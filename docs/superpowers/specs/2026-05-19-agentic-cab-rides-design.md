@@ -26,7 +26,8 @@ Deliverables: repo (3-min clone-to-run), 5 transcripts (happy path / price compa
 - **FastAPI + vanilla HTML/JS** for web UI (no build step, no npm)
 - **Rich** for CLI rendering
 - **pytest** with parameterized provider contract suite
-- **JSONL** for action log and chat history; `state.json` for live state
+- **SQLite** (stdlib `sqlite3`, no ORM) for live state (drafts, bookings, idempotency keys)
+- **JSONL** for action log, chat history, and geocode cache (append-only / replay-friendly artifacts stay flat files)
 - **ULIDs** for all IDs (sortable, no DB needed)
 - **No external API keys** beyond `ANTHROPIC_API_KEY` — Nominatim is keyless, cached fixtures committed
 - **Deterministic seeds** for all randomness; scenarios pin seeds + frozen clock
@@ -45,7 +46,7 @@ Tool layer        (Pydantic-typed functions; owns fingerprinting, action-log emi
 Core ports        (Protocols: BookingProvider, ConfirmationChannel, Clock, ActionLog, StateStore)
    │
 Adapters          (UberSimAdapter, CLI/Web/Scripted ConfirmationChannel, System/FrozenClock,
-                   JSONLActionLog, JSONStateStore, NominatimGeocoder)
+                   JSONLActionLog, SqliteStateStore, NominatimGeocoder)
 ```
 
 **Invariant:** Agent → Tools → Ports → Adapters. No upward edges. Each layer is independently testable.
@@ -111,7 +112,7 @@ class BookingProvider(Protocol):
     async def cancel(self, booking_id: str, idempotency_key: str) -> Booking: ...
 ```
 
-**`idempotency_key` is required by the contract.** This is the production-realism hook that pays off in the writeup. The sim dedupes via in-memory dict; prod implementations would persist.
+**`idempotency_key` is required by the contract.** Dedupe is enforced at the `StateStore` boundary via a `UNIQUE` constraint on the `idempotency_keys` table (see §11a). The provider checks the store before issuing a new booking; a duplicate key returns the previously-recorded booking. This survives process restart — the prod-realism story that the writeup leans on.
 
 **Lyft swap:** new `LyftAdapter` implementing the same contract. Agent/tools/gate/log unchanged.
 **Zocdoc swap:** add `AppointmentIntent` to the union, add `AppointmentOptionDetails`, write `ZocdocAdapter`, add an intent router. Tool layer, confirmation gate, action log unchanged.
@@ -232,6 +233,87 @@ price = base_fare[class]
 
 `AddressRef` carries `{raw, formatted, lat, lng, confidence}`. Low confidence (<0.5) is the signal the agent uses to ask for clarification in the bad-address scenario.
 
+## 10a. State persistence (SQLite)
+
+Live mutable state — drafts, bookings, booking events, idempotency keys — lives in `data/state.db`. Stdlib `sqlite3`, WAL mode, no ORM. One `schema.sql` file applied on startup (idempotent `CREATE TABLE IF NOT EXISTS`). Append-only artifacts (action log, chat, geocode cache) stay as JSONL/JSON files — moving them into SQLite would harm the audit story, not help it.
+
+**Schema** (`src/agentic_cab/adapters/schema.sql`):
+
+```sql
+CREATE TABLE IF NOT EXISTS drafts (
+    draft_id        TEXT PRIMARY KEY,                  -- ULID
+    option_snapshot TEXT NOT NULL,                     -- canonical JSON
+    fingerprint     TEXT NOT NULL,                     -- sha256 hex
+    created_at      TEXT NOT NULL,
+    expires_at      TEXT NOT NULL,
+    consumed_at     TEXT                               -- set when confirm succeeds; NULL otherwise
+);
+
+CREATE TABLE IF NOT EXISTS bookings (
+    booking_id   TEXT PRIMARY KEY,                     -- provider-issued
+    draft_id     TEXT NOT NULL REFERENCES drafts(draft_id),
+    provider     TEXT NOT NULL,
+    status       TEXT NOT NULL,
+    summary      TEXT NOT NULL,                        -- canonical JSON
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL,
+    cancelled_at TEXT,
+    cancellation TEXT                                  -- JSON or NULL
+);
+CREATE INDEX IF NOT EXISTS bookings_status_idx ON bookings(status);
+
+CREATE TABLE IF NOT EXISTS booking_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    booking_id TEXT NOT NULL REFERENCES bookings(booking_id),
+    ts         TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    payload    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS booking_events_booking_idx ON booking_events(booking_id, ts);
+
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    key             TEXT PRIMARY KEY,                  -- ULID minted by tool layer
+    scope           TEXT NOT NULL,                     -- "confirm" | "cancel"
+    booking_id      TEXT,                              -- resolved booking, if any
+    response_blob   TEXT NOT NULL,                     -- canonical JSON of provider response
+    created_at      TEXT NOT NULL
+);
+```
+
+**`SqliteStateStore` port methods:**
+
+```python
+class StateStore(Protocol):
+    # Drafts
+    def put_draft(self, draft: Draft) -> None: ...
+    def get_draft(self, draft_id: str) -> Draft | None: ...
+    def consume_draft(self, draft_id: str, at: datetime) -> bool: ...   # atomic mark-used
+
+    # Bookings
+    def put_booking(self, booking: Booking) -> None: ...
+    def get_booking(self, booking_id: str) -> Booking | None: ...
+    def update_booking_status(self, booking_id: str, status: str, event: BookingEvent) -> None: ...
+    def list_active_bookings(self) -> list[Booking]: ...
+
+    # Idempotency
+    def claim_or_recall(self, key: str, scope: str) -> ClaimResult: ...
+        # If key exists: returns existing response_blob (no provider call needed).
+        # If not: claims it with empty response, returns "new" — caller must
+        # finalize() with the provider response.
+    def finalize_idempotency(self, key: str, booking_id: str, response_blob: dict) -> None: ...
+```
+
+**Idempotency flow inside `confirm_booking`:**
+
+1. Mint `idempotency_key` (ULID) — or reuse if the tool layer is retrying.
+2. `store.claim_or_recall(key, "confirm")`. If recalled, short-circuit: emit `executed` row with `latency_ms=0, replayed=true`, return the recalled booking. **No second provider call.**
+3. Otherwise, call `provider.confirm(draft_id, idempotency_key)`. The sim provider also checks its own dedupe (mirroring real prod where the provider is the source of truth) — but the store is the durable barrier.
+4. `store.finalize_idempotency(key, booking_id, response_blob)`. Same transaction as `put_booking`.
+
+**Concurrency:** WAL mode means CLI REPL and FastAPI web can both touch the DB without locking issues. Both share `data/state.db`; the action log is per-session so no contention there.
+
+**Restart survival** is tested explicitly in `tests/contract/test_restart_survival.py`: book → kill process → restart → call `confirm` with the same idempotency key → assert same booking returned, no duplicate provider call.
+
 ## 11. Scenarios & transcripts
 
 **Scenario YAML schema** (`scenarios/<name>.yaml`):
@@ -347,10 +429,12 @@ agentic-cab-rides/
 │   │   │   └── cache.py
 │   │   ├── clock.py
 │   │   ├── action_log.py
-│   │   └── state_store.py
+│   │   ├── state_store.py       # SqliteStateStore
+│   │   └── schema.sql           # applied on startup, idempotent
 │   └── render/transcript.py
 ├── scenarios/                   # 5 yaml files
 ├── transcripts/                 # 5 generated .md files (committed)
+├── data/                        # gitignored; state.db lives here
 ├── logs/                        # gitignored
 ├── fixtures/geocode/            # cached Nominatim responses
 ├── tests/
@@ -373,7 +457,9 @@ agentic-cab-rides/
 | UberSimAdapter (pricing, surge, state machine) | 5 |
 | Contract test suite (parameterized) | 2 |
 | ConfirmationChannel (CLI + scripted) | 2 |
-| Action log + state store | 2 |
+| Action log (JSONL) | 1 |
+| SQLite schema + `SqliteStateStore` + idempotency flow | 2 |
+| Restart-survival contract test | 0.5 |
 | Geocoding (Nominatim + cache) | 1.5 |
 | 7 tools | 4 |
 | Agent loop + system prompt + CLI REPL | 3 |
@@ -385,8 +471,8 @@ agentic-cab-rides/
 | Web polish + screenshot | 1 |
 | Polish + README + Makefile | 2 |
 | Writeup (1-pager) | 1.5 |
-| **Subtotal** | **36** |
-| Buffer | 6 |
+| **Subtotal** | **37.5** |
+| Buffer | 4.5 |
 | **Total** | **42** |
 
 **Cut order if behind:**
@@ -405,13 +491,12 @@ agentic-cab-rides/
 Single page, four blocks:
 
 1. **Swapping marketplaces** (½ page) — Lyft = trivial (same `RideIntent`, new adapter passes contract). Zocdoc = new `AppointmentIntent` variant + adapter + intent router; tool layer, gate, log, fingerprint all unchanged. This is the architectural payoff.
-2. **What breaks first in production** (¼ page) — pick **idempotency under retries**. Port already takes `idempotency_key` but sim dedupes via dict; prod needs persistent dedupe with TTL surviving restart, and agent retry policy must reuse the same key (currently mints fresh). 3-line fix sketch.
-3. **Other landmines** (¼ page) — bullet list w/ one-line mitigation: price drift quote↔confirm (mitigated), PII in logs (partial), payment scope (out of scope), provider rate limits (need token bucket), state drift agent↔reality (needs polling loop).
-4. **Next** — persistent state store (SQLite), webhook ConfirmationChannel, real Lyft adapter proving the contract, payment authorization flow.
+2. **What breaks first in production** (¼ page) — the obvious answer is **idempotency under retries**, and I built it: SQLite `UNIQUE` on `idempotency_keys`, `claim_or_recall` short-circuits the second provider call, restart-survival test proves it. With that in hand, the *next* thing that breaks is **agent-side retry policy**: the agent must reuse the same idempotency key across retries, not mint a new one. Today the tool layer mints per-call; production needs key-bound-to-intent (e.g., `sha256(draft_id + "confirm")`) so that an agent retry after a timeout doesn't bypass the dedupe barrier. 3-line fix sketch.
+3. **Other landmines** (¼ page) — bullet list w/ one-line mitigation: price drift quote↔confirm (mitigated), PII in logs (partial — addresses redacted at log boundary), payment scope (out of scope), provider rate limits (need token bucket + backoff), state drift agent↔reality (needs background polling loop refreshing `bookings.status`), action log retention/rotation (not implemented).
+4. **Next** — webhook/Slack `ConfirmationChannel`, real `LyftAdapter` proving the contract suite holds, payment authorization flow, agent-bound idempotency keys, background status poller, multi-user / auth layer.
 
 ## 16. Out of scope (explicit)
 
-- Persistent DB (SQLite or otherwise) — `state.json` + JSONL only
 - Auth / multi-tenant — single user assumed
 - Payment method selection — assume account-level pre-auth
 - Real ride routing — straight-line × fudge factor
@@ -431,3 +516,4 @@ Single page, four blocks:
 | 6 | Geocoding | Nominatim + committed cache fixtures; in-process pricing math |
 | 7 | Transcript format | Auto-generated markdown from log + chat, with scenario YAMLs and invariants |
 | +1 | Web UI in scope? | Yes — minimal, no build step, demonstrates ConfirmationChannel abstraction |
+| +2 | Persistent state via SQLite? | Yes — stdlib `sqlite3`, no daemon, doesn't violate 3-min clone-to-run. Upgrades the idempotency story from hand-waved to implemented. Action log / chat / geocode cache stay JSONL. |
