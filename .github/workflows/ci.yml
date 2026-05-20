@@ -24,7 +24,7 @@ jobs:
         run: uv python install
 
       - name: Install
-        run: uv sync --all-extras --frozen
+        run: uv sync --frozen
 
       - name: Verify (fmt + lint + typecheck + fast tests)
         run: make verify

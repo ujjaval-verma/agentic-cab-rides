@@ -14,8 +14,8 @@ UV ?= uv
 help: ## Show this help
 	awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-install: ## uv sync + install pre-commit hooks
-	$(UV) sync --all-extras
+install: ## uv sync (incl. dev deps) + install pre-commit hooks
+	$(UV) sync
 	$(UV) run pre-commit install --install-hooks
 	$(UV) run pre-commit install --hook-type pre-push
 
