@@ -1,6 +1,6 @@
 # Writeup — Marketplace Swap & Production Failure Modes
 
-> **Status: P4 complete.** All five scenarios render with green invariants (01 happy-path, 02 price-comparison, 03 bad-address, 04 surge-on-confirm, 05 cancel-with-fee). P5–P6 will add streaming CLI output and a real third-party adapter.
+> **Status: P4 complete; P5 (Web UI) shipped.** All five scenarios render with green invariants (01 happy-path, 02 price-comparison, 03 bad-address, 04 surge-on-confirm, 05 cancel-with-fee). The browser-driven confirmation surface (`WebConfirmationChannel`, FastAPI + SSE) is also shipped — confirmations work identically via CLI and browser. P6 covers final polish: clone-to-run validation, `ARCHITECTURE.md`, and README quickstart.
 
 ---
 
