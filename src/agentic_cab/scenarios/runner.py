@@ -24,6 +24,8 @@ from agentic_cab.tools.confirm import ConfirmArgs, confirm_booking
 from agentic_cab.tools.discover import DiscoverArgs, discover_options
 from agentic_cab.tools.geocode import DESCRIPTION as GEOCODE_DESCRIPTION
 from agentic_cab.tools.geocode import GeocodeArgs, geocode_address
+from agentic_cab.tools.list_active import DESCRIPTION as LIST_ACTIVE_DESCRIPTION
+from agentic_cab.tools.list_active import ListActiveArgs, list_active_bookings
 from agentic_cab.tools.prepare import PrepareArgs, prepare_booking
 from agentic_cab.tools.registry import pydantic_to_anthropic_tool
 from agentic_cab.tools.track import DESCRIPTION as TRACK_DESCRIPTION
@@ -77,6 +79,11 @@ async def run_scenario(
             description=TRACK_DESCRIPTION,
             args_model=TrackArgs,
         ),
+        pydantic_to_anthropic_tool(
+            name="list_active_bookings",
+            description=LIST_ACTIVE_DESCRIPTION,
+            args_model=ListActiveArgs,
+        ),
     ]
     turn_id = new_turn_id()
     common: dict[str, Any] = dict(
@@ -113,12 +120,22 @@ async def run_scenario(
     async def _track(a: dict[str, Any]) -> dict[str, Any]:
         return await track_booking(TrackArgs(**a), **common)
 
+    async def _list_active(a: dict[str, Any]) -> dict[str, Any]:
+        return await list_active_bookings(
+            ListActiveArgs(**a),
+            store=store,
+            log=log,
+            session_id=session_id,
+            turn_id=turn_id,
+        )
+
     handlers: dict[str, ToolHandler] = {
         "geocode_address": _geocode,
         "discover_options": _discover,
         "prepare_booking": _prepare,
         "confirm_booking": _confirm,
         "track_booking": _track,
+        "list_active_bookings": _list_active,
     }
     client = Anthropic()
     history: list[dict[str, Any]] = []
