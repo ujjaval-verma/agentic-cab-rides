@@ -31,6 +31,7 @@ from agentic_cab.core.types import (
     Intent,
     Money,
     Option,
+    RideIntent,
     RideOptionDetails,
     VehicleClass,
 )
@@ -93,6 +94,8 @@ class UberSimAdapter:
         self._any_draft_prepared: bool = False
 
     async def discover(self: Self, intent: Intent) -> list[Option]:
+        if not isinstance(intent, RideIntent):
+            raise TypeError(f"UberSimAdapter only supports RideIntent; got {type(intent).__name__}")
         km = _km(intent.pickup.lat, intent.pickup.lng, intent.dropoff.lat, intent.dropoff.lng)
         est_min = max(1, int(km * 2))
         now = self._clock.now()

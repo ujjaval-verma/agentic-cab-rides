@@ -34,7 +34,7 @@ from agentic_cab.core.ports import (
     ConfirmationRequest,
     StateStore,
 )
-from agentic_cab.core.types import Draft
+from agentic_cab.core.types import Draft, RideOptionDetails
 
 
 class ConfirmArgs(BaseModel):
@@ -161,12 +161,18 @@ async def confirm_booking(
     # If draft has no intent_snapshot (legacy P1 drafts), drift = 0 (no re-quote possible).
     requote_drift_cents = 0
     _new_draft_id_for_requote: str | None = None
-    if draft.intent_snapshot is not None:
+    if draft.intent_snapshot is not None and isinstance(
+        draft.option_snapshot.details, RideOptionDetails
+    ):
         fresh_options = await provider.discover(draft.intent_snapshot)
-        # Match by vehicle_class (option_id changes each discover call)
+        # Match by vehicle_class (option_id changes each discover call; ride-only path)
         _draft_vc = draft.option_snapshot.details.vehicle_class
         _matched = next(
-            (o for o in fresh_options if o.details.vehicle_class == _draft_vc),
+            (
+                o
+                for o in fresh_options
+                if isinstance(o.details, RideOptionDetails) and o.details.vehicle_class == _draft_vc
+            ),
             None,
         )
         if _matched is not None:

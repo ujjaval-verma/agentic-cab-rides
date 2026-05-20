@@ -38,7 +38,18 @@ class RideIntent(BaseModel):
     vehicle_class_preference: list[str] | None = None
 
 
-Intent = RideIntent  # union widens in P3+ to | AppointmentIntent
+class AppointmentIntent(BaseModel):
+    kind: Literal["appointment"] = "appointment"
+    subject: str  # e.g. "GP check-up"
+    earliest_at: datetime
+    latest_at: datetime
+    location: AddressRef
+
+
+Intent = Annotated[
+    RideIntent | AppointmentIntent,
+    Field(discriminator="kind"),
+]
 
 
 class RideOptionDetails(BaseModel):
@@ -47,7 +58,17 @@ class RideOptionDetails(BaseModel):
     capacity: int
 
 
-OptionDetails = Annotated[RideOptionDetails, Field(discriminator="kind")]
+class AppointmentOptionDetails(BaseModel):
+    kind: Literal["appointment"] = "appointment"
+    clinic: str
+    slot_at: datetime
+    specialty: str
+
+
+OptionDetails = Annotated[
+    RideOptionDetails | AppointmentOptionDetails,
+    Field(discriminator="kind"),
+]
 
 
 class Option(BaseModel):

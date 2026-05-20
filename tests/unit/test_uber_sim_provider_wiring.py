@@ -13,7 +13,7 @@ from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
 from agentic_cab.adapters.uber_sim.state_machine import DriverAvailability
 from agentic_cab.adapters.uber_sim.surge import SurgeCurve
-from agentic_cab.core.types import AddressRef, RideIntent
+from agentic_cab.core.types import AddressRef, RideIntent, RideOptionDetails
 
 _START = datetime(2026, 5, 19, 12, 0, tzinfo=UTC)
 _INTENT = RideIntent(
@@ -47,7 +47,9 @@ async def test_discover_returns_all_four_vehicle_classes(tmp_path: Path) -> None
     """With multi-class pricing, discover() returns uberx/comfort/uberxl/black."""
     _, sim = _sim(tmp_path)
     options = await sim.discover(_INTENT)
-    vehicle_classes = {o.details.vehicle_class for o in options}
+    vehicle_classes = {
+        o.details.vehicle_class for o in options if isinstance(o.details, RideOptionDetails)
+    }
     assert vehicle_classes == {"uberx", "comfort", "uberxl", "black"}
 
 
@@ -56,7 +58,9 @@ async def test_discover_prices_ordered_uberx_cheapest(tmp_path: Path) -> None:
     """uberx must be the cheapest option."""
     _, sim = _sim(tmp_path)
     options = sorted(await sim.discover(_INTENT), key=lambda o: o.price.amount_cents)
+    assert isinstance(options[0].details, RideOptionDetails)
     assert options[0].details.vehicle_class == "uberx"
+    assert isinstance(options[-1].details, RideOptionDetails)
     assert options[-1].details.vehicle_class == "black"
 
 
@@ -82,10 +86,14 @@ async def test_surge_curve_applied_on_discover(tmp_path: Path) -> None:
     sim_surge = UberSimAdapter(store=store2, clock=clock_surge, rng_seed=42, surge_curve=peak_curve)
 
     opts_no = {
-        o.details.vehicle_class: o.price.amount_cents for o in await sim_no.discover(_INTENT)
+        o.details.vehicle_class: o.price.amount_cents
+        for o in await sim_no.discover(_INTENT)
+        if isinstance(o.details, RideOptionDetails)
     }
     opts_surge = {
-        o.details.vehicle_class: o.price.amount_cents for o in await sim_surge.discover(_INTENT)
+        o.details.vehicle_class: o.price.amount_cents
+        for o in await sim_surge.discover(_INTENT)
+        if isinstance(o.details, RideOptionDetails)
     }
 
     for vc in ("uberx", "comfort", "uberxl", "black"):
@@ -104,7 +112,11 @@ async def test_confirm_final_price_uses_surge_on_confirm(tmp_path: Path) -> None
     )
     _, sim = _sim(tmp_path, surge_curve=curve)
     opts = await sim.discover(_INTENT)
-    uberx = next(o for o in opts if o.details.vehicle_class == "uberx")
+    uberx = next(
+        o
+        for o in opts
+        if isinstance(o.details, RideOptionDetails) and o.details.vehicle_class == "uberx"
+    )
     price_at_discover = uberx.price.amount_cents
 
     draft = await sim.prepare(uberx.option_id)
@@ -119,7 +131,11 @@ async def test_track_uses_state_machine(tmp_path: Path) -> None:
     """track() advances booking status via the state machine."""
     clock, sim = _sim(tmp_path)
     opts = await sim.discover(_INTENT)
-    uberx = next(o for o in opts if o.details.vehicle_class == "uberx")
+    uberx = next(
+        o
+        for o in opts
+        if isinstance(o.details, RideOptionDetails) and o.details.vehicle_class == "uberx"
+    )
     draft = await sim.prepare(uberx.option_id)
     booking = await sim.confirm(draft.draft_id, idempotency_key="K1")
 
@@ -139,7 +155,11 @@ async def test_force_no_availability_keeps_tracking_in_requested(tmp_path: Path)
     avail = DriverAvailability(available=True, force_no_availability=True)
     clock, sim = _sim(tmp_path, availability=avail)
     opts = await sim.discover(_INTENT)
-    uberx = next(o for o in opts if o.details.vehicle_class == "uberx")
+    uberx = next(
+        o
+        for o in opts
+        if isinstance(o.details, RideOptionDetails) and o.details.vehicle_class == "uberx"
+    )
     draft = await sim.prepare(uberx.option_id)
     booking = await sim.confirm(draft.draft_id, idempotency_key="K2")
 

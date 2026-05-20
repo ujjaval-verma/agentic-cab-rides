@@ -37,7 +37,9 @@ async def test_discover_returns_uberx_option(sim: UberSimAdapter) -> None:
     options = await sim.discover(intent)
     # P3: sim now returns all 4 vehicle classes
     assert len(options) == 4
-    vehicle_classes = {o.details.vehicle_class for o in options}
+    vehicle_classes = {
+        o.details.vehicle_class for o in options if isinstance(o.details, RideOptionDetails)
+    }
     assert "uberx" in vehicle_classes
     assert all(o.price.amount_cents > 0 for o in options)
 
