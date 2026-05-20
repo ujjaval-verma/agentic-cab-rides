@@ -18,22 +18,17 @@ The remaining additions: one intent-router rule in the agent's tool-call resolut
 
 *The fact that "swap to Zocdoc" requires no edits below the tool layer is the architectural payoff this design was meant to surface.*
 
-## 2. What breaks first in production
+## 2. What breaks first in production — and what shipped
 
-**Idempotency under retries — and we already built half of it.** The `BookingProvider` port requires `idempotency_key`. SQLite enforces `UNIQUE` on the `idempotency_keys` table. `claim_or_recall` short-circuits the second provider call, and a restart-survival contract test (`tests/contract/test_restart_survival.py`) proves it.
+**Idempotency under retries — shipped.** The `BookingProvider` port requires `idempotency_key`. SQLite enforces `UNIQUE` on the `idempotency_keys` table. `claim_or_recall` short-circuits the second provider call.
 
-*What still breaks:* the **agent-side retry policy**. Today the tool layer mints a fresh ULID at the top of `confirm_booking`. If the agent's first call times out and it retries, it mints a *new* key and bypasses the dedupe barrier — the SQLite UNIQUE constraint is then defending against a problem that no longer exists, because each retry has a fresh key.
+As of T27, keys are **intent-bound**, not call-bound:
+- `confirm_booking`: key = `sha256(canonical_json({draft_id, fingerprint, op:"confirm"}))`
+- `cancel_booking`: key = `sha256(canonical_json({booking_id, fee_cents, status_at_quote, op:"cancel"}))`
 
-**The 3-line fix:**
-```python
-# tools/confirm.py
-idempotency_key = hashlib.sha256(
-    f"{draft_id}:confirm".encode()
-).hexdigest()[:26]   # ULID-shaped, deterministic per intent
-```
-The key becomes intent-bound, not call-bound. An agent retry produces the same key → `claim_or_recall` returns the recorded response → no second provider call.
+An agent retry after a timeout produces the **same key** → `claim_or_recall` returns the recorded response → no second provider call. The fee and status-at-quote are part of the cancel key because two cancels quoted at different fees are different intents — the user consented to a specific fee.
 
-This gap is tracked in [`FOLLOWUPS.md`](FOLLOWUPS.md) under "Architecture / engineering."
+*Remaining gap:* **cross-process retries beyond restart-survival's window.** If the process crashes between `confirm` returning and the agent recording the outcome, a restart picks up a fresh session with no memory of the in-flight key. T30 (restart-survival) closes this by persisting `in_progress` claims so recovery sees the prior key. That gap is tracked in [`FOLLOWUPS.md`](FOLLOWUPS.md) under "Architecture / engineering."
 
 ## 3. Other landmines (one-line mitigations)
 
@@ -46,7 +41,7 @@ This gap is tracked in [`FOLLOWUPS.md`](FOLLOWUPS.md) under "Architecture / engi
 
 ## 4. What I'd build next, in priority order
 
-1. **Intent-bound idempotency keys** (3-line fix above; biggest production gap)
+1. **Restart-survival for in-flight claims** (T30; closes the cross-process retry gap noted above)
 2. **Background `track_booking` polling loop** for state-drift mitigation
 3. **Webhook/Slack `ConfirmationChannel`** — proves the third channel works after CLI + Web; closes the abstraction
 4. **Real `LyftAdapter`** — empirical proof the contract holds against a second real provider
