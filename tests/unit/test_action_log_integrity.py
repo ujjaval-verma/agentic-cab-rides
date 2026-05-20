@@ -1,7 +1,7 @@
 """For any action_id where verified.result == 'rejected', no executed row may exist.
 
-This invariant guards against regressions in the confirm_booking implementation —
-the short-circuit must be structural, not merely conventional.
+This invariant guards against regressions in the confirm_booking and cancel_booking
+implementations — the short-circuit must be structural, not merely conventional.
 """
 
 import json
@@ -12,9 +12,9 @@ import pytest
 
 @pytest.fixture
 def fixture_rows() -> list[dict]:
-    """Synthetic mixed-outcome log covering both pass and fail action_ids."""
+    """Synthetic mixed-outcome log covering confirm and cancel rejected + ok action_ids."""
     return [
-        # action A: rejected (fingerprint mismatch) — no executed row
+        # action A: confirm rejected (fingerprint mismatch) — no executed row
         {"action_id": "A", "kind": "requested", "tool": "confirm_booking"},
         {
             "action_id": "A",
@@ -23,7 +23,7 @@ def fixture_rows() -> list[dict]:
             "reason": "fingerprint mismatch",
         },
         {"action_id": "A", "kind": "outcome", "status": "rejected"},
-        # action B: ok
+        # action B: confirm ok
         {"action_id": "B", "kind": "requested", "tool": "confirm_booking"},
         {
             "action_id": "B",
@@ -33,6 +33,25 @@ def fixture_rows() -> list[dict]:
         },
         {"action_id": "B", "kind": "executed", "idempotency_key": "K", "replayed": False},
         {"action_id": "B", "kind": "outcome", "status": "confirmed"},
+        # action C: cancel rejected (user declined) — no executed row
+        {"action_id": "C", "kind": "requested", "tool": "cancel_booking"},
+        {
+            "action_id": "C",
+            "kind": "verified",
+            "result": "rejected",
+            "reason": "user declined",
+        },
+        {"action_id": "C", "kind": "outcome", "status": "rejected"},
+        # action D: cancel ok
+        {"action_id": "D", "kind": "requested", "tool": "cancel_booking"},
+        {
+            "action_id": "D",
+            "kind": "verified",
+            "result": "ok",
+            "checks": {"booking_found": True},
+        },
+        {"action_id": "D", "kind": "executed", "idempotency_key": "K2", "replayed": False},
+        {"action_id": "D", "kind": "outcome", "status": "cancelled"},
     ]
 
 
@@ -59,6 +78,18 @@ def test_integrity_catches_violation() -> None:
     bad = [
         {"action_id": "X", "kind": "verified", "result": "rejected"},
         {"action_id": "X", "kind": "executed"},
+    ]
+    with pytest.raises(AssertionError, match="INVARIANT VIOLATED"):
+        _assert_integrity(bad)
+
+
+@pytest.mark.parametrize("tool", ["confirm_booking", "cancel_booking"])
+def test_integrity_catches_violation_for_tool(tool: str) -> None:
+    """Invariant 6 must hold for both confirm and cancel: rejected → no executed row."""
+    bad = [
+        {"action_id": "Y", "kind": "requested", "tool": tool},
+        {"action_id": "Y", "kind": "verified", "result": "rejected", "reason": "user declined"},
+        {"action_id": "Y", "kind": "executed"},  # must never appear after rejected
     ]
     with pytest.raises(AssertionError, match="INVARIANT VIOLATED"):
         _assert_integrity(bad)

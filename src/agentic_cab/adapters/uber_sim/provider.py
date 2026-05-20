@@ -13,6 +13,7 @@ from agentic_cab.core.fingerprint import fingerprint
 from agentic_cab.core.ids import new_draft_id
 from agentic_cab.core.types import (
     Booking,
+    CancellationInfo,
     Draft,
     Intent,
     Money,
@@ -127,8 +128,24 @@ class UberSimAdapter:
         return self._compute_fee(b.status)
 
     async def cancel(self: Self, booking_id: str, idempotency_key: str) -> Booking:
-        # P2 wires the gate; P1 keeps this minimal but contract-shaped.
         b = self._store.get_booking(booking_id)
         if b is None:
             raise ValueError(f"unknown booking: {booking_id}")
-        return b
+        # Capture status before mutation so _compute_fee uses the pre-cancel state.
+        status_at_cancel = b.status
+        fee = self._compute_fee(status_at_cancel)
+        cancelled = Booking(
+            booking_id=b.booking_id,
+            draft_id=b.draft_id,
+            status="cancelled",
+            provider=b.provider,
+            summary=b.summary,
+            events=b.events,
+            cancellation=CancellationInfo(
+                cancelled_at=self._clock.now(),
+                fee=fee,
+                reason=None,
+            ),
+        )
+        self._store.put_booking(cancelled)
+        return cancelled

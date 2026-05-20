@@ -20,6 +20,7 @@ from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
 from agentic_cab.agent.loop import ToolHandler, run_turn
 from agentic_cab.core.ids import new_session_id, new_turn_id
+from agentic_cab.tools.cancel import CancelArgs, cancel_booking
 from agentic_cab.tools.confirm import ConfirmArgs, confirm_booking
 from agentic_cab.tools.discover import DiscoverArgs, discover_options
 from agentic_cab.tools.geocode import DESCRIPTION as GEOCODE_DESCRIPTION
@@ -75,6 +76,14 @@ async def run_scenario(
             args_model=ConfirmArgs,
         ),
         pydantic_to_anthropic_tool(
+            name="cancel_booking",
+            description=(
+                "Cancel an existing booking_id. Gated — user will be asked to approve"
+                " the cancellation fee. The fee depends on current ride status."
+            ),
+            args_model=CancelArgs,
+        ),
+        pydantic_to_anthropic_tool(
             name="track_booking",
             description=TRACK_DESCRIPTION,
             args_model=TrackArgs,
@@ -117,6 +126,14 @@ async def run_scenario(
             **common,
         )
 
+    async def _cancel(a: dict[str, Any]) -> dict[str, Any]:
+        return await cancel_booking(
+            CancelArgs(**a),
+            store=store,
+            channel=channel,
+            **common,
+        )
+
     async def _track(a: dict[str, Any]) -> dict[str, Any]:
         return await track_booking(
             TrackArgs(**a),
@@ -140,6 +157,7 @@ async def run_scenario(
         "discover_options": _discover,
         "prepare_booking": _prepare,
         "confirm_booking": _confirm,
+        "cancel_booking": _cancel,
         "track_booking": _track,
         "list_active_bookings": _list_active,
     }
