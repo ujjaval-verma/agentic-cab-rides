@@ -33,6 +33,6 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     key             TEXT PRIMARY KEY,
     scope           TEXT NOT NULL,
     booking_id      TEXT,
-    response_blob   TEXT NOT NULL,
+    response_blob   TEXT,           -- nullable; NULL means claimed but not yet finalised
     created_at      TEXT NOT NULL
 );

@@ -85,6 +85,19 @@ def test_claim_or_recall_new_then_recalled(store: SqliteStateStore) -> None:
     assert second.booking.booking_id == "B1"
 
 
+def test_claim_or_recall_in_progress_returns_new(store: SqliteStateStore) -> None:
+    """Claimed but never finalised → on re-call with same key, return status='new'
+    so the caller can retry. Documents the P1 recovery semantic; P3 swaps to
+    status='in_progress' with intent-bound keys."""
+    key = "K-CRASH"
+    first = store.claim_or_recall(key, scope="confirm")
+    assert first.status == "new"
+    # simulate crash: no finalize_idempotency call
+    second = store.claim_or_recall(key, scope="confirm")
+    assert second.status == "new"
+    assert second.booking is None
+
+
 def test_schema_apply_is_idempotent(store: SqliteStateStore) -> None:
     store.apply_schema()
     store.apply_schema()  # second apply must not raise

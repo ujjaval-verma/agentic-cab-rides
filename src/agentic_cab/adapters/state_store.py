@@ -18,7 +18,7 @@ class SqliteStateStore:
     def __init__(self: Self, db_path: Path) -> None:
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self._db_path), isolation_level=None)
+        self._conn = sqlite3.connect(str(self._db_path))  # default isolation (deferred)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
 
@@ -74,10 +74,13 @@ class SqliteStateStore:
         now = datetime.now(UTC).isoformat()
         with self._conn:
             self._conn.execute(
-                "INSERT OR REPLACE INTO bookings"
-                "(booking_id, draft_id, provider, status, summary,"
-                " created_at, updated_at, cancelled_at, cancellation)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                """INSERT INTO bookings(booking_id, draft_id, provider, status, summary,
+                                        created_at, updated_at, cancelled_at, cancellation)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(booking_id) DO UPDATE SET
+                       status = excluded.status,
+                       summary = excluded.summary,
+                       updated_at = excluded.updated_at""",
                 (
                     booking.booking_id,
                     booking.draft_id,
@@ -146,17 +149,18 @@ class SqliteStateStore:
         ).fetchone()
         if existing is not None:
             booking_id: str | None = existing[0]
-            response_blob: str = existing[1]
-            if booking_id and response_blob:
+            response_blob: str | None = existing[1]
+            if booking_id is not None and response_blob is not None:
                 booking = Booking.model_validate_json(response_blob)
                 return ClaimResult(status="recalled", booking=booking)
-            # Claimed but not yet finalised — treat as in-progress.
-            # P3 restart-survival will harden this corner; see FOLLOWUPS.md.
-            return ClaimResult(status="recalled", booking=None)
+            # In-progress: previous claim wasn't finalised. Caller may retry the provider
+            # call with the same key. P3 restart-survival hardens this with intent-bound
+            # keys and a proper "in_progress" status — tracked in FOLLOWUPS.md.
+            return ClaimResult(status="new", booking=None)
         with self._conn:
             self._conn.execute(
                 "INSERT INTO idempotency_keys(key, scope, booking_id, response_blob, created_at)"
-                " VALUES (?, ?, NULL, '', ?)",
+                " VALUES (?, ?, NULL, NULL, ?)",
                 (key, scope, datetime.now(UTC).isoformat()),
             )
         return ClaimResult(status="new", booking=None)
