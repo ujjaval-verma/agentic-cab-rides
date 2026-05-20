@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal, Self
 
 from agentic_cab.core.ports import ClaimResult
-from agentic_cab.core.types import Booking, BookingEvent, Draft, Option
+from agentic_cab.core.types import Booking, BookingEvent, Draft, Intent, Option
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
@@ -35,34 +35,47 @@ class SqliteStateStore:
     # --- Drafts ---
 
     def put_draft(self: Self, draft: Draft) -> None:
+        intent_json: str | None = None
+        if draft.intent_snapshot is not None:
+            intent_json = draft.intent_snapshot.model_dump_json()
         with self._conn:
             self._conn.execute(
-                "INSERT INTO drafts(draft_id, option_snapshot, fingerprint, created_at, expires_at)"
-                " VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO drafts"
+                "(draft_id, option_snapshot, fingerprint, created_at, expires_at, intent_snapshot)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     draft.draft_id,
                     draft.option_snapshot.model_dump_json(),
                     draft.fingerprint,
                     draft.created_at.isoformat(),
                     draft.expires_at.isoformat(),
+                    intent_json,
                 ),
             )
 
     def get_draft(self: Self, draft_id: str) -> Draft | None:
         row = self._conn.execute(
-            "SELECT draft_id, option_snapshot, fingerprint, created_at, expires_at"
+            "SELECT draft_id, option_snapshot, fingerprint, created_at, expires_at, intent_snapshot"
             " FROM drafts WHERE draft_id = ?",
             (draft_id,),
         ).fetchone()
         if row is None:
             return None
         opt = Option.model_validate_json(row[1])
+        intent: Intent | None = None
+        if row[5] is not None:
+            import json as _json
+
+            from agentic_cab.core.types import RideIntent
+
+            intent = RideIntent.model_validate(_json.loads(row[5]))
         return Draft(
             draft_id=row[0],
             option_snapshot=opt,
             fingerprint=row[2],
             created_at=datetime.fromisoformat(row[3]),
             expires_at=datetime.fromisoformat(row[4]),
+            intent_snapshot=intent,
         )
 
     def consume_draft(self: Self, draft_id: str, at: datetime) -> bool:

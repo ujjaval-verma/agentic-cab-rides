@@ -63,6 +63,19 @@ class Option(BaseModel):
     expires_at: datetime
 
 
+VehicleClass = Literal["uberx", "comfort", "uberxl", "black"]
+
+BookingStatus = Literal[
+    "requested",
+    "matched",
+    "en_route",
+    "in_progress",
+    "completed",
+    "cancelled",
+    "failed",
+]
+
+
 class Draft(BaseModel):
     model_config = ConfigDict(frozen=True)
     draft_id: str
@@ -70,6 +83,7 @@ class Draft(BaseModel):
     fingerprint: str
     created_at: datetime
     expires_at: datetime
+    intent_snapshot: Intent | None = None  # populated by provider.prepare(); used for re-quote
 
 
 class BookingEvent(BaseModel):

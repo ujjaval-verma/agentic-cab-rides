@@ -45,6 +45,7 @@ class UberSimAdapter:
         self._clock = clock
         self._rng = random.Random(rng_seed)
         self._option_cache: dict[str, Option] = {}
+        self._intent_cache: dict[str, Intent] = {}  # option_id → intent that produced it
 
     async def discover(self: Self, intent: Intent) -> list[Option]:
         km = _km(intent.pickup.lat, intent.pickup.lng, intent.dropoff.lat, intent.dropoff.lng)
@@ -63,6 +64,7 @@ class UberSimAdapter:
             expires_at=now + timedelta(minutes=5),
         )
         self._option_cache[opt.option_id] = opt
+        self._intent_cache[opt.option_id] = intent
         return [opt]
 
     async def prepare(self: Self, option_id: str) -> Draft:
@@ -70,12 +72,14 @@ class UberSimAdapter:
         if opt is None:
             raise ValueError(f"unknown option_id: {option_id}")
         now = self._clock.now()
+        intent_snap = self._intent_cache.get(option_id)
         draft = Draft(
             draft_id=new_draft_id(),
             option_snapshot=opt,
             fingerprint=fingerprint(opt),
             created_at=now,
             expires_at=now + timedelta(minutes=3),
+            intent_snapshot=intent_snap,
         )
         self._store.put_draft(draft)
         return draft

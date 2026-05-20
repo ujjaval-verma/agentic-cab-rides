@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS drafts (
     fingerprint     TEXT NOT NULL,
     created_at      TEXT NOT NULL,
     expires_at      TEXT NOT NULL,
-    consumed_at     TEXT
+    consumed_at     TEXT,
+    intent_snapshot TEXT            -- JSON; nullable for backwards compat with P1 fixtures
 );
 
 CREATE TABLE IF NOT EXISTS bookings (
