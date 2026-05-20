@@ -16,7 +16,8 @@ async def test_match_approve() -> None:
     )
     res = await ch.request(
         ConfirmationRequest(
-            draft_id="D",
+            subject_id="D",
+            subject_kind="draft",
             summary="Confirm UberX for $15",
             fingerprint="f",
             details={},
@@ -37,7 +38,8 @@ async def test_match_decline() -> None:
     )
     res = await ch.request(
         ConfirmationRequest(
-            draft_id="D",
+            subject_id="D",
+            subject_kind="draft",
             summary="Confirm UberX for $15",
             fingerprint="f",
             details={},
@@ -57,7 +59,8 @@ async def test_no_match_raises() -> None:
     with pytest.raises(AssertionError):
         await ch.request(
             ConfirmationRequest(
-                draft_id="D",
+                subject_id="D",
+                subject_kind="draft",
                 summary="UberX",
                 fingerprint="f",
                 details={},

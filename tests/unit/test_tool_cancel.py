@@ -253,6 +253,38 @@ async def test_cancel_idempotency_replay(harness) -> None:
 
 
 @pytest.mark.asyncio
+async def test_cancel_request_uses_subject_kind_booking(harness) -> None:
+    """cancel_booking must emit subject_kind='booking' and subject_id=booking_id on the gate."""
+    store, log, clock, sim = harness
+    booking_id = await _book(sim, store, log, clock)
+
+    captured: list[ConfirmationRequest] = []
+
+    class CapturingChannel:
+        async def request(self, req: ConfirmationRequest) -> ConfirmationResult:
+            captured.append(req)
+            return ConfirmationResult(
+                approved=True, reason="approved", approved_at=clock.now(), approver="spy"
+            )
+
+    result = await cancel_booking(
+        CancelArgs(booking_id=booking_id),
+        provider=sim,
+        store=store,
+        log=log,
+        channel=CapturingChannel(),
+        clock=clock,
+        session_id="S",
+        turn_id="T",
+    )
+    assert result["status"] == "cancelled"
+    assert len(captured) == 1
+    req = captured[0]
+    assert req.subject_kind == "booking"
+    assert req.subject_id == booking_id
+
+
+@pytest.mark.asyncio
 async def test_cancel_fee_in_gate_summary(harness) -> None:
     """Spy channel captures req.summary; assert it contains the dollar amount from _compute_fee."""
     store, log, clock, sim = harness

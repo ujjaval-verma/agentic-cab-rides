@@ -192,7 +192,8 @@ async def confirm_booking(
 
     # 5. Gate (invariant 2) — ConfirmationChannel owns the y/n decision
     req = ConfirmationRequest(
-        draft_id=draft.draft_id,
+        subject_id=draft.draft_id,
+        subject_kind="draft",
         summary=_summary(draft),
         fingerprint=draft.fingerprint,
         details={"price_cents": draft.option_snapshot.price.amount_cents},

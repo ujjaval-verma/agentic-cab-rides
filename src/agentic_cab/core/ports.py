@@ -38,7 +38,8 @@ class BookingProvider(Protocol):
 
 
 class ConfirmationRequest(BaseModel):
-    draft_id: str
+    subject_id: str
+    subject_kind: Literal["draft", "booking"]
     summary: str
     fingerprint: str
     details: dict[str, Any]

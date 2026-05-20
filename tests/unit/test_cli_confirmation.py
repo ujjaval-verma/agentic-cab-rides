@@ -24,7 +24,8 @@ _FAKE_FINGERPRINT = "abcdef123456789012345678"
 
 def _make_request() -> ConfirmationRequest:
     return ConfirmationRequest(
-        draft_id="01JTEST00000000000000001",
+        subject_id="01JTEST00000000000000001",
+        subject_kind="draft",
         summary="Confirm UberX from 123 Main St to 456 Oak Ave — $12.50",
         fingerprint=_FAKE_FINGERPRINT,
         details={"price_cents": 1250, "currency": "USD"},

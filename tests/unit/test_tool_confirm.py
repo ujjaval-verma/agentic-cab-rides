@@ -220,6 +220,40 @@ async def test_provider_exception_closes_log_with_outcome(harness, monkeypatch) 
 
 
 @pytest.mark.asyncio
+async def test_confirm_request_uses_subject_kind_draft(harness) -> None:
+    """confirm_booking must emit subject_kind='draft' and subject_id=draft_id on the gate."""
+    from agentic_cab.core.ports import ConfirmationRequest, ConfirmationResult
+
+    store, log, clock, sim = harness
+    draft_id = await _prepare(sim, log, clock)
+
+    captured: list[ConfirmationRequest] = []
+
+    class CapturingChannel:
+        async def request(self, req: ConfirmationRequest) -> ConfirmationResult:
+            captured.append(req)
+            return ConfirmationResult(
+                approved=True, reason="approved", approved_at=clock.now(), approver="spy"
+            )
+
+    result = await confirm_booking(
+        ConfirmArgs(draft_id=draft_id),
+        provider=sim,
+        store=store,
+        log=log,
+        channel=CapturingChannel(),
+        clock=clock,
+        session_id="S",
+        turn_id="T",
+    )
+    assert result["status"] == "confirmed"
+    assert len(captured) == 1
+    req = captured[0]
+    assert req.subject_kind == "draft"
+    assert req.subject_id == draft_id
+
+
+@pytest.mark.asyncio
 async def test_price_drift_branch_is_stubbed_in_p1(harness) -> None:
     """P1 sets requote_price_drift_cents=0 without re-discovering. Documents the stub;
     P3 will land real re-quote alongside intent-bound idempotency keys (FOLLOWUPS)."""
