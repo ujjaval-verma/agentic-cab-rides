@@ -1,0 +1,26 @@
+name: 02_price_comparison
+description: Multiple ride classes surfaced; user picks the cheapest (UberX).
+seed: 2
+clock:
+  start: "2026-05-19T12:00:00+00:00"
+  mode: frozen
+sim:
+  rng_seed: 2
+confirmation:
+  channel: scripted
+  script:
+    - match: "UberX"
+      action: approve
+user_turns:
+  - "What are the cheapest options from 37.7749,-122.4194 (Market & Powell) to 37.7849,-122.4094 (Union Square)?"
+  - "Go with the cheapest — UberX please. Confirm."
+invariants:
+  - kind: action_log_contains
+    where: {kind: "outcome", status: "confirmed"}
+  - kind: four_row_pattern
+    tool: "confirm_booking"
+  - kind: no_double_booking
+  - kind: fingerprint_verified_before_execute
+    tool: "confirm_booking"
+  - kind: gate_invoked_for_tool
+    tool: "confirm_booking"
