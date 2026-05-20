@@ -54,9 +54,19 @@ def confirm_idempotency_key(draft_id: str, fingerprint: str) -> str:
 def cancel_idempotency_key(booking_id: str, fee_cents: int, status_at_quote: str) -> str:
     """Derive a deterministic idempotency key for a cancel_booking call.
 
-    Key is bound to (booking_id, fee_cents, status_at_quote) so retries produce the same
-    key. Two cancels quoted at different fee amounts are *different intents* (user consented
-    to a specific fee), so fee and status-at-quote are part of the key.
+    Key is bound to (booking_id, fee_cents, status_at_quote, op="cancel") so retries produce
+    the same key.  Two cancels quoted at different fee amounts are *different intents* (user
+    consented to a specific fee), so fee and status-at-quote are part of the key.
+
+    The ``"op": "cancel"`` discriminator prevents a confirm-scope key from colliding with a
+    cancel-scope key in the shared ``idempotency_keys`` table — without it, a confirm and a
+    cancel for the same booking_id+fee_cents+status combo would hash to the same value.
+
+    Note: the *gate-consent* fingerprint for a cancel action is computed separately by
+    ``_cancel_fingerprint`` in ``tools/cancel.py``.  That function deliberately omits
+    ``"op"`` because the gate is scoped to a single tool-call (no cross-scope collision is
+    possible there).  The two functions intentionally hash different payloads.
+
     Returns a 64-char sha256 hex digest.
     """
     payload = {

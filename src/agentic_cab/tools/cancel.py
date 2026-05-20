@@ -51,9 +51,18 @@ class CancelArgs(BaseModel):
 
 
 def _cancel_fingerprint(booking_id: str, fee_cents: int, status_at_quote: str) -> str:
-    # Cancel fingerprint covers intent-specific fields, NOT the original draft snapshot.
-    # This prevents a mutated-booking replay from slipping past as if it were the original
-    # confirmed-state booking — the fee and status are what the user is consenting to cancel.
+    """Compute a gate-consent fingerprint for a cancel action.
+
+    Covers exactly what the user sees in the confirmation prompt: (booking_id, fee_cents,
+    status_at_quote).  Deliberately does NOT include an ``"op"`` discriminator — the gate
+    is already scoped to this specific tool-call, so no cross-scope collision is possible.
+
+    This is the *gate* fingerprint counterpart to
+    :func:`~agentic_cab.core.ids.cancel_idempotency_key`, which DOES include
+    ``"op": "cancel"`` so that confirm-scope and cancel-scope keys can safely coexist in
+    the shared ``idempotency_keys`` table without colliding.  The two functions serve
+    different purposes and intentionally hash different payloads.
+    """
     payload = {"booking_id": booking_id, "fee_cents": fee_cents, "status_at_quote": status_at_quote}
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
