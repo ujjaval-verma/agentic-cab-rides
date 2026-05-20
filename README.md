@@ -14,12 +14,14 @@ A prototype that demonstrates three properties:
 
 ## Status
 
-**P0 — Harness:** shipped. Tooling, hooks, skills, invariants, phase contract.
-**P1 — Tracer bullet:** next. See [`docs/PHASES.md`](docs/PHASES.md).
+Working today: REPL agent (`make repl`), web UI (`make web`), 5 end-to-end
+scenarios with replayable action logs, a contract suite that proves the
+`BookingProvider` port survives a non-ride second adapter, and a green
+`make verify` gate on every push.
 
 Tracker = `git log --oneline --grep='(P[0-9])'`. There is no status file; status lives in commits.
 
-## Quickstart *(will be validated end-to-end in P6)*
+## Quickstart
 
 **Requires:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) (Python is installed by `uv` automatically; 3.12+ pinned in `.python-version`).
 
