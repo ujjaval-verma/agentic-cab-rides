@@ -40,4 +40,4 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 
 ## Operational
 
-- (none yet)
+- [ ] **`transcripts/01_happy_path.md` is stale relative to T27's sha256 key shape.** Line 31 still carries `"idempotency_key": "01KS1QTRK867VXS7HDC6TJPGHW"` (a 26-char ULID). After T27, the key should be a 64-char sha256 hex digest. `make transcripts` consistently hangs after discover — the agent stops without proceeding to prepare+confirm (observed across 5+ runs post-T27; pre-T27 run `01KS2H5P7R675YAN37993745B0` shows the old ULID shape). Root cause is likely agent prompt drift causing early stop; investigate runner.py turn-loop exit conditions. Regenerate once scenario flakiness is resolved. — T27 gap 2 / P3 spec-compliance audit.
