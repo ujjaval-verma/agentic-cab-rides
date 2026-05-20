@@ -66,6 +66,55 @@ make help            # Discover targets
 - `temperature=0` for the agent and any subagent reviewer.
 - Scenarios use `FrozenClock` and seeded RNG; interactive mode uses `SystemClock` and `random.Random(os.urandom(8))`.
 
+## Documentation: durable vs transient
+
+The repo has two kinds of markdown: docs that travel with the code (versioned, referenced by other artifacts) and scratch that exists only to support the current task (gitignored, deletable). Mixing them rots the repo silently.
+
+### Durable — committed, part of the contract
+
+| Path | Purpose |
+|---|---|
+| `CLAUDE.md` (root) | Invariants every session must respect |
+| `README.md` (root) | 3-min quickstart for the grader |
+| `docs/superpowers/specs/*.md` | Design specs (date-prefixed) |
+| `docs/superpowers/plans/*.md` | Implementation plans (output of `writing-plans`) |
+| `docs/build-progress.md` | Live slice tracker; mutable but durable — git history is the audit |
+| `docs/ARCHITECTURE.md` | Layer diagram + port boundaries |
+| `docs/WRITEUP.md` | The 1-pager deliverable |
+| `docs/FOLLOWUPS.md` | The only legal home for TODO-class items |
+| `transcripts/*.md` | Generated, but committed — the deliverable artifact |
+
+### Transient — gitignored, do not commit
+
+| Path | Purpose |
+|---|---|
+| `docs/scratch/` (except its README) | Agent thinking-out-loud, exploratory notes, Ralph-loop review outputs |
+| `notes/` (except its README) | Personal scratchpad — meta notes, command snippets, references-to-read-later |
+| `*.draft.md` anywhere | Naming-convention fallback for in-flight docs near related code |
+| `*.local.md` anywhere | Local-only annotations |
+| `.review-*.md` anywhere | Ralph-loop review outputs (dispositions distilled into `build-progress.md`) |
+| `$TMPDIR/handoff-*.md` | Handoff docs live outside the repo entirely (per the `handoff` skill) |
+
+### Decision tree
+
+```
+Will this doc still be useful in 7 days?
+├── No  → docs/scratch/  (or *.draft.md if it belongs near code)
+└── Yes → Will multiple sessions/agents need to read it?
+         ├── No  → notes/  or  docs/scratch/
+         └── Yes → Does it define a contract, invariant, or deliverable?
+                  ├── Yes → docs/  (and link from CLAUDE.md or README.md)
+                  └── No  → append to docs/FOLLOWUPS.md
+```
+
+**Tie-breaker:** when unsure, it's scratch. Promoting scratch → durable later is cheap; removing committed history is not.
+
+### Enforcement
+
+- `.gitignore` excludes `docs/scratch/*`, `notes/*`, `*.draft.md`, `*.local.md`, `.review-*.md` (READMEs in scratch/notes are whitelisted)
+- Pre-commit hook `no-stray-root-md` rejects net-new top-level `*.md` files outside `{CLAUDE.md, README.md}` — forces them under `docs/` or `docs/scratch/`
+- Durable docs **must not link into** `docs/scratch/` or `notes/` — those links would 404 for anyone cloning fresh
+
 ## Where to put things
 
 - New ports: `src/agentic_cab/core/ports.py`

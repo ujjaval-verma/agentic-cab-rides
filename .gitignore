@@ -18,6 +18,16 @@ data/
 logs/
 chat/
 
+# Transient documentation (see CLAUDE.md "Documentation: durable vs transient")
+docs/scratch/*
+!docs/scratch/README.md
+notes/*
+!notes/README.md
+*.draft.md
+*.local.md
+.review-*.md
+**/.review-*.md
+
 # Secrets
 .env
 .env.local

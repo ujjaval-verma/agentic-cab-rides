@@ -39,6 +39,12 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: no-stray-root-md
+        name: no net-new top-level .md outside whitelist (use docs/ or docs/scratch/)
+        entry: bash -c 'allowed="^(CLAUDE\.md|README\.md)$"; new=$(git diff --cached --name-only --diff-filter=A | grep -E "^[^/]+\.md$" | grep -vE "$allowed" || true); if [ -n "$new" ]; then echo "Net-new top-level .md files are not allowed:"; echo "$new"; echo "Move under docs/ (durable) or docs/scratch/ (gitignored). See CLAUDE.md."; exit 1; fi'
+        language: system
+        pass_filenames: false
+
       - id: fast-tests
         name: fast tests (unit + contract, no scenarios)
         entry: uv run pytest -m "not scenario and not slow" -q
