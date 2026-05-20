@@ -6,7 +6,7 @@ See spec §3 (layers), §5 (BookingProvider), §6 (ConfirmationChannel), §10a (
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Protocol, Self, runtime_checkable
+from typing import Any, ClassVar, Literal, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -18,7 +18,7 @@ from agentic_cab.core.types import Booking, BookingEvent, Draft, Intent, Option
 @runtime_checkable
 class BookingProvider(Protocol):
     name: str
-    supported_intent_kinds: set[str]
+    supported_intent_kinds: ClassVar[set[str]]
 
     async def discover(self: Self, intent: Intent) -> list[Option]: ...
 
