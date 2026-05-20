@@ -1,8 +1,9 @@
 name: 03_bad_address
 description: >
   Dropoff address "123 Main St" is ambiguous (confidence 0.3, two
-  alternates).  Agent surfaces alternates; user picks the Anytown, CA
-  one and confirms.  Booking proceeds.
+  alternates).  Agent receives the low-confidence geocode result and
+  asks the user to clarify the location.  User supplies a specific
+  address with lat/lng coordinates, and the booking proceeds.
 seed: 3
 clock:
   start: "2026-05-19T12:00:00+00:00"
