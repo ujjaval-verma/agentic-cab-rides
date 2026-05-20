@@ -75,9 +75,9 @@ status: ## One-screen orientation: branch, dirty files, recent commits, slice tr
 	echo "─── dirty ───"
 	git status --short 2>/dev/null | head -20 || true
 	echo "─── recent ───"
-	git log --oneline -5 2>/dev/null || true
-	echo "─── slice ───"
-	if [ -f docs/build-progress.md ]; then grep -E "^\- \[[ \-x]\]" docs/build-progress.md | head -10; else echo "(docs/build-progress.md not yet scaffolded — see writing-plans step)"; fi
+	git log --oneline -10 2>/dev/null || true
+	echo "─── by phase ───"
+	git log --oneline 2>/dev/null | grep -oE '\(P[0-9]\)' | sort | uniq -c | sort -rn || true
 
 demo: ## Run the happy-path scenario and tail the action log
 	$(UV) run python -m agentic_cab run-scenario 01_happy_path

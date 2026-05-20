@@ -78,7 +78,7 @@ The repo has two kinds of markdown: docs that travel with the code (versioned, r
 | `README.md` (root) | 3-min quickstart for the grader |
 | `docs/superpowers/specs/*.md` | Design specs (date-prefixed) |
 | `docs/superpowers/plans/*.md` | Implementation plans (output of `writing-plans`) |
-| `docs/build-progress.md` | Live slice tracker; mutable but durable — git history is the audit |
+| `docs/PHASES.md` | Static contract: Definition of Done + phases with acceptance bullets. No status field — git log is the tracker. |
 | `docs/ARCHITECTURE.md` | Layer diagram + port boundaries |
 | `docs/WRITEUP.md` | The 1-pager deliverable |
 | `docs/FOLLOWUPS.md` | The only legal home for TODO-class items |
@@ -126,7 +126,7 @@ Will this doc still be useful in 7 days?
 - Unit tests: `tests/unit/`
 - Scenario tests: `tests/scenarios/`
 - Follow-ups: `docs/FOLLOWUPS.md` (never inline `TODO`)
-- Slice tracker: `docs/build-progress.md` (created in the writing-plans step)
+- Phases + DOD: `docs/PHASES.md` (static contract; status comes from `git log`, not a tracker)
 
 ## When something is unclear
 
