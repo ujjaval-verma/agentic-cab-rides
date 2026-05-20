@@ -115,7 +115,7 @@ class UberSimAdapter:
             base = base_price(vc, km, float(est_min))
             surged = _apply_surge(base, surge_mult)
             opt = Option(
-                option_id=f"opt-{vc}-{self._rng.randrange(10 ** 12)}",
+                option_id=f"opt-{vc}-{self._rng.randrange(10**12)}",
                 provider=self.name,
                 title=f"{_TITLE_TEMPLATE[vc]} — ~{est_min} min",
                 price=surged,

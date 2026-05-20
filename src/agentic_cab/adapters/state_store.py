@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal, Self
 
 from agentic_cab.core.ports import ClaimResult
-from agentic_cab.core.types import Booking, BookingEvent, Draft, Intent, Option
+from agentic_cab.core.types import Booking, BookingEvent, Draft, Intent, Option, RideIntent
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
@@ -64,11 +64,7 @@ class SqliteStateStore:
         opt = Option.model_validate_json(row[1])
         intent: Intent | None = None
         if row[5] is not None:
-            import json as _json
-
-            from agentic_cab.core.types import RideIntent
-
-            intent = RideIntent.model_validate(_json.loads(row[5]))
+            intent = RideIntent.model_validate(json.loads(row[5]))
         return Draft(
             draft_id=row[0],
             option_snapshot=opt,
