@@ -34,7 +34,7 @@ async def test_discover_emits_requested_and_outcome(tmp_path: Path) -> None:
         turn_id="T",
     )
     assert "options" in result
-    assert len(result["options"]) == 1
+    assert len(result["options"]) == 4  # uberx, comfort, uberxl, black (P3 multi-class)
     rows = log.read("S")
     kinds = [r["kind"] for r in rows]
     assert kinds == ["requested", "outcome"]

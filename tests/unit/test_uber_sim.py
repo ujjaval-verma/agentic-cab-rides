@@ -35,9 +35,11 @@ async def test_discover_returns_uberx_option(sim: UberSimAdapter) -> None:
         when="now",
     )
     options = await sim.discover(intent)
-    assert len(options) == 1
-    assert options[0].details.vehicle_class == "uberx"
-    assert options[0].price.amount_cents > 0
+    # P3: sim now returns all 4 vehicle classes
+    assert len(options) == 4
+    vehicle_classes = {o.details.vehicle_class for o in options}
+    assert "uberx" in vehicle_classes
+    assert all(o.price.amount_cents > 0 for o in options)
 
 
 @pytest.mark.asyncio
@@ -51,7 +53,8 @@ async def test_prepare_then_confirm_returns_booking(sim: UberSimAdapter) -> None
     opt = options[0]
     draft = await sim.prepare(opt.option_id)
     booking = await sim.confirm(draft.draft_id, idempotency_key="K1")
-    assert booking.status == "confirmed"
+    # P3: sim starts booking at "requested" (state machine initial state)
+    assert booking.status == "requested"
     assert booking.draft_id == draft.draft_id
 
 
