@@ -44,10 +44,13 @@ def render_transcripts(
     assert_invariants: Annotated[
         bool,
         typer.Option(
-            "--assert-invariants",
-            help="After each run, assert all invariants pass (exit 1 if any fail).",
+            "--assert-invariants/--no-assert-invariants",
+            help=(
+                "Assert all invariants pass after each run (exit 1 on any FAIL)."
+                " Default on; pass --no-assert-invariants to render even when invariants fail."
+            ),
         ),
-    ] = False,
+    ] = True,
 ) -> None:
     """Render all scenarios under scenarios/ into transcripts/ (P2 wires the actual MD render)."""
     scenarios_dir = Path("scenarios")
@@ -101,12 +104,13 @@ def render_transcripts(
         # print() is allowed here — __main__.py is the CLI surface (CLAUDE.md inv 14).
         print(f"{scn_path.name} → session {session_id}")  # noqa: T201
 
-        if assert_invariants:
-            for kind, passed, params in results:
-                mark = "PASS" if passed else "FAIL"
-                print(f"  {mark} {kind} {params}")  # noqa: T201
-                if not passed:
-                    all_passed = False
+        # Always print invariant results so silent FAILs cannot hide a regression
+        # behind a successful-looking "session X" line.
+        for kind, passed, params in results:
+            mark = "PASS" if passed else "FAIL"
+            print(f"  {mark} {kind} {params}")  # noqa: T201
+            if not passed:
+                all_passed = False
 
     if assert_invariants and not all_passed:
         sys.exit(1)
