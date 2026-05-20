@@ -16,6 +16,7 @@ def test_render_snapshot(snapshot) -> None:
         {
             "action_id": "A",
             "kind": "verified",
+            "tool": "confirm_booking",
             "result": "ok",
             "ts": "2026-05-19T12:00:01+00:00",
             "checks": {
@@ -26,6 +27,7 @@ def test_render_snapshot(snapshot) -> None:
         {
             "action_id": "A",
             "kind": "executed",
+            "tool": "confirm_booking",
             "provider": "uber-sim",
             "method": "confirm",
             "idempotency_key": "K",
@@ -36,6 +38,7 @@ def test_render_snapshot(snapshot) -> None:
         {
             "action_id": "A",
             "kind": "outcome",
+            "tool": "confirm_booking",
             "status": "confirmed",
             "result": {"booking_id": "B1"},
             "ts": "2026-05-19T12:00:03+00:00",

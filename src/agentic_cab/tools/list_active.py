@@ -61,6 +61,7 @@ async def list_active_bookings(
             "session_id": session_id,
             "action_id": action_id,
             "kind": "outcome",
+            "tool": "list_active_bookings",
             "status": "ok",
             "result": result,
             "error": None,

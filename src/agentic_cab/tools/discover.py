@@ -71,6 +71,7 @@ async def discover_options(
             "session_id": session_id,
             "action_id": action_id,
             "kind": "outcome",
+            "tool": "discover_options",
             "status": "ok",
             "result": payload,
             "error": None,

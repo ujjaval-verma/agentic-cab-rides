@@ -50,6 +50,7 @@ async def prepare_booking(
             "session_id": session_id,
             "action_id": action_id,
             "kind": "outcome",
+            "tool": "prepare_booking",
             "status": "ok",
             "result": result,
             "error": None,

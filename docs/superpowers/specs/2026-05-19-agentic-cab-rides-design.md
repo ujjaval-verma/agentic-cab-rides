@@ -208,6 +208,9 @@ Row kinds, all linked by `action_id`:
 - PII redaction at log boundary: raw address text replaced with `{formatted, lat, lng}`; phone/name through `redact()`.
 - `replay.py <session_id>` reconstructs the full session deterministically.
 
+<!-- spec-amendment: 2026-05-20 -->
+Every row (requested/verified/executed/outcome) carries a `tool` field — added 2026-05-20 to make plain-grep diagnostics work without an action_id join.
+
 ## 9. UberSimAdapter
 
 **Pricing** (in-process, fully deterministic):

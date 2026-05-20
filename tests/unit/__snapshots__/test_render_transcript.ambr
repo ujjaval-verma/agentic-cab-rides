@@ -18,9 +18,9 @@
   
   ```json
   {"action_id": "A", "kind": "requested", "tool": "confirm_booking", "ts": "2026-05-19T12:00:00+00:00"}
-  {"action_id": "A", "kind": "verified", "result": "ok", "ts": "2026-05-19T12:00:01+00:00", "checks": {"fingerprint_match": true, "confirmation": {"approved": true, "approver": "scripted"}}}
-  {"action_id": "A", "kind": "executed", "provider": "uber-sim", "method": "confirm", "idempotency_key": "K", "latency_ms": 0, "replayed": false, "ts": "2026-05-19T12:00:02+00:00"}
-  {"action_id": "A", "kind": "outcome", "status": "confirmed", "result": {"booking_id": "B1"}, "ts": "2026-05-19T12:00:03+00:00"}
+  {"action_id": "A", "kind": "verified", "tool": "confirm_booking", "result": "ok", "ts": "2026-05-19T12:00:01+00:00", "checks": {"fingerprint_match": true, "confirmation": {"approved": true, "approver": "scripted"}}}
+  {"action_id": "A", "kind": "executed", "tool": "confirm_booking", "provider": "uber-sim", "method": "confirm", "idempotency_key": "K", "latency_ms": 0, "replayed": false, "ts": "2026-05-19T12:00:02+00:00"}
+  {"action_id": "A", "kind": "outcome", "tool": "confirm_booking", "status": "confirmed", "result": {"booking_id": "B1"}, "ts": "2026-05-19T12:00:03+00:00"}
   ```
   
   </details>
