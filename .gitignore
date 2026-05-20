@@ -41,3 +41,6 @@ notes/*
 # Build artifacts
 dist/
 build/
+
+# Claude Code runtime artifacts
+.claude/scheduled_tasks.lock
