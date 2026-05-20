@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Cab Rides</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <header>
+    <span>Agentic Cab Rides</span>
+    <span class="badge">WebConfirmationChannel</span>
+  </header>
+
+  <div class="session-info" id="session-info">session: connecting…</div>
+
+  <div class="layout">
+    <!-- Chat pane -->
+    <div class="chat-pane">
+      <div class="chat-messages" id="chat-messages"></div>
+      <form class="chat-form" id="chat-form" autocomplete="off">
+        <input
+          type="text"
+          id="message-input"
+          placeholder="Book a ride from A to B…"
+          autofocus
+        />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+
+    <!-- Log pane -->
+    <div class="log-pane">
+      <h2>Action Log</h2>
+      <div class="log-entries" id="log-entries"></div>
+    </div>
+  </div>
+
+  <!-- Confirmation modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <h3>Confirm Action</h3>
+      <div class="summary" id="modal-summary"></div>
+      <div class="fingerprint" id="modal-fingerprint"></div>
+      <div class="modal-actions">
+        <button class="btn-decline" id="btn-decline">Decline</button>
+        <button class="btn-approve" id="btn-approve">Approve</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

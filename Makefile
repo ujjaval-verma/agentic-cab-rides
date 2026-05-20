@@ -59,7 +59,7 @@ repl: ## Interactive CLI agent (CLIConfirmationChannel via /dev/tty)
 	$(UV) run python -m agentic_cab repl
 
 web: ## FastAPI + browser UI at http://localhost:8000 (WebConfirmationChannel)
-	$(UV) run python -m agentic_cab web
+	$(UV) run uvicorn agentic_cab.web.app:create_app --factory --host 127.0.0.1 --port 8000 --reload
 
 transcripts: ## Regenerate all 5 transcripts from scenarios/
 	$(UV) run python -m agentic_cab render-transcripts
