@@ -1,0 +1,25 @@
+name: 01_happy_path
+description: Single ride, defaults, approved on first ask
+seed: 42
+clock:
+  start: "2026-05-19T12:00:00+00:00"
+  mode: frozen
+sim:
+  rng_seed: 42
+confirmation:
+  channel: scripted
+  script:
+    - match: "UberX"
+      action: approve
+user_turns:
+  - "Book me a ride from 37.7749,-122.4194 (Market & Powell) to 37.7849,-122.4094 (Union Square)."
+invariants:
+  - kind: action_log_contains
+    where: {tool: "confirm_booking", kind: "outcome", status: "confirmed"}
+  - kind: four_row_pattern
+    tool: "confirm_booking"
+  - kind: no_double_booking
+  - kind: fingerprint_verified_before_execute
+    tool: "confirm_booking"
+  - kind: gate_invoked_for_tool
+    tool: "confirm_booking"
