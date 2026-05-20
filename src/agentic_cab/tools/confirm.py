@@ -4,7 +4,7 @@ Algorithm:
   1. Load draft; reject if missing / expired / already consumed.
   2. Fingerprint check — abort on mismatch (invariant 3).
   3. Re-quote stub (P1: drift = 0; P3 will call provider.discover() again).
-  4. Mint idempotency key via injected factory; claim_or_recall for short-circuit.
+  4. Derive intent-bound idempotency key (draft_id + fingerprint); claim_or_recall.
   5. Gate via ConfirmationChannel; abort on decline (invariant 2).
   6. Emit verified row (ok).
   7. Execute provider.confirm(); emit executed row.
@@ -24,7 +24,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from agentic_cab.core.fingerprint import fingerprint
-from agentic_cab.core.ids import new_action_id, new_idempotency_key
+from agentic_cab.core.ids import confirm_idempotency_key, new_action_id
 from agentic_cab.core.ports import (
     ActionLog,
     BookingProvider,
@@ -95,7 +95,7 @@ async def confirm_booking(
     clock: Clock,
     session_id: str,
     turn_id: str,
-    key_factory: Callable[[], str] = new_idempotency_key,
+    key_factory: Callable[[str, str], str] = confirm_idempotency_key,
 ) -> dict[str, Any]:
     action_id = new_action_id()
     log.emit(
@@ -156,12 +156,13 @@ async def confirm_booking(
     # Narrowing: _validate_draft guarantees draft is not None when rejection is None
     draft: Draft = draft_or_none  # type: ignore[assignment]
 
-    # 3. Re-quote (P1 stub — drift always 0; P3 retrofits real provider.discover() call
-    # alongside intent-bound idempotency keys; tracked in FOLLOWUPS.md, noted in WRITEUP.md).
+    # 3. Re-quote (P1 stub — drift always 0; P3 retrofits real provider.discover() call).
     requote_drift_cents = 0
 
-    # 4. Idempotency claim (invariant 5)
-    key = key_factory()
+    # 4. Idempotency claim (invariant 5). Key derived from (draft_id, fingerprint) so an
+    # agent retry after a network timeout produces the same key and hits claim_or_recall
+    # instead of re-booking. draft.fingerprint is available after _validate_draft.
+    key = key_factory(draft.draft_id, draft.fingerprint)
     claim = store.claim_or_recall(key, scope="confirm")
     if claim.status == "recalled" and claim.booking is not None:
         _emit_verified(

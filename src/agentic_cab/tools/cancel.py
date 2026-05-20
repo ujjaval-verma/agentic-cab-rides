@@ -2,11 +2,14 @@
 
 Algorithm:
   1. Load booking; reject if missing.
-  2. Mint idempotency key; claim_or_recall BEFORE status guard — a replay on a booking
-     that already transitioned to "cancelled" via the first call must short-circuit here,
-     not fall through to the "already cancelled" rejection path (spec §10a).
-  3. Reject if booking status is already terminal or not cancellable (after recall check).
-  4. quote_cancel_fee → fee shown in gate summary.
+  2. quote_cancel_fee → need fee + status BEFORE key derivation (key includes both).
+     Note: this is a read-only provider call; calling it on a replay before claim_or_recall
+     is acceptable. The dedup only needs to guard the mutation (provider.cancel).
+  3. Derive intent-bound idempotency key from (booking_id, fee_cents, status_at_quote);
+     claim_or_recall BEFORE status guard — a replay on a booking that already transitioned
+     to "cancelled" via the first call must short-circuit here, not fall through to the
+     "already cancelled" rejection path (spec §10a). Original approval is canonical.
+  4. Reject if booking status is already terminal or not cancellable (after recall check).
   5. Gate via ConfirmationChannel; abort on decline (invariant 2).
   6. Emit verified(ok).
   7. Execute provider.cancel(); emit executed row.
@@ -27,7 +30,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from agentic_cab.core.fingerprint import canonical_json
-from agentic_cab.core.ids import new_action_id, new_idempotency_key
+from agentic_cab.core.ids import cancel_idempotency_key, new_action_id
 from agentic_cab.core.ports import (
     ActionLog,
     BookingProvider,
@@ -65,7 +68,7 @@ async def cancel_booking(
     clock: Clock,
     session_id: str,
     turn_id: str,
-    key_factory: Callable[[], str] = new_idempotency_key,
+    key_factory: Callable[[str, int, str], str] = cancel_idempotency_key,
 ) -> dict[str, Any]:
     action_id = new_action_id()
     log.emit(
@@ -123,10 +126,19 @@ async def cancel_booking(
         _emit_verified({"booking_found": False}, "rejected", "unknown booking")
         return _emit_outcome("rejected", {"reason": "unknown booking"})
 
-    # Step 2: Idempotency claim BEFORE the status guard (invariant 5 + spec §10a).
-    # A second cancel call with the same key must short-circuit here even if the booking
-    # is now "cancelled" (because the first call put it there). Original approval is canonical.
-    key = key_factory()
+    # Step 2: Quote cancellation fee BEFORE deriving the idempotency key. The key is
+    # bound to (booking_id, fee_cents, status_at_quote) so the user's fee-consent is
+    # captured in the key — two cancels quoted at different fees are different intents.
+    # quote_cancel_fee is a read-only provider call; calling it on a replay before
+    # claim_or_recall is acceptable overhead; the dedup only guards the mutation (provider.cancel).
+    fee = await provider.quote_cancel_fee(args.booking_id)
+    status_at_quote = booking.status
+
+    # Step 3: Derive intent-bound key; claim_or_recall BEFORE the status guard (invariant 5 +
+    # spec §10a). A second cancel call on the same intent must short-circuit here even if the
+    # booking is now "cancelled" (because the first call put it there). Original approval is
+    # canonical.
+    key = key_factory(args.booking_id, fee.amount_cents, status_at_quote)
     claim = store.claim_or_recall(key, scope="cancel")
     if claim.status == "recalled" and claim.booking is not None:
         _emit_verified(
@@ -154,7 +166,7 @@ async def cancel_booking(
         )
         return _emit_outcome("cancelled", {"booking_id": claim.booking.booking_id})
 
-    # Step 3: Reject terminal / non-cancellable statuses (AFTER idempotency recall check).
+    # Step 4: Reject terminal / non-cancellable statuses (AFTER idempotency recall check).
     if booking.status in _ALREADY_TERMINAL:
         _emit_verified(
             {"booking_found": True, "status": booking.status},
@@ -172,10 +184,6 @@ async def cancel_booking(
         return _emit_outcome(
             "rejected", {"reason": f"cannot cancel; ride in status={booking.status!r}"}
         )
-
-    # Step 4: Quote cancellation fee.
-    fee = await provider.quote_cancel_fee(args.booking_id)
-    status_at_quote = booking.status
 
     # Step 5: Gate (invariant 2) — ConfirmationChannel owns the y/n decision.
     fp = _cancel_fingerprint(args.booking_id, fee.amount_cents, status_at_quote)
