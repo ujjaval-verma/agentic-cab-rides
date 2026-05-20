@@ -177,7 +177,12 @@ async def cancel_booking(
     # Step 5: Gate (invariant 2) — ConfirmationChannel owns the y/n decision.
     fp = _cancel_fingerprint(args.booking_id, fee.amount_cents, status_at_quote)
     req = ConfirmationRequest(
-        draft_id=args.booking_id,  # repurpose draft_id field for the booking_id
+        # ConfirmationRequest.draft_id is overloaded to carry the booking_id for
+        # cancel intents — the field is opaque to ScriptedConfirmationChannel and
+        # CLIConfirmationChannel (both treat it as an audit identifier). See
+        # docs/FOLLOWUPS.md "ConfirmationRequest.draft_id overload" — the web
+        # channel (P3) must pick a typed solution before any web-cancel path lands.
+        draft_id=args.booking_id,
         summary=(
             f"Cancel {booking.summary.title}? Fee: ${fee.amount_cents / 100:.2f} {fee.currency}"
         ),
