@@ -275,12 +275,9 @@ def test_startup_hook_publishes_to_session_id_not_subject_id(tmp_path: Path) -> 
 
     assert publish_calls, "Expected at least one publish call from the startup hook"
     keys_used = [call[0] for call in publish_calls]
-    assert (
-        session_id in keys_used
-    ), f"Startup hook must publish to session_id={session_id!r}; got keys: {keys_used!r}"
-    assert (
-        subject_id not in keys_used
-    ), f"Startup hook must NOT publish to subject_id={subject_id!r}; got keys: {keys_used!r}"
+    # session_id must be used as the bus key, not subject_id
+    assert session_id in keys_used
+    assert subject_id not in keys_used
 
 
 def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
