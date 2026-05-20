@@ -74,12 +74,44 @@ def check_gate_invoked_for_tool(rows: list[dict[str, Any]], tool: str) -> bool:
     return True
 
 
+def check_price_changed_rejected(rows: list[dict[str, Any]], tool: str) -> bool:
+    """Assert that at least one action for `tool` has verified.result=='rejected'
+    and verified.reason=='price_changed', and outcome.status=='price_changed'."""
+    for group in _by_action(rows).values():
+        req = next((r for r in group if r["kind"] == "requested"), None)
+        if not req or req.get("tool") != tool:
+            continue
+        ver = next((r for r in group if r["kind"] == "verified"), None)
+        if ver and ver.get("result") == "rejected" and ver.get("reason") == "price_changed":
+            out = next((r for r in group if r["kind"] == "outcome"), None)
+            if out and out.get("status") == "price_changed":
+                return True
+    return False
+
+
+def check_no_executed_after_price_changed(rows: list[dict[str, Any]], tool: str) -> bool:
+    """For every action_id of `tool` whose outcome.status=='price_changed',
+    assert there is no executed row (invariant 6: rejected → no executed)."""
+    for group in _by_action(rows).values():
+        req = next((r for r in group if r["kind"] == "requested"), None)
+        if not req or req.get("tool") != tool:
+            continue
+        out = next((r for r in group if r["kind"] == "outcome"), None)
+        if out and out.get("status") == "price_changed":
+            exe = next((r for r in group if r["kind"] == "executed"), None)
+            if exe is not None:
+                return False  # executed row present after price_changed → invariant violated
+    return True
+
+
 CHECKERS: dict[str, Any] = {
     "action_log_contains": check_action_log_contains,
     "four_row_pattern": check_four_row_pattern,
     "no_double_booking": check_no_double_booking,
     "fingerprint_verified_before_execute": check_fingerprint_verified_before_execute,
     "gate_invoked_for_tool": check_gate_invoked_for_tool,
+    "price_changed_rejected": check_price_changed_rejected,
+    "no_executed_after_price_changed": check_no_executed_after_price_changed,
 }
 
 

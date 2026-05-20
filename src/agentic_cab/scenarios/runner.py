@@ -18,6 +18,8 @@ from agentic_cab.adapters.geocoding.cache import GeocodeCache
 from agentic_cab.adapters.geocoding.nominatim import NominatimGeocoder
 from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
+from agentic_cab.adapters.uber_sim.state_machine import DriverAvailability
+from agentic_cab.adapters.uber_sim.surge import SurgeCurve
 from agentic_cab.agent.loop import ToolHandler, run_turn
 from agentic_cab.core.ids import new_session_id, new_turn_id
 from agentic_cab.tools.cancel import CancelArgs, cancel_booking
@@ -54,7 +56,23 @@ async def run_scenario(
     store = SqliteStateStore(db_path=data_dir / f"{scn['name']}.db")
     store.apply_schema()
     log = JSONLActionLog(log_dir=log_dir)
-    sim = UberSimAdapter(store=store, clock=clock, rng_seed=scn["sim"]["rng_seed"])
+
+    # Optional sim config: surge_curve and availability (T28)
+    sim_cfg = scn.get("sim", {})
+    surge_curve: SurgeCurve | None = None
+    if "surge_curve" in sim_cfg:
+        surge_curve = SurgeCurve.model_validate(sim_cfg["surge_curve"])
+    availability: DriverAvailability | None = None
+    if "availability" in sim_cfg:
+        availability = DriverAvailability.model_validate(sim_cfg["availability"])
+
+    sim = UberSimAdapter(
+        store=store,
+        clock=clock,
+        rng_seed=sim_cfg.get("rng_seed", 0),
+        surge_curve=surge_curve,
+        availability=availability,
+    )
     channel = ScriptedConfirmationChannel(script=scn["confirmation"]["script"], clock=clock)
     _geocode_fixtures_dir = (
         geocode_fixtures_dir if geocode_fixtures_dir is not None else _DEFAULT_GEOCODE_FIXTURES

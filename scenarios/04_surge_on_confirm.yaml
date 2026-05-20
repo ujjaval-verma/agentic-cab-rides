@@ -1,0 +1,34 @@
+name: 04_surge_on_confirm
+description: >
+  Surge price kicks in between prepare and confirm (force_surge_on_confirm=True).
+  Agent receives price_changed outcome and surfaces the new price to the user.
+  Demonstrates that verified.result=rejected with reason=price_changed fires before
+  the ConfirmationChannel is invoked and no executed row appears (invariant 6).
+seed: 7
+clock:
+  start: "2026-05-19T10:00:00+00:00"
+  mode: frozen
+sim:
+  rng_seed: 7
+  surge_curve:
+    base_multiplier: "1.0"
+    peak_multiplier: "3.0"
+    peak_start: "2026-05-19T08:00:00+00:00"   # ended 2 hours before scenario start
+    peak_duration_min: 30
+    force_surge_on_confirm: true
+  availability:
+    available: true
+    force_no_availability: false
+confirmation:
+  channel: scripted
+  script:
+    - match: "UberX"
+      action: approve
+user_turns:
+  - "Book me a ride from 37.7749,-122.4194 (Market & Powell) to 37.7849,-122.4094 (Union Square)."
+invariants:
+  - kind: price_changed_rejected
+    tool: "confirm_booking"
+  - kind: no_executed_after_price_changed
+    tool: "confirm_booking"
+  - kind: no_double_booking
