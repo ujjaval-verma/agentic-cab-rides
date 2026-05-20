@@ -22,11 +22,14 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 - [ ] **AutoApproveChannel structural guard.** When `adapters/confirmation/auto.py` lands (P1), its `__init__` must assert `os.environ.get("ALLOW_AUTO_APPROVE") == "1"` and raise otherwise. Add a unit test that asserts construction raises by default and succeeds with the env var set. Right now this is only enforced by prose in the spec; the assignment grader will rightly probe it. — P1 confirmation slice.
 - [ ] **Mock `AppointmentProvider` in the contract suite.** The Zocdoc-reach claim is currently paper-only — the architecture supports it but no test exercises an `AppointmentIntent` end-to-end. Ship a minimal in-memory `MockAppointmentProvider` that satisfies the contract suite, proving the abstraction holds beyond ride-share. Strong signal for the writeup. — P3 contract suite expansion.
 - [ ] **Action-log retention/rotation.** Logs currently grow without bound under `logs/<session>.jsonl`. Add a `make logs-rotate` target and a retention policy doc (likely just "keep last 100 sessions" for the prototype) before any long-running demo. — post-P6.
+- [ ] **Restart-survival semantics for claim_or_recall.** P1 returns status='new' for an in-progress (claimed-but-not-finalised) idempotency_keys row, which lets the caller retry the provider call with the same key. P3 should introduce status='in_progress' alongside intent-bound keys so a single canonical recovery path exists. — T7 Ralph B1.
+- [ ] **SqliteStateStore thread-safety for FastAPI web path.** Connection opened with default check_same_thread=True. Web path (P4/P5) will hit "objects can only be used in same thread" if a shared store is used across asyncio handlers. Fix: connection-per-request or check_same_thread=False with locking. — T7 Ralph N7.
 
 ## Tests / coverage gaps
 
 - [ ] **Fingerprint property test: permutations.** Current test only reverses dict insertion order; replace with st.permutations or hypothesis shuffling to cover arbitrary key orderings. — T3 Ralph N1.
 - [ ] **Tighten `fingerprint()` parameter type to Option.** Today accepts any BaseModel; spec §4 only requires Option. — T3 Ralph Q1.
+- [ ] **Booking.events round-trip inconsistency.** claim_or_recall's recalled Booking carries the events list as serialised at finalize_idempotency time. get_booking reconstructs a Booking with no events (events table not joined). Decide canonical semantics in P3 contract suite design — possibly: claim_or_recall returns only booking_id and T13 re-fetches via get_booking. — T7 Ralph Q1.
 
 ## Product / UX
 
