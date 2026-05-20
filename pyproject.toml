@@ -79,6 +79,7 @@ ignore = [
 "src/agentic_cab/agent/chat.py" = ["T20"]
 "src/agentic_cab/web/**" = ["T20"]
 "scripts/**" = ["T20"]
+"src/agentic_cab/__main__.py" = ["FBT"]  # Typer CLI flags require bool defaults
 
 [tool.ruff.format]
 quote-style = "double"

@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from pathlib import Path
+from typing import Annotated
 
 import typer
+import yaml
 
+from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.state_store import SqliteStateStore
+from agentic_cab.scenarios.invariants import evaluate
 from agentic_cab.scenarios.runner import run_scenario
 
 app = typer.Typer(no_args_is_help=True)
@@ -26,18 +31,62 @@ def init_db() -> None:
 
 
 @app.command("render-transcripts")
-def render_transcripts() -> None:
+def render_transcripts(
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Validate YAML schema only; skip LLM calls (used by CI)."),
+    ] = False,
+    assert_invariants: Annotated[
+        bool,
+        typer.Option(
+            "--assert-invariants",
+            help="After each run, assert all invariants pass (exit 1 if any fail).",
+        ),
+    ] = False,
+) -> None:
     """Render all scenarios under scenarios/ into transcripts/ (P2 wires the actual MD render)."""
     scenarios_dir = Path("scenarios")
     data_dir = Path("data")
     log_dir = Path("logs")
     data_dir.mkdir(exist_ok=True)
     log_dir.mkdir(exist_ok=True)
-    for scn_path in sorted(scenarios_dir.glob("*.yaml")):
+
+    scenario_paths = sorted(scenarios_dir.glob("*.yaml"))
+    if not scenario_paths:
+        print("No scenarios found under scenarios/")  # noqa: T201
+        return
+
+    if dry_run:
+        # Validate YAML schema only — no LLM, no provider calls.
+        for scn_path in scenario_paths:
+            scn = yaml.safe_load(scn_path.read_text())
+            for required in ("name", "clock", "sim", "confirmation", "user_turns", "invariants"):
+                if required not in scn:
+                    print(f"FAIL {scn_path.name}: missing required field '{required}'")  # noqa: T201
+                    sys.exit(1)
+            print(f"ok   {scn_path.name}")  # noqa: T201
+        return
+
+    all_passed = True
+    for scn_path in scenario_paths:
         session_id = asyncio.run(run_scenario(scn_path, data_dir=data_dir, log_dir=log_dir))
         # T16 will plug in the markdown renderer here; for T15 we just produce logs.
         # print() is allowed here — __main__.py is the CLI surface (CLAUDE.md inv 14).
         print(f"{scn_path.name} → session {session_id}")  # noqa: T201
+
+        if assert_invariants:
+            scn = yaml.safe_load(scn_path.read_text())
+            action_log = JSONLActionLog(log_dir=log_dir)
+            rows = action_log.read(session_id)
+            results = evaluate(rows, scn.get("invariants", []))
+            for kind, passed, params in results:
+                mark = "PASS" if passed else "FAIL"
+                print(f"  {mark} {kind} {params}")  # noqa: T201
+                if not passed:
+                    all_passed = False
+
+    if assert_invariants and not all_passed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
