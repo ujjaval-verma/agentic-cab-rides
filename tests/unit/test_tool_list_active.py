@@ -97,6 +97,17 @@ class _StubStore:
     def finalize_idempotency(self, key: str, booking: Booking) -> None:
         raise NotImplementedError
 
+    def put_pending_confirmation(
+        self, subject_id: str, session_id: str, request_json: str, expires_at: Any
+    ) -> None:
+        raise NotImplementedError
+
+    def pop_pending_confirmation(self, subject_id: str) -> None:
+        return None
+
+    def list_pending_confirmations(self, now: Any) -> list:
+        return []
+
 
 # ---------------------------------------------------------------------------
 # Tests

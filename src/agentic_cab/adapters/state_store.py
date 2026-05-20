@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, Self
 
-from agentic_cab.core.ports import ClaimResult
+from agentic_cab.core.ports import ClaimResult, ConfirmationRequest
 from agentic_cab.core.types import Booking, BookingEvent, Draft, Intent, Option, RideIntent
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
@@ -221,3 +221,48 @@ class SqliteStateStore:
                 "UPDATE idempotency_keys SET booking_id = ?, response_blob = ? WHERE key = ?",
                 (booking.booking_id, booking.model_dump_json(), key),
             )
+
+    # --- Pending confirmations (restart-survival) ---
+
+    def put_pending_confirmation(
+        self: Self,
+        subject_id: str,
+        session_id: str,
+        request_json: str,
+        expires_at: datetime,
+    ) -> None:
+        with self._write() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO pending_confirmations"
+                "(subject_id, session_id, request_json, created_at, expires_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (
+                    subject_id,
+                    session_id,
+                    request_json,
+                    datetime.now(UTC).isoformat(),
+                    expires_at.isoformat(),
+                ),
+            )
+
+    def pop_pending_confirmation(self: Self, subject_id: str) -> ConfirmationRequest | None:
+        row = self._conn.execute(
+            "SELECT request_json FROM pending_confirmations WHERE subject_id = ?",
+            (subject_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        req = ConfirmationRequest.model_validate_json(row[0])
+        with self._write() as conn:
+            conn.execute(
+                "DELETE FROM pending_confirmations WHERE subject_id = ?",
+                (subject_id,),
+            )
+        return req
+
+    def list_pending_confirmations(self: Self, now: datetime) -> list[ConfirmationRequest]:
+        rows = self._conn.execute(
+            "SELECT request_json FROM pending_confirmations WHERE expires_at > ?",
+            (now.isoformat(),),
+        ).fetchall()
+        return [ConfirmationRequest.model_validate_json(row[0]) for row in rows]

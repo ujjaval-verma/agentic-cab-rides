@@ -113,6 +113,19 @@ class StateStore(Protocol):
 
     def finalize_idempotency(self: Self, key: str, booking: Booking) -> None: ...
 
+    # Pending confirmations (restart-survival)
+    def put_pending_confirmation(
+        self: Self,
+        subject_id: str,
+        session_id: str,
+        request_json: str,
+        expires_at: datetime,
+    ) -> None: ...
+
+    def pop_pending_confirmation(self: Self, subject_id: str) -> ConfirmationRequest | None: ...
+
+    def list_pending_confirmations(self: Self, now: datetime) -> list[ConfirmationRequest]: ...
+
 
 # ---------- GeocoderPort ----------
 

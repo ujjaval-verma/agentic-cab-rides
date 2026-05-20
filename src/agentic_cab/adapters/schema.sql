@@ -37,3 +37,11 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     response_blob   TEXT,           -- nullable; NULL means claimed but not yet finalised
     created_at      TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS pending_confirmations (
+    subject_id   TEXT PRIMARY KEY,
+    session_id   TEXT NOT NULL,
+    request_json TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    expires_at   TEXT NOT NULL
+);
