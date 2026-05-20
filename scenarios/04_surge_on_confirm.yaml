@@ -26,6 +26,7 @@ confirmation:
       action: approve
 user_turns:
   - "Book me a ride from 37.7749,-122.4194 (Market & Powell) to 37.7849,-122.4094 (Union Square)."
+  - "UberX please — go ahead and confirm."
 invariants:
   - kind: price_changed_rejected
     tool: "confirm_booking"

@@ -78,7 +78,8 @@ async def run_scenario(
         geocode_fixtures_dir if geocode_fixtures_dir is not None else _DEFAULT_GEOCODE_FIXTURES
     )
     geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
-    geocoder = NominatimGeocoder(cache=geocode_cache, http=httpx.AsyncClient())
+    http_client = httpx.AsyncClient()
+    geocoder = NominatimGeocoder(cache=geocode_cache, http=http_client)
 
     tools = [
         pydantic_to_anthropic_tool(
@@ -189,14 +190,17 @@ async def run_scenario(
     }
     client = Anthropic()
     history: list[dict[str, Any]] = []
-    for user_msg in scn["user_turns"]:
-        _text, history = await run_turn(
-            client,
-            user_message=user_msg,
-            history=history,
-            tools=tools,
-            handlers=handlers,
-        )
+    try:
+        for user_msg in scn["user_turns"]:
+            _text, history = await run_turn(
+                client,
+                user_message=user_msg,
+                history=history,
+                tools=tools,
+                handlers=handlers,
+            )
+    finally:
+        await http_client.aclose()
 
     # Persist chat for transcript renderer (one JSON object per line)
     chat_path = log_dir / f"{session_id}.chat.jsonl"
