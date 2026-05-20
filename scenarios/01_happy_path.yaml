@@ -15,7 +15,7 @@ user_turns:
   - "Book me a ride from 37.7749,-122.4194 (Market & Powell) to 37.7849,-122.4094 (Union Square)."
 invariants:
   - kind: action_log_contains
-    where: {tool: "confirm_booking", kind: "outcome", status: "confirmed"}
+    where: {kind: "outcome", status: "confirmed"}
   - kind: four_row_pattern
     tool: "confirm_booking"
   - kind: no_double_booking

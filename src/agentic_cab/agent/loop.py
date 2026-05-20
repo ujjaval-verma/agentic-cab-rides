@@ -10,7 +10,7 @@ import structlog
 from anthropic import Anthropic
 
 from agentic_cab.agent.system_prompt import SYSTEM_PROMPT
-from agentic_cab.core.constants import AGENT_MAX_TOKENS, AGENT_TEMPERATURE, MODEL_ID
+from agentic_cab.core.constants import AGENT_MAX_TOKENS, MODEL_ID
 
 log = structlog.get_logger()
 
@@ -31,10 +31,12 @@ async def run_turn(
     """
     history = [*history, {"role": "user", "content": user_message}]
     while True:
+        # Note: claude-opus-4-7 is an extended-thinking model and rejects the
+        # 'temperature' parameter (API returns 400).  Determinism is maintained
+        # via FrozenClock + seeded RNG in scenario mode (CLAUDE.md inv. 9).
         response = client.messages.create(
             model=MODEL_ID,
             max_tokens=AGENT_MAX_TOKENS,
-            temperature=AGENT_TEMPERATURE,
             system=SYSTEM_PROMPT,
             tools=tools,  # type: ignore[arg-type]
             messages=history,  # type: ignore[arg-type]
