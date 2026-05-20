@@ -101,3 +101,18 @@ def test_claim_or_recall_in_progress_returns_new(store: SqliteStateStore) -> Non
 def test_schema_apply_is_idempotent(store: SqliteStateStore) -> None:
     store.apply_schema()
     store.apply_schema()  # second apply must not raise
+
+
+def test_get_draft_consumed_at_returns_none_until_consumed(store: SqliteStateStore) -> None:
+    store.put_draft(_draft())
+    result = store.get_draft_consumed_at("D1")
+    assert result is None
+
+
+def test_get_draft_consumed_at_returns_timestamp_after_consume(store: SqliteStateStore) -> None:
+    store.put_draft(_draft())
+    consumed_time = datetime(2026, 5, 19, 12, 1, 0, tzinfo=UTC)
+    store.consume_draft("D1", at=consumed_time)
+    result = store.get_draft_consumed_at("D1")
+    assert result is not None
+    assert result == consumed_time

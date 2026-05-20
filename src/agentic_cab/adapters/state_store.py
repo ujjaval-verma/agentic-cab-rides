@@ -22,6 +22,11 @@ class SqliteStateStore:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
 
+    @property
+    def db_path(self: Self) -> Path:
+        """Read-only path to the underlying SQLite database file."""
+        return self._db_path
+
     def apply_schema(self: Self) -> None:
         sql = _SCHEMA_PATH.read_text()
         with self._conn:
@@ -67,6 +72,15 @@ class SqliteStateStore:
                 (at.isoformat(), draft_id),
             )
             return cur.rowcount == 1
+
+    def get_draft_consumed_at(self: Self, draft_id: str) -> datetime | None:
+        row = self._conn.execute(
+            "SELECT consumed_at FROM drafts WHERE draft_id = ?",
+            (draft_id,),
+        ).fetchone()
+        if row is None or row[0] is None:
+            return None
+        return datetime.fromisoformat(row[0])
 
     # --- Bookings ---
 

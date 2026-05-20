@@ -25,10 +25,14 @@ from pydantic import BaseModel
 
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.clock import FrozenClock
-from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.core.fingerprint import fingerprint
 from agentic_cab.core.ids import new_action_id, new_idempotency_key
-from agentic_cab.core.ports import BookingProvider, ConfirmationChannel, ConfirmationRequest
+from agentic_cab.core.ports import (
+    BookingProvider,
+    ConfirmationChannel,
+    ConfirmationRequest,
+    StateStore,
+)
 from agentic_cab.core.types import Draft
 
 
@@ -43,7 +47,7 @@ def _summary(draft: Draft) -> str:
 
 def _validate_draft(
     draft_id: str,
-    store: SqliteStateStore,
+    store: StateStore,
     now: datetime,
 ) -> tuple[Draft | None, dict[str, Any], str | None]:
     """Return (draft, checks, rejection_reason) — reason is None when valid."""
@@ -54,15 +58,7 @@ def _validate_draft(
     if draft.expires_at < now:
         return None, {"draft_found": True, "draft_expired": True}, "draft expired"
 
-    # Consumed check.
-    # NOTE: accessing store._conn is a private-attribute reach-in. If this needs to
-    # be exposed cleanly, add SqliteStateStore.get_draft_consumed_at(draft_id) in a
-    # follow-up commit so the Protocol surface stays clean. Tracked in FOLLOWUPS.md.
-    consumed_row = store._conn.execute(  # type: ignore[attr-defined]
-        "SELECT consumed_at FROM drafts WHERE draft_id = ?",
-        (draft_id,),
-    ).fetchone()
-    if consumed_row is not None and consumed_row[0] is not None:
+    if store.get_draft_consumed_at(draft_id) is not None:
         return (
             None,
             {"draft_found": True, "draft_expired": False, "already_consumed": True},
@@ -93,7 +89,7 @@ async def confirm_booking(
     args: ConfirmArgs,
     *,
     provider: BookingProvider,
-    store: SqliteStateStore,
+    store: StateStore,
     log: JSONLActionLog,
     channel: ConfirmationChannel,
     clock: FrozenClock,
