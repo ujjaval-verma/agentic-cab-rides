@@ -91,7 +91,7 @@ class MockAppointmentProvider:
                 specialty=specialty,
             )
             opt = Option(
-                option_id=f"appt-{i}-{rng.randrange(10 ** 8)}",
+                option_id=f"appt-{i}-{rng.randrange(10**8)}",
                 provider=self.name,
                 title=f"{clinic} @ {slot_at.strftime('%H:%M')}",
                 price=Money(amount_cents=price_cents, currency="USD"),
