@@ -8,6 +8,10 @@ from hypothesis import strategies as st
 from agentic_cab.core.fingerprint import canonical_json, fingerprint
 from agentic_cab.core.types import Money, Option, RideOptionDetails
 
+# Pinned sha256 digest of _opt(). If this breaks because Pydantic changed serialization,
+# update the pin AND decide whether existing stored fingerprints need migrating.
+_OPT_PINNED_DIGEST = "1ef947fca566803bb4a8cf67fa206eb3d7994fe53725a46e59291d4d7855df22"
+
 
 def _opt() -> Option:
     return Option(
@@ -57,3 +61,36 @@ def test_canonical_json_stable_under_key_permutation(d: dict) -> None:
     a = canonical_json(d)
     b = canonical_json(reordered)
     assert a == b
+
+
+def test_fingerprint_value_equality_across_instances() -> None:
+    """Two independently constructed value-equal Options must hash identically."""
+    a = _opt()
+    b = _opt()
+    assert fingerprint(a) == fingerprint(b)
+
+
+def test_fingerprint_pinned_digest() -> None:
+    """Pinned digest of the _opt() fixture catches Pydantic-version drift in model_dump.
+
+    If this test breaks because Pydantic changed serialization, update the pin AND
+    decide whether existing stored fingerprints need migrating.
+    """
+    assert fingerprint(_opt()) == _OPT_PINNED_DIGEST
+
+
+def test_fingerprint_survives_json_round_trip() -> None:
+    """Round-tripping an Option through JSON must preserve the fingerprint.
+
+    Catches datetime parse-back divergence (e.g. tzinfo representation changes).
+    """
+    opt = _opt()
+    parsed = Option.model_validate_json(opt.model_dump_json())
+    assert fingerprint(opt) == fingerprint(parsed)
+
+
+def test_canonical_json_nfc_normalises_strings() -> None:
+    """NFC and NFD representations of the same string must produce the same JSON."""
+    nfc = "Café"  # é precomposed (NFC)
+    nfd = "Café"  # e + combining acute (NFD)
+    assert canonical_json({"name": nfc}) == canonical_json({"name": nfd})

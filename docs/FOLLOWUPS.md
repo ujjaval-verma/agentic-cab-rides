@@ -22,6 +22,8 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 ## Tests / coverage gaps
 
 - [ ] **PII redaction integration test.** `redact()` must be applied at the log boundary; today only the spec describes this. Add a test that feeds a `RideIntent` containing `"pickup at Jane Doe's house, 555-1234"` and asserts no substring of that raw text appears in the resulting JSONL. — P1 action_log slice.
+- [ ] **Fingerprint property test: permutations.** Current test only reverses dict insertion order; replace with st.permutations or hypothesis shuffling to cover arbitrary key orderings. — T3 Ralph N1.
+- [ ] **Tighten `fingerprint()` parameter type to Option.** Today accepts any BaseModel; spec §4 only requires Option. — T3 Ralph Q1.
 
 ## Product / UX
 
