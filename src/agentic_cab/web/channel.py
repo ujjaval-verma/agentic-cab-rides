@@ -23,27 +23,61 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
-from agentic_cab.core.ports import ConfirmationChannel, ConfirmationRequest, ConfirmationResult
+from agentic_cab.core.ports import (
+    Clock,
+    ConfirmationChannel,
+    ConfirmationRequest,
+    ConfirmationResult,
+    StateStore,
+)
 from agentic_cab.web.sse import SessionEventBus
+
+if TYPE_CHECKING:
+    pass
 
 # Satisfy the runtime_checkable Protocol check.
 assert isinstance(ConfirmationChannel, type) or hasattr(ConfirmationChannel, "__protocol_attrs__")
 
 
 class WebConfirmationChannel:
-    """ConfirmationChannel implementation that suspends until the browser resolves."""
+    """ConfirmationChannel implementation that suspends until the browser resolves.
 
-    def __init__(self: Self, bus: SessionEventBus, session_id: str) -> None:
+    Takes an optional StateStore and Clock for restart-survival (T30). When a store
+    is provided, request() durably persists the pending confirmation before awaiting
+    the future, and pops the row when the future resolves (approved/declined/timeout).
+    On process restart, the app startup hook calls list_pending_confirmations() and
+    re-publishes each via the bus so the reloaded browser tab can show the modal.
+    """
+
+    def __init__(
+        self: Self,
+        bus: SessionEventBus,
+        session_id: str,
+        *,
+        store: StateStore | None = None,
+        clock: Clock | None = None,
+    ) -> None:
         self._bus = bus
         self._session_id = session_id
+        self._store = store
+        self._clock = clock
         self._pending: dict[str, asyncio.Future[ConfirmationResult]] = {}
 
     async def request(self: Self, req: ConfirmationRequest) -> ConfirmationResult:
         loop = asyncio.get_running_loop()
         future: asyncio.Future[ConfirmationResult] = loop.create_future()
         self._pending[req.subject_id] = future
+
+        # Durably persist BEFORE awaiting so a process restart can recover the row.
+        if self._store is not None:
+            self._store.put_pending_confirmation(
+                subject_id=req.subject_id,
+                session_id=self._session_id,
+                request_json=req.model_dump_json(),
+                expires_at=req.expires_at,
+            )
 
         # Publish the pending prompt so the browser can render a modal.
         event: dict[str, Any] = {
@@ -70,6 +104,9 @@ class WebConfirmationChannel:
             )
         finally:
             self._pending.pop(req.subject_id, None)
+            # Clear durable state regardless of how the future resolved.
+            if self._store is not None:
+                self._store.pop_pending_confirmation(req.subject_id)
 
     def resolve(self: Self, subject_id: str, *, approved: bool, approver: str | None) -> bool:
         """Resolve a pending confirmation request from the browser.
@@ -96,4 +133,7 @@ class WebConfirmationChannel:
                 approver=None,
             )
         future.set_result(result)
+        # Also clear durable state eagerly; the request() finally block is belt-and-suspenders.
+        if self._store is not None:
+            self._store.pop_pending_confirmation(subject_id)
         return True

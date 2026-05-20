@@ -70,9 +70,15 @@ _turn_id_refs: dict[str, list[str]] = {}
 _chat_histories: dict[str, list[dict[str, Any]]] = {}
 
 
-def _get_channel(session_id: str) -> WebConfirmationChannel:
+def _get_channel(
+    session_id: str,
+    store: SqliteStateStore | None = None,
+    clock: SystemClock | None = None,
+) -> WebConfirmationChannel:
     if session_id not in _channels:
-        _channels[session_id] = WebConfirmationChannel(bus=_bus, session_id=session_id)
+        _channels[session_id] = WebConfirmationChannel(
+            bus=_bus, session_id=session_id, store=store, clock=clock
+        )
     return _channels[session_id]
 
 
@@ -140,7 +146,7 @@ def create_app(
         clock = SystemClock()
         rng_seed = int.from_bytes(os.urandom(4), "big")
         sim = UberSimAdapter(store=store, clock=clock, rng_seed=rng_seed)
-        channel = _get_channel(session_id)
+        channel = _get_channel(session_id, store=store, clock=clock)
 
         geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
         geocoder = NominatimGeocoder(
