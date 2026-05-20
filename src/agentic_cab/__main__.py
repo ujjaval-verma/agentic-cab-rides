@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -12,6 +13,7 @@ import yaml
 
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.state_store import SqliteStateStore
+from agentic_cab.render.transcript import render
 from agentic_cab.scenarios.invariants import evaluate
 from agentic_cab.scenarios.runner import run_scenario
 
@@ -68,17 +70,35 @@ def render_transcripts(
         return
 
     all_passed = True
+    transcripts_dir = Path("transcripts")
     for scn_path in scenario_paths:
         session_id = asyncio.run(run_scenario(scn_path, data_dir=data_dir, log_dir=log_dir))
-        # T16 will plug in the markdown renderer here; for T15 we just produce logs.
+
+        # Render Markdown transcript for this scenario run.
+        scn = yaml.safe_load(scn_path.read_text())
+        action_log_adapter = JSONLActionLog(log_dir=log_dir)
+        rows = action_log_adapter.read(session_id)
+        chat_path = log_dir / f"{session_id}.chat.jsonl"
+        chat = (
+            [json.loads(line) for line in chat_path.read_text().splitlines() if line.strip()]
+            if chat_path.exists()
+            else []
+        )
+        results = evaluate(rows, scn.get("invariants", []))
+        md = render(
+            scenario_name=scn.get("name", scn_path.stem),
+            seed=scn.get("seed", 0),
+            chat=chat,
+            action_log=rows,
+            invariants=results,
+        )
+        transcripts_dir.mkdir(exist_ok=True)
+        (transcripts_dir / f"{scn_path.stem}.md").write_text(md)
+
         # print() is allowed here — __main__.py is the CLI surface (CLAUDE.md inv 14).
         print(f"{scn_path.name} → session {session_id}")  # noqa: T201
 
         if assert_invariants:
-            scn = yaml.safe_load(scn_path.read_text())
-            action_log = JSONLActionLog(log_dir=log_dir)
-            rows = action_log.read(session_id)
-            results = evaluate(rows, scn.get("invariants", []))
             for kind, passed, params in results:
                 mark = "PASS" if passed else "FAIL"
                 print(f"  {mark} {kind} {params}")  # noqa: T201
