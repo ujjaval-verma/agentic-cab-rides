@@ -348,8 +348,7 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
     key_from_log_2 = exec_rows_2[0]["idempotency_key"]
     # Both executed rows must carry identical keys (structural idempotency guarantee).
     assert key_from_log_1 == key_from_log_2
-    # The log layer applies PII redaction, so logged keys may differ textually from the raw
-    # sha256 hex.  Verify raw key determinism independently (same inputs → same output).
+    # Verify raw key determinism independently: same inputs → same output.
     assert expected_key == confirm_idempotency_key(draft.draft_id, draft.fingerprint)
 
     # Second call's verified row must expose idempotency='recalled' in checks.

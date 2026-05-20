@@ -285,26 +285,23 @@ async def test_cancel_request_uses_subject_kind_booking(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_retry_reuses_idempotency_key(
+async def test_cancel_idempotency_key_is_deterministic_in_tool_path(
     harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Key-determinism for cancel: same (booking_id, fee_cents, status_at_quote) → same key.
+    """Key determinism in the cancel tool path: same inputs → same key, key logged, gate once.
 
-    The full end-to-end recall path for cancel (second call collides with first call's claim
-    and short-circuits via claim_or_recall) is NOT testable at T27 scope because after a
-    successful first cancel the booking status transitions to "cancelled", so the second call
-    derives a DIFFERENT key (status_at_quote changes), and the status-guard catches it rather
-    than the recall branch.
+    What this test proves:
+    - The intent-bound key is deterministic: same (booking_id, fee_cents, status_at_quote)
+      always produces the same sha256 hex digest.
+    - The executed row carries the idempotency_key field (tool wires the key into the log).
+    - The gate is invoked exactly once (OnceApproveChannel raises on a second call).
 
-    The true retry scenario for cancel (agent retries after network drop mid-execute, before
-    provider.cancel returns, so booking status is still "confirmed" on retry) requires the
-    "in_progress" claim status from T30 (restart-survival semantics) to short-circuit correctly.
-    See docs/FOLLOWUPS.md — "Restart-survival semantics for claim_or_recall".
-
-    What IS provable at T27:
-    - The intent-bound key is deterministic: same inputs → same key, always.
-    - The executed row carries the idempotency_key field.
-    - The gate is invoked exactly once (first call only; tested via OnceApproveChannel).
+    What this test does NOT prove (impossible at T27 scope):
+    - The full recall short-circuit path.  After a successful cancel the booking transitions
+      to "cancelled", so a second cancel derives a DIFFERENT key (status_at_quote changed)
+      and hits the status-guard rather than the recall branch.  True in-flight retry replay
+      requires the "in_progress" claim status from T30 (restart-survival semantics).
+      See docs/FOLLOWUPS.md — "Restart-survival semantics for claim_or_recall".
     """
     from agentic_cab.core.ids import cancel_idempotency_key
 
