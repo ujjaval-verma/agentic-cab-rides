@@ -255,9 +255,7 @@ async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path) -> 
 
     # Same booking returned — no double-book.
     assert r2["status"] == "confirmed"
-    assert (
-        r2["booking_id"] == booking_id_1
-    ), f"Expected same booking_id={booking_id_1!r}, got {r2['booking_id']!r}"
+    assert r2["booking_id"] == booking_id_1  # same booking; no double-book
 
     # provider.confirm was NOT called on Instance B.
     assert not provider_confirm_called, "provider.confirm must not be called on a recalled key"
