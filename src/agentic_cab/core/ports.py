@@ -65,15 +65,6 @@ class Clock(Protocol):
 # ---------- ActionLog ----------
 
 
-class ActionLogRow(BaseModel):
-    """Discriminated by 'kind'. Concrete shapes live in adapters/action_log.py."""
-
-    ts: datetime
-    session_id: str
-    action_id: str
-    kind: Literal["requested", "verified", "executed", "outcome"]
-
-
 @runtime_checkable
 class ActionLog(Protocol):
     def emit(self: Self, row: dict[str, Any]) -> None: ...
@@ -86,8 +77,7 @@ class ActionLog(Protocol):
 
 class ClaimResult(BaseModel):
     status: Literal["new", "recalled"]
-    response_blob: dict[str, Any] | None = None
-    booking_id: str | None = None
+    booking: Booking | None = None  # populated only when status == "recalled"
 
 
 @runtime_checkable
@@ -115,6 +105,4 @@ class StateStore(Protocol):
         self: Self, key: str, scope: Literal["confirm", "cancel"]
     ) -> ClaimResult: ...
 
-    def finalize_idempotency(
-        self: Self, key: str, booking_id: str, response_blob: dict[str, Any]
-    ) -> None: ...
+    def finalize_idempotency(self: Self, key: str, booking: Booking) -> None: ...

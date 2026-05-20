@@ -296,11 +296,11 @@ class StateStore(Protocol):
     def list_active_bookings(self) -> list[Booking]: ...
 
     # Idempotency
-    def claim_or_recall(self, key: str, scope: str) -> ClaimResult: ...
-        # If key exists: returns existing response_blob (no provider call needed).
-        # If not: claims it with empty response, returns "new" — caller must
+    def claim_or_recall(self, key: str, scope: Literal["confirm", "cancel"]) -> ClaimResult: ...
+        # If key exists: returns ClaimResult(status="recalled", booking=<Booking>).
+        # If not: claims it with no booking, returns ClaimResult(status="new") — caller must
         # finalize() with the provider response.
-    def finalize_idempotency(self, key: str, booking_id: str, response_blob: dict) -> None: ...
+    def finalize_idempotency(self, key: str, booking: Booking) -> None: ...
 ```
 
 **Idempotency flow inside `confirm_booking`:**
@@ -308,7 +308,7 @@ class StateStore(Protocol):
 1. Mint `idempotency_key` (ULID) — or reuse if the tool layer is retrying.
 2. `store.claim_or_recall(key, "confirm")`. If recalled, short-circuit: emit `executed` row with `latency_ms=0, replayed=true`, return the recalled booking. **No second provider call.**
 3. Otherwise, call `provider.confirm(draft_id, idempotency_key)`. The sim provider also checks its own dedupe (mirroring real prod where the provider is the source of truth) — but the store is the durable barrier.
-4. `store.finalize_idempotency(key, booking_id, response_blob)`. Same transaction as `put_booking`.
+4. `store.finalize_idempotency(key, booking)`. Same transaction as `put_booking`. The adapter serialises the Booking internally to the `response_blob` column.
 
 **Concurrency:** WAL mode means CLI REPL and FastAPI web can both touch the DB without locking issues. Both share `data/state.db`; the action log is per-session so no contention there.
 
