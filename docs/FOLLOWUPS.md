@@ -27,6 +27,7 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 
 ## Tests / coverage gaps
 
+- [ ] **`test_cancel_happy_path_emits_four_rows` flake (P4 retro).** Observed in a single pre-push run during P4 Task 5: the test reported 0 rows for the action_id, then passed on retry without code changes. Almost certainly a test-isolation issue (shared JSONL log file, leftover state across tests in the same process, or non-deterministic `action_id` collision). Currently low-frequency; flag if it recurs. Suspect `tests/unit/test_action_log*` or `tests/contract/test_*cancel*` not isolating its `log_dir`. — P4 Task 5 retro.
 - [ ] **Fingerprint property test: permutations.** Current test only reverses dict insertion order; replace with st.permutations or hypothesis shuffling to cover arbitrary key orderings. — T3 Ralph N1.
 - [ ] **Tighten `fingerprint()` parameter type to Option.** Today accepts any BaseModel; spec §4 only requires Option. — T3 Ralph Q1.
 - [ ] **Filter `approved_at: null` from declined verified rows.** When the user declines, the `verified.checks.confirmation` dump includes `approved_at: null`. Spec §8 examples only show the field when approved. Consider filtering on the declined path to keep audit rows tight, or update spec §8 to acknowledge the null. — T13 Ralph A5.
