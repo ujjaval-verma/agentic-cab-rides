@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, Self
 
-from agentic_cab.core.ports import ClaimResult, ConfirmationRequest
+from agentic_cab.core.ports import ClaimResult, ConfirmationRequest, PendingConfirmationRecord
 from agentic_cab.core.types import Booking, BookingEvent, Draft, Intent, Option, RideIntent
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
@@ -260,9 +260,15 @@ class SqliteStateStore:
             )
         return req
 
-    def list_pending_confirmations(self: Self, now: datetime) -> list[ConfirmationRequest]:
+    def list_pending_confirmations(self: Self, now: datetime) -> list[PendingConfirmationRecord]:
         rows = self._conn.execute(
-            "SELECT request_json FROM pending_confirmations WHERE expires_at > ?",
+            "SELECT session_id, request_json FROM pending_confirmations WHERE expires_at > ?",
             (now.isoformat(),),
         ).fetchall()
-        return [ConfirmationRequest.model_validate_json(row[0]) for row in rows]
+        return [
+            PendingConfirmationRecord(
+                session_id=row[0],
+                request=ConfirmationRequest.model_validate_json(row[1]),
+            )
+            for row in rows
+        ]

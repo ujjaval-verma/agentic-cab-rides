@@ -205,8 +205,82 @@ def test_startup_flushes_pending_confirmations(tmp_path: Path) -> None:
 
     # The pending row is still in the DB (startup hook publishes but does NOT pop).
     pending = store.list_pending_confirmations(now=datetime.now(UTC))
-    ids = {r.subject_id for r in pending}
+    ids = {r.request.subject_id for r in pending}
     assert "draft-startup-test" in ids
+
+
+def test_startup_hook_publishes_to_session_id_not_subject_id(tmp_path: Path) -> None:
+    """Startup hook must call bus.publish(session_id, ...) — not publish(subject_id, ...).
+
+    We verify this by patching the module-level _bus with a recording stub,
+    pre-seeding a pending_confirmations row, then forcing the lifespan startup
+    to run via TestClient context manager.  The captured publish key must equal
+    the session_id stored in the DB row, NOT the subject_id of the request.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    import agentic_cab.web.app as _app_module
+    from agentic_cab.adapters.state_store import SqliteStateStore
+    from agentic_cab.core.ports import ConfirmationRequest
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    session_id = "sess-bus-key-test"
+    subject_id = "draft-bus-key-subject"
+
+    store = SqliteStateStore(db_path=data_dir / "state.db")
+    store.apply_schema()
+    req = ConfirmationRequest(
+        subject_id=subject_id,
+        subject_kind="draft",
+        summary="Book UberX $20.00?",
+        fingerprint="d" * 64,
+        details={"price_cents": 2000},
+        expires_at=datetime.now(UTC) + timedelta(seconds=3600),
+    )
+    store.put_pending_confirmation(
+        subject_id=req.subject_id,
+        session_id=session_id,
+        request_json=req.model_dump_json(),
+        expires_at=req.expires_at,
+    )
+
+    # Install a recording stub as the module-level bus.
+    publish_calls: list[tuple[str, dict]] = []
+
+    class _RecordingBus:
+        def publish(self, key: str, payload: dict) -> None:
+            publish_calls.append((key, payload))
+
+        async def subscribe(self, key: str):  # type: ignore[return]
+            return
+            yield  # make it a generator
+
+    original_bus = _app_module._bus
+    _app_module._bus = _RecordingBus()  # type: ignore[assignment]
+
+    try:
+        _channels.clear()
+        fastapi_app = create_app(
+            data_dir=data_dir,
+            log_dir=tmp_path / "logs",
+            geocode_fixtures_dir=tmp_path / "fixtures",
+        )
+        with TestClient(fastapi_app, raise_server_exceptions=True):
+            # Lifespan startup runs on __enter__.
+            pass
+    finally:
+        _app_module._bus = original_bus
+
+    assert publish_calls, "Expected at least one publish call from the startup hook"
+    keys_used = [call[0] for call in publish_calls]
+    assert (
+        session_id in keys_used
+    ), f"Startup hook must publish to session_id={session_id!r}; got keys: {keys_used!r}"
+    assert (
+        subject_id not in keys_used
+    ), f"Startup hook must NOT publish to subject_id={subject_id!r}; got keys: {keys_used!r}"
 
 
 def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:

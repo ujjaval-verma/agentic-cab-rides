@@ -6,6 +6,7 @@ See spec §3 (layers), §5 (BookingProvider), §6 (ConfirmationChannel), §10 (G
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, ClassVar, Literal, Protocol, Self, runtime_checkable
 
@@ -51,6 +52,14 @@ class ConfirmationResult(BaseModel):
     reason: Literal["approved", "declined", "expired", "timeout"]
     approved_at: datetime | None
     approver: str | None
+
+
+@dataclass
+class PendingConfirmationRecord:
+    """Row returned by list_pending_confirmations — includes the original session_id."""
+
+    session_id: str
+    request: ConfirmationRequest
 
 
 @runtime_checkable
@@ -124,7 +133,9 @@ class StateStore(Protocol):
 
     def pop_pending_confirmation(self: Self, subject_id: str) -> ConfirmationRequest | None: ...
 
-    def list_pending_confirmations(self: Self, now: datetime) -> list[ConfirmationRequest]: ...
+    def list_pending_confirmations(
+        self: Self, now: datetime
+    ) -> list[PendingConfirmationRecord]: ...
 
 
 # ---------- GeocoderPort ----------

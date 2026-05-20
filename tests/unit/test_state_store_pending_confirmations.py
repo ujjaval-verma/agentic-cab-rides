@@ -42,8 +42,9 @@ def test_put_then_list_returns_request(store: SqliteStateStore) -> None:
     )
     results = store.list_pending_confirmations(now=datetime.now(UTC))
     assert len(results) == 1
-    assert results[0].subject_id == "s1"
-    assert results[0].summary == req.summary
+    assert results[0].session_id == "sess-1"
+    assert results[0].request.subject_id == "s1"
+    assert results[0].request.summary == req.summary
 
 
 def test_pop_returns_request_and_removes_it(store: SqliteStateStore) -> None:
@@ -61,7 +62,7 @@ def test_pop_returns_request_and_removes_it(store: SqliteStateStore) -> None:
 
     # Row must be gone now.
     after = store.list_pending_confirmations(now=datetime.now(UTC))
-    assert all(r.subject_id != "s2" for r in after)
+    assert all(r.request.subject_id != "s2" for r in after)
 
 
 def test_list_filters_expired_entries(store: SqliteStateStore) -> None:
@@ -84,7 +85,7 @@ def test_list_filters_expired_entries(store: SqliteStateStore) -> None:
     )
 
     results = store.list_pending_confirmations(now=now)
-    ids = {r.subject_id for r in results}
+    ids = {r.request.subject_id for r in results}
     assert "s-active" in ids
     assert "s-expired" not in ids
 

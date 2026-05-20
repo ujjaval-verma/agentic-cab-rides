@@ -50,7 +50,7 @@ async def test_request_writes_pending_row(tmp_path: Path) -> None:
 
     # The durable row should be present while the future is pending.
     pending = store.list_pending_confirmations(now=datetime.now(UTC))
-    ids = {r.subject_id for r in pending}
+    ids = {r.request.subject_id for r in pending}
     assert "draft-write-test" in ids
 
     # Clean up: resolve and await.
@@ -75,7 +75,7 @@ async def test_resolve_clears_pending_row(tmp_path: Path) -> None:
     await asyncio.wait_for(task, timeout=2.0)
 
     pending = store.list_pending_confirmations(now=datetime.now(UTC))
-    ids = {r.subject_id for r in pending}
+    ids = {r.request.subject_id for r in pending}
     assert "draft-resolve-test" not in ids
 
 
@@ -93,5 +93,5 @@ async def test_timeout_clears_pending_row(tmp_path: Path) -> None:
     assert result.reason == "timeout"
 
     pending = store.list_pending_confirmations(now=datetime.now(UTC))
-    ids = {r.subject_id for r in pending}
+    ids = {r.request.subject_id for r in pending}
     assert "draft-timeout-test" not in ids

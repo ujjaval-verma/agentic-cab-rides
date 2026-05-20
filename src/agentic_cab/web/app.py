@@ -110,15 +110,17 @@ def create_app(
         store.apply_schema()
         clock = SystemClock()
         pending = store.list_pending_confirmations(now=clock.now())
-        for req in pending:
+        for record in pending:
+            req = record.request
             _log.info(
                 "web.startup.flush_pending_confirmation",
+                session_id=record.session_id,
                 subject_id=req.subject_id,
             )
             # Publish into the session's SSE channel so a reloaded browser tab
             # can render the confirmation modal.
             _bus.publish(
-                req.subject_id,  # session_id is the discriminator; subject_id used as key
+                record.session_id,  # use the original session_id, not subject_id
                 {
                     "kind": "pending_confirmation",
                     "subject_id": req.subject_id,
