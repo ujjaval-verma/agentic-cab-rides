@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Any, Self, cast
 
 _PHONE = re.compile(r"\+?\d[\d\-\(\)\s]{6,}\d")
+# Match sequences of 2+ capitalised words that look like proper names
+# (e.g. "Sarah Smith", "John van der Berg").  The regex stops at hyphens
+# used as separators (plate numbers like "ABC123" are not capitalised words).
+_NAME = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b")
 
 
 def _redact_address(addr: dict[str, Any]) -> dict[str, Any]:
@@ -20,6 +24,16 @@ def _redact_address(addr: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _redact_summary_title(value: str) -> str:
+    """Apply name + phone redaction to a summary_title string (spec §8 + inv. 8).
+
+    summary_title may contain driver names or vehicle plate numbers from a real provider.
+    Strip them at the log boundary rather than trusting each adapter to sanitise.
+    """
+    value = _NAME.sub("[redacted-name]", value)
+    return _PHONE.sub("[redacted-phone]", value)
+
+
 def redact(payload: Any) -> Any:
     """Walk a JSON-shaped payload, redact PII at known address fields + phone-shaped substrings."""
     if isinstance(payload, dict):
@@ -28,6 +42,8 @@ def redact(payload: Any) -> Any:
         for k, v in typed.items():
             if k in ("pickup", "dropoff") and isinstance(v, dict) and "raw" in v:
                 out[k] = _redact_address(cast(dict[str, Any], v))
+            elif k == "summary_title" and isinstance(v, str):
+                out[k] = _redact_summary_title(v)
             else:
                 out[k] = redact(v)
         return out

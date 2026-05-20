@@ -16,6 +16,8 @@
 
 The remaining additions: one intent-router rule in the agent's tool-call resolution, and a new tool surface variant (`reschedule_appointment` replaces `cancel_booking` semantics — Zocdoc rescheduling is the dominant flow). The tool layer's fingerprint logic, the `ConfirmationChannel` design, the four-row action log, and the SQLite idempotency table are unchanged.
 
+**This claim is now tested, not just prose.** `tests/contract/test_booking_provider_contract.py` runs a parametrized suite over `UberSimAdapter` (ride intent) and `MockAppointmentProvider` (appointment intent). Both adapters pass the same Protocol-level contract tests — idempotency, option/draft rejection, cancel no-op, fingerprint stability — without any test reaching into adapter-specific shape. The suite is the swap proof: the abstraction holds for a second, structurally different intent kind.
+
 *The fact that "swap to Zocdoc" requires no edits below the tool layer is the architectural payoff this design was meant to surface.*
 
 ## 2. What breaks first in production — and what shipped
