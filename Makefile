@@ -125,5 +125,14 @@ ship: ## Push current branch to origin and report CI status (use after `make ver
 ci-status: ## Latest CI runs for current branch
 	gh run list --limit 5 --branch "$$(git rev-parse --abbrev-ref HEAD)"
 
-demo: ## Run the happy-path scenario and tail the action log
-	$(UV) run python -m agentic_cab run-scenario 01_happy_path
+demo: ## Start web UI and open browser — manual smoke test  # manual smoke
+	@echo ""
+	@echo "  ╔══════════════════════════════════════════════════════════╗"
+	@echo "  ║  agentic-cab-rides — web demo                           ║"
+	@echo "  ║  Open http://127.0.0.1:8000 in your browser.            ║"
+	@echo "  ║  Try: book a ride, track it, then cancel.               ║"
+	@echo "  ║  Ctrl-C to stop the server.                             ║"
+	@echo "  ╚══════════════════════════════════════════════════════════╝"
+	@echo ""
+	$(UV) run python -m webbrowser http://127.0.0.1:8000 &
+	$(UV) run uvicorn agentic_cab.web.app:create_app --factory --host 127.0.0.1 --port 8000
