@@ -31,12 +31,32 @@ If a slice's plan conflicts with the spec, **update the spec first** (in a separ
 ### 2. Rigor — prove the change
 
 - **Deep modules over shallow.** The `BookingProvider` port is the canonical example: 5 methods hide pricing, surge, state machines, idempotency, expiry. Before expanding any interface, ask "can this be one method instead of three?"
+- **SOLID as design pressure** (not religion). Use it as a *checklist on the slice's diff*, not an excuse to abstract early:
+  - **SRP** — each module changes for one reason. If the same file is edited for unrelated reasons across two slices, split it.
+  - **OCP** — the marketplace-swap story rides on this. New providers extend `BookingProvider` *without editing* tools/agent/log/gate. If a new adapter forces edits upstream, the port is wrong — fix the port, not the adapter.
+  - **LSP** — every `BookingProvider` impl must pass the same contract suite (P3 enforces this mechanically). No "this one's special" branches in the tool layer.
+  - **ISP** — ports are narrow Protocols. Flag if a port grows past ~6 methods or if a consumer uses < ½ of one.
+  - **DIP** — the agent depends on `core/ports`, *never* on adapters. This is also `CLAUDE.md` invariant 1, but SOLID frames the *why*. Concrete trigger: if a new import edge points "upward" in the layer diagram, you've violated DIP — fix before commit.
+  - **Tests follow DI, not field-overrides.** If a test needs to pin non-determinism (clock, RNG, idempotency key, retry policy), inject a collaborator at the function/constructor boundary. Do NOT add `_override` fields to production Pydantic models, env-var escape hatches, or module-level monkeypatches. Tests should survive a refactor that swaps the underlying mechanism, as long as the public interface is intact.
 - **Within a slice, vertical tracer bullets.** One test → minimal code to pass → next test. Do NOT write all the implementation then all the tests. Confirm the happy path first; expand incrementally.
 - **TDD where it pays, fixtures where it doesn't, no tests where it would be ceremony.** See `## TDD scope` below.
 - **Adversarial review (Ralph loop) for any non-trivial slice.** Before claiming done, spawn a subagent with `Agent(subagent_type=feature-dev:code-reviewer)` (or `general-purpose` if specialist unavailable) and a prompt naming the slice's spec section + invariants. Address blocking feedback on-branch. Distill dispositions into the commit message body (or `docs/scratch/.review-<slug>.md` if verbose). Merge confidence requires Ralph evidence, not just green CI.
 - **Never `--no-verify`.** If a hook fails, fix the cause. If the hook is wrong, change the hook in a separate commit with a one-line rationale. This is enforced by `.claude/settings.json` deny list.
 - **Determinism.** `temperature=0`, pinned model ID, seeded RNG, `FrozenClock` in scenarios. If a test flakes, fix the cause; do not retry.
 - **Evidence required to mark a slice ✓.** For tool/adapter slices: contract test green + unit tests green + relevant scenario(s) still render with invariants passing. For UI slices: screenshot + console/network clean. For agent/prompt slices: at least one scenario re-rendered with passing invariants.
+
+### Refactor scan (after each green test, before commit)
+
+Adapted from Matt Pocock's TDD refactoring skill (https://github.com/mattpocock/skills/blob/main/skills/engineering/tdd/refactoring.md). After every green test in the slice — not just at the end — walk this list against the diff:
+
+- **Duplication** → extract function/class.
+- **Long methods** → break into private helpers. Keep tests on the public interface so the helpers stay free to move.
+- **Shallow modules** → combine or deepen. A module whose every method is a one-liner pass-through is usually a layering mistake.
+- **Feature envy** → move logic to where the data lives. If `tools/confirm.py` is reaching into a `Draft` to compute things, the method probably belongs on `Draft` or a sibling helper.
+- **Primitive obsession** → introduce value objects. This repo already does this for `Money`, `AddressRef`, `Draft`, `ConfirmationRequest`. If a `dict[str, Any]` or `tuple[str, int, str]` keeps reappearing in signatures, promote it.
+- **Existing code the new code reveals as problematic** → fix it now, in this slice, as a separate commit (refactor before feature, never bundled).
+
+Run tests after each refactor step. If a refactor breaks a test that *should* have survived (e.g., swapping a field-override for proper DI breaks an idempotency test), the original test was coupled to implementation, not behavior — rewrite the test. If a refactor breaks a test that legitimately should fail (e.g., narrowing a return type), update both, but call it out in the commit body as a behavior change, not a refactor.
 
 ### 3. Hygiene — keep the repo operable
 
@@ -72,7 +92,7 @@ If a slice's plan conflicts with the spec, **update the spec first** (in a separ
 
 1. Implement vertically (test → minimal code → test).
 2. `make test-fast` during iteration. `make verify` before push.
-3. Scan for refactor candidates the new code revealed (duplication, shallow modules, primitive obsession). Tests after each refactor step.
+3. Run the **refactor scan** (see Rigor §"Refactor scan") against the slice's diff. Re-run tests after each refactor step. SOLID checklist applies — especially DIP if the slice added new import edges.
 4. Run `make verify` and at least the smallest affected scenario via `make transcripts`.
 5. Commit. Conventional Commits format with **phase scope**: `feat(P1):`, `fix(P3):`, `refactor(P2):`, `test(P3):`. Docs/chore commits don't need a phase scope.
 6. For non-trivial slices: **Ralph loop.** Spawn an adversarial-review subagent (see below). Distill dispositions into the commit message body. Address blocking feedback on-branch before the commit lands.

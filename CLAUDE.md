@@ -13,6 +13,8 @@ This repo is a 48h take-home: an AI agent that books cab rides end-to-end, with 
 - **`handoff`** — when pausing mid-slice across sessions; writes to `$TMPDIR`, not the repo.
 - **`superpowers:verification-before-completion`** — before any "done" claim. Evidence required.
 
+**SOLID + refactor-scan** are owned by `slice-delivery` (Rigor pillar). Consult after every green test, not as an afterthought at PR time. Tests pin non-determinism via dependency injection, not via `_override` fields on production types.
+
 Do not use LangChain, LlamaIndex, instructor, dspy, or any ORM. The Anthropic SDK and stdlib `sqlite3` are sufficient and demonstrate the engineering discipline being graded.
 
 ## Invariants — never violate without an explicit spec update
