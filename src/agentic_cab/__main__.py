@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+import uvicorn
 import yaml
 
 from agentic_cab.adapters.action_log import JSONLActionLog
@@ -17,6 +18,7 @@ from agentic_cab.agent.chat import run_repl
 from agentic_cab.render.transcript import render
 from agentic_cab.scenarios.invariants import evaluate
 from agentic_cab.scenarios.runner import run_scenario
+from agentic_cab.web.app import create_app
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -114,6 +116,15 @@ def render_transcripts(
 def repl() -> None:
     """Interactive CLI agent (CLIConfirmationChannel via /dev/tty)."""
     asyncio.run(run_repl())
+
+
+@app.command("web")
+def web(
+    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port")] = 8000,
+) -> None:
+    """FastAPI + browser UI (WebConfirmationChannel). Prefer `make web`."""
+    uvicorn.run(create_app(), host=host, port=port, reload=False)
 
 
 if __name__ == "__main__":
