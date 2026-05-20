@@ -283,6 +283,5 @@ async def test_cancel_fee_in_gate_summary(harness) -> None:
     # Booking status at quote time is "confirmed" → _compute_fee returns $0.00
     expected_fee: Money = UberSimAdapter._compute_fee("confirmed")
     fee_str = f"${expected_fee.amount_cents / 100:.2f}"
-    assert (
-        fee_str in captured_summary[0]
-    ), f"Expected fee {fee_str!r} in summary {captured_summary[0]!r}"
+    summary = captured_summary[0]
+    assert fee_str in summary, f"Expected fee {fee_str!r} in summary {summary!r}"
