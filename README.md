@@ -21,16 +21,18 @@ Tracker = `git log --oneline --grep='(P[0-9])'`. There is no status file; status
 
 ## Quickstart *(will be validated end-to-end in P6)*
 
+**Requires:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) (Python is installed by `uv` automatically; 3.12+ pinned in `.python-version`).
+
 ```bash
 git clone <repo>
 cd agentic-cab-rides
-cp .env.example .env && echo "ANTHROPIC_API_KEY=..." >> .env
-make install         # uv sync + install pre-commit + pre-push hooks
-make repl            # CLI agent
+cp .env.example .env                         # then edit .env: ANTHROPIC_API_KEY=sk-ant-...
+make install                                 # uv sync + install pre-commit + pre-push hooks
+make repl                                    # CLI agent
 # or
-make web             # browser UI at http://localhost:8000
+make web                                     # browser UI at http://localhost:8000
 # or
-make transcripts     # regenerate all 5 scenario transcripts
+make transcripts                             # regenerate all 5 scenario transcripts
 ```
 
 `make help` lists every target. The Makefile is the discovery surface; pre-commit and CI both call into it so there is one path.

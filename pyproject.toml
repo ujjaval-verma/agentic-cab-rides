@@ -89,7 +89,7 @@ indent-style = "space"
 [tool.pyright]
 include = ["src", "tests"]
 # Strict typing where it matters: contracts, fingerprints, tool gate logic.
-strict = ["src/agentic_cab/core", "src/agentic_cab/tools"]
+strict = ["src/agentic_cab/core", "src/agentic_cab/tools", "src/agentic_cab/adapters"]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
 reportMissingImports = "error"

@@ -33,24 +33,26 @@
       "Bash(touch:*)",
       "Bash(cp:*)",
       "Bash(mv:*)",
-      "Read(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/**)",
-      "Edit(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/**)",
-      "Write(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/**)"
+      "Read(**)",
+      "Edit(**)",
+      "Write(**)"
     ],
     "deny": [
       "Bash(rm -rf /*)",
       "Bash(rm -rf ~/*)",
       "Bash(git push --force:*)",
+      "Bash(git push --force-with-lease:*)",
       "Bash(git push -f:*)",
       "Bash(git commit --no-verify:*)",
       "Bash(git commit -n:*)",
       "Bash(git push --no-verify:*)",
       "Bash(*--no-verify*)",
+      "Bash(git rebase --autosquash:*)",
       "Bash(curl * | sh:*)",
       "Bash(curl * | bash:*)",
-      "Read(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/.env)",
-      "Read(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/data/**)",
-      "Write(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/.env)"
+      "Read(.env)",
+      "Read(data/**)",
+      "Write(.env)"
     ]
   },
   "hooks": {

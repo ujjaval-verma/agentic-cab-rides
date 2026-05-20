@@ -84,7 +84,9 @@ P5 (web UI) branches from P1 — the agent loop, tool surface, and one working s
 **Acceptance:**
 - [ ] `make transcripts` produces `transcripts/01_happy_path.md`
 - [ ] Action log for the run shows the 4-row pattern (`requested → verified → executed → outcome`) for `confirm_booking`
+- [ ] **Action log integrity test**: for any `action_id` where a `verified` row exists with `result == "rejected"`, assert no `executed` row exists with the same `action_id`. Ship as `tests/unit/test_action_log_integrity.py`.
 - [ ] Fingerprint check is exercised (a unit test mutates the draft and asserts rejection)
+- [ ] Single-use draft check exercised (a unit test re-uses an already-consumed draft and asserts rejection — separate from idempotency)
 - [ ] Idempotency `claim_or_recall` exercised end-to-end (one happy-path call; restart test deferred to P3)
 - [ ] `replay.py <session_id>` reconstructs the transcript from the log
 

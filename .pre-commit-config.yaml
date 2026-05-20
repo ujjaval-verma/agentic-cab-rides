@@ -35,13 +35,13 @@ repos:
 
       - id: no-todo-in-code
         name: no TODO/FIXME in code (use docs/FOLLOWUPS.md)
-        entry: bash -c 'if grep -RnE "TODO|FIXME|XXX" src/ tests/ 2>/dev/null; then echo "Promote these to docs/FOLLOWUPS.md or fix them now."; exit 1; fi'
+        entry: bash -c 'if grep -RnE "TODO|FIXME|XXX|HACK" src/ tests/ scripts/ 2>/dev/null; then echo "Promote these to docs/FOLLOWUPS.md or fix them now."; exit 1; fi'
         language: system
         pass_filenames: false
 
       - id: no-stray-root-md
         name: no net-new top-level .md outside whitelist (use docs/ or docs/scratch/)
-        entry: bash -c 'allowed="^(CLAUDE\.md|README\.md)$"; new=$(git diff --cached --name-only --diff-filter=A | grep -E "^[^/]+\.md$" | grep -vE "$allowed" || true); if [ -n "$new" ]; then echo "Net-new top-level .md files are not allowed:"; echo "$new"; echo "Move under docs/ (durable) or docs/scratch/ (gitignored). See CLAUDE.md."; exit 1; fi'
+        entry: bash -c 'allowed="^(CLAUDE\.md|README\.md)$"; new=$(git diff --cached --name-only --diff-filter=AR | grep -E "^[^/]+\.md$" | grep -vE "$allowed" || true); if [ -n "$new" ]; then echo "Net-new top-level .md files are not allowed:"; echo "$new"; echo "Move under docs/ (durable) or docs/scratch/ (gitignored). See CLAUDE.md."; exit 1; fi'
         language: system
         pass_filenames: false
 

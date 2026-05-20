@@ -20,7 +20,7 @@ Deliverables: repo (3-min clone-to-run), 5 transcripts (happy path / price compa
 
 ## 2. Stack & non-negotiables
 
-- **Python 3.11+**, `uv`-managed
+- **Python 3.12+**, `uv`-managed
 - **Pydantic v2** for all typed contracts
 - **Anthropic SDK** native tool use (no LangChain — hides the rigor being graded)
 - **FastAPI + vanilla HTML/JS** for web UI (no build step, no npm)
@@ -129,7 +129,7 @@ class ConfirmationRequest(BaseModel):
 
 class ConfirmationResult(BaseModel):
     approved: bool
-    reason: Literal["approved","declined","expired","fingerprint_mismatch","timeout"]
+    reason: Literal["approved", "declined", "expired", "timeout"]
     approved_at: datetime | None
     approver: str | None       # "cli-tty" | "web:<session>" | "scripted"
 
@@ -143,7 +143,7 @@ class ConfirmationChannel(Protocol):
 - `ScriptedConfirmationChannel` — for scenarios; matches summary against script rules.
 - `AutoApproveChannel` — tests only; guarded by env var assertion.
 
-The fingerprint check is performed by the **tool layer**, not the channel. The channel only displays + collects.
+The fingerprint check is performed by the **tool layer**, not the channel. The channel only displays + collects — it cannot reject for fingerprint reasons. Fingerprint mismatch surfaces as a tool-layer error before the channel is invoked.
 
 ## 7. Tool surface (what the agent sees)
 
@@ -161,7 +161,7 @@ Seven narrow tools, all Pydantic-validated:
 
 **`confirm_booking` algorithm (the heart of the system):**
 
-1. Load draft from state. Reject if unknown or expired.
+1. Load draft from state. Reject if unknown, expired, or already consumed (`consumed_at IS NOT NULL`) — drafts are single-use even though the idempotency key is the durable barrier against double-booking.
 2. Recompute fingerprint over `draft.option_snapshot`. Reject on mismatch.
 3. Call `provider.discover()` for re-quote. If price drift > $1 OR > 5%, re-prepare and return `PriceChanged{new_draft_id, new_summary}` — do NOT invoke the gate with stale price.
 4. Mint `idempotency_key` (ULID).
@@ -389,7 +389,7 @@ agentic-cab-rides/
 ├── pyproject.toml               # uv-managed, locked
 ├── .env.example                 # ANTHROPIC_API_KEY=
 ├── src/agentic_cab/
-│   ├── __main__.py              # repl | run-scenario | web
+│   ├── __main__.py              # repl | run-scenario | render-transcripts | web
 │   ├── core/
 │   │   ├── types.py
 │   │   ├── ports.py
