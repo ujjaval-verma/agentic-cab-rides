@@ -110,6 +110,9 @@ class Booking(BaseModel):
         "completed",
         "cancelled",
         "failed",
+        # sim state-machine statuses (BookingStatus)
+        "requested",
+        "matched",
     ]
     provider: str
     summary: Option
