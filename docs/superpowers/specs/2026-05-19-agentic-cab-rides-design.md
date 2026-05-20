@@ -310,6 +310,15 @@ class StateStore(Protocol):
 3. Otherwise, call `provider.confirm(draft_id, idempotency_key)`. The sim provider also checks its own dedupe (mirroring real prod where the provider is the source of truth) — but the store is the durable barrier.
 4. `store.finalize_idempotency(key, booking)`. Same transaction as `put_booking`. The adapter serialises the Booking internally to the `response_blob` column.
 
+**Idempotency replay vs. structural gate.** When `claim_or_recall` returns
+`status="recalled"`, the tool layer short-circuits without re-invoking the
+`ConfirmationChannel`. This is intentional: the channel approval that produced
+the original booking is the canonical consent for this idempotency_key, and
+the recalled response is a deterministic replay of that approved action — not
+a new state mutation. CLAUDE.md invariant 2 ("every state-mutating action goes
+through a ConfirmationChannel") is preserved at the *idempotency-key* level,
+not the function-call level.
+
 **Concurrency:** WAL mode means CLI REPL and FastAPI web can both touch the DB without locking issues. Both share `data/state.db`; the action log is per-session so no contention there.
 
 **Restart survival** is tested explicitly in `tests/contract/test_restart_survival.py`: book → kill process → restart → call `confirm` with the same idempotency key → assert same booking returned, no duplicate provider call.
