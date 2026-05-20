@@ -281,7 +281,7 @@ async def run_repl(
     geocode_fixtures_dir: Path | None = None,
     console: Console | None = None,
     input_source: InputSource | None = None,
-    channel: CLIConfirmationChannel | None = None,
+    channel: ConfirmationChannel | None = None,
 ) -> None:
     """Entry point for the interactive REPL.
 

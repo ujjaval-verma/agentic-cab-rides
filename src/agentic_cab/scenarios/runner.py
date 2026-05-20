@@ -37,10 +37,15 @@ def _load(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text())  # type: ignore[no-any-return]
 
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_DEFAULT_GEOCODE_FIXTURES = _REPO_ROOT / "fixtures" / "geocode"
+
+
 async def run_scenario(
     scenario_path: Path,
     data_dir: Path,
     log_dir: Path,
+    geocode_fixtures_dir: Path | None = None,
 ) -> str:
     """Run a scenario end-to-end. Returns session_id."""
     scn = _load(scenario_path)
@@ -51,7 +56,10 @@ async def run_scenario(
     log = JSONLActionLog(log_dir=log_dir)
     sim = UberSimAdapter(store=store, clock=clock, rng_seed=scn["sim"]["rng_seed"])
     channel = ScriptedConfirmationChannel(script=scn["confirmation"]["script"], clock=clock)
-    geocode_cache = GeocodeCache(fixtures_dir=data_dir / "geocode_fixtures")
+    _geocode_fixtures_dir = (
+        geocode_fixtures_dir if geocode_fixtures_dir is not None else _DEFAULT_GEOCODE_FIXTURES
+    )
+    geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
     geocoder = NominatimGeocoder(cache=geocode_cache, http=httpx.AsyncClient())
 
     tools = [
