@@ -64,10 +64,10 @@ clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .ruff_cache .pyright dist build htmlcov .coverage
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 
-reset: ## Wipe runtime state (data/, logs/, chat/)
+reset: ## Wipe data/, logs/, chat/ and re-apply schema
 	rm -rf data logs chat
 	mkdir -p data logs chat
-	touch data/.gitkeep logs/.gitkeep chat/.gitkeep
+	$(UV) run python -m agentic_cab init-db
 
 replay: ## Pretty-print a session log: `make replay SESSION=<id>`
 	@test -n "$(SESSION)" || (echo "usage: make replay SESSION=<session_id>"; exit 1)
