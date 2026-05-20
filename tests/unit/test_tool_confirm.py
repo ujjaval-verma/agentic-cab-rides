@@ -254,81 +254,118 @@ async def test_confirm_request_uses_subject_kind_draft(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_retry_after_synthetic_failure_reuses_idempotency_key(harness) -> None:
-    """Two confirm_booking calls on the same draft + same state produce the same idempotency key.
-    provider.confirm is invoked once total; the second call returns via the recalled branch
-    with the same booking. Both action-log executed rows carry identical idempotency_key."""
-    store, log, clock, sim = harness
+async def test_retry_after_synthetic_failure_reuses_idempotency_key(
+    harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Recall path: one draft, two confirm_booking calls, provider.confirm invoked ONCE.
 
-    # First confirm: succeeds normally
-    draft_id = await _prepare(sim, log, clock)
-    ch = ScriptedConfirmationChannel(script=[{"match": "UberX", "action": "approve"}], clock=clock)
-    r1 = await confirm_booking(
-        ConfirmArgs(draft_id=draft_id),
-        provider=sim,
-        store=store,
-        log=log,
-        channel=ch,
-        clock=clock,
-        session_id="S",
-        turn_id="T",
-    )
-    assert r1["status"] == "confirmed"
-    booking_id_1 = r1["booking_id"]
+    Simulates an agent retry after a network drop between provider.confirm returning and
+    consume_draft persisting — the draft is not marked consumed, so the second call can
+    validate it, derive the same intent-bound key, and hit claim_or_recall's recall branch
+    instead of re-booking.
 
-    # Collect the executed row from the first call to capture the idempotency_key
-    exec_rows_1 = [
-        r for r in log.read("S") if r["action_id"] == r1["action_id"] and r["kind"] == "executed"
-    ]
-    assert len(exec_rows_1) == 1
-    key_1 = exec_rows_1[0]["idempotency_key"]
-
-    # Second confirm: same draft_id (draft was consumed after first call so _validate_draft
-    # rejects, but we need to test key derivation. Instead, use a *second* draft with a
-    # fixed key_factory that derives as the real default would — we verify via the helpers
-    # directly that the same inputs produce the same key.)
-    # For integration: use a new draft but a spy key_factory to capture the generated key.
-    draft_id_2 = await _prepare(sim, log, clock)
-    # Load draft so we can derive expected key
-    draft_2 = store.get_draft(draft_id_2)
-    assert draft_2 is not None
+    Assertions:
+    - provider.confirm called exactly once (spy via unittest.mock.patch.object).
+    - Both action-log executed rows for the two calls carry IDENTICAL idempotency_key values.
+    - Second call's verified row has checks.idempotency == 'recalled'.
+    - Second call returns the same booking_id as the first.
+    """
+    from unittest.mock import patch
 
     from agentic_cab.core.ids import confirm_idempotency_key
 
-    expected_key_2 = confirm_idempotency_key(draft_2.draft_id, draft_2.fingerprint)
-    captured_keys: list[str] = []
+    store, log, clock, sim = harness
 
-    def spy_factory(draft_id: str, fingerprint: str) -> str:
-        k = confirm_idempotency_key(draft_id, fingerprint)
-        captured_keys.append(k)
-        return k
+    # Prepare ONE draft; remember its fingerprint for independent key verification.
+    draft_id = await _prepare(sim, log, clock)
+    draft = store.get_draft(draft_id)
+    assert draft is not None
+    expected_key = confirm_idempotency_key(draft.draft_id, draft.fingerprint)
 
-    ch2 = ScriptedConfirmationChannel(script=[{"match": "UberX", "action": "approve"}], clock=clock)
-    r2 = await confirm_booking(
-        ConfirmArgs(draft_id=draft_id_2),
-        provider=sim,
-        store=store,
-        log=log,
-        channel=ch2,
-        clock=clock,
-        session_id="S",
-        turn_id="T2",
-        key_factory=spy_factory,
-    )
-    assert r2["status"] == "confirmed"
-    assert captured_keys == [expected_key_2]
+    # Monkeypatch consume_draft to a no-op for the first call only, simulating the scenario
+    # where the agent's process dies (or the network drops) AFTER provider.confirm succeeds
+    # and finalize_idempotency runs but BEFORE consume_draft persists.  On a retry the draft
+    # appears un-consumed, so _validate_draft passes, the same key is derived, and
+    # claim_or_recall short-circuits to the recalled branch.
+    _real_consume = store.consume_draft
+    consume_call_count = 0
 
-    # Now simulate a retry: same draft_id_2 but draft is consumed — we instead test via
-    # store.claim_or_recall returning recalled. For a pure key-determinism check:
-    # call confirm_idempotency_key twice with same inputs, get same key.
-    key_a = confirm_idempotency_key(draft_id_2, draft_2.fingerprint)
-    key_b = confirm_idempotency_key(draft_id_2, draft_2.fingerprint)
-    assert key_a == key_b, "same inputs must produce same idempotency key"
-    assert key_a == expected_key_2
+    def _noop_consume(d_id: str, at) -> bool:  # type: ignore[override]
+        nonlocal consume_call_count
+        consume_call_count += 1
+        if consume_call_count == 1:
+            return True  # silently skip so draft stays un-consumed
+        return _real_consume(d_id, at=at)
 
-    # Assert the two different drafts got different keys (different draft_ids → different keys)
-    assert key_1 != key_a, "different drafts must produce different idempotency keys"
-    _ = booking_id_1  # referenced to avoid unused warning
+    monkeypatch.setattr(store, "consume_draft", _noop_consume)
+
+    # First call: succeeds; provider.confirm is called once; finalize_idempotency runs.
+    ch = ScriptedConfirmationChannel(script=[{"match": "UberX", "action": "approve"}], clock=clock)
+    with patch.object(sim, "confirm", wraps=sim.confirm) as spy:
+        r1 = await confirm_booking(
+            ConfirmArgs(draft_id=draft_id),
+            provider=sim,
+            store=store,
+            log=log,
+            channel=ch,
+            clock=clock,
+            session_id="S",
+            turn_id="T",
+        )
+        assert r1["status"] == "confirmed"
+        booking_id_1 = r1["booking_id"]
+
+        # Second call: same draft_id, same store — draft is still valid (consume was no-op).
+        # claim_or_recall returns "recalled"; provider.confirm must NOT be called again.
+        r2 = await confirm_booking(
+            ConfirmArgs(draft_id=draft_id),
+            provider=sim,
+            store=store,
+            log=log,
+            channel=ch,
+            clock=clock,
+            session_id="S",
+            turn_id="T2",
+        )
+        assert r2["status"] == "confirmed"
+
+        # Core assertion: exactly one provider.confirm call across both tool invocations.
+        assert (
+            spy.call_count == 1
+        ), f"provider.confirm must be called exactly once; got {spy.call_count}"
+
+    # Same booking_id returned from both calls.
+    assert r2["booking_id"] == booking_id_1, "recall branch must return the original booking_id"
+
+    # Both executed rows carry identical idempotency_key.
+    exec_rows_1 = [
+        r for r in log.read("S") if r["action_id"] == r1["action_id"] and r["kind"] == "executed"
+    ]
+    exec_rows_2 = [
+        r for r in log.read("S") if r["action_id"] == r2["action_id"] and r["kind"] == "executed"
+    ]
+    assert len(exec_rows_1) == 1
+    assert len(exec_rows_2) == 1
+    key_from_log_1 = exec_rows_1[0]["idempotency_key"]
+    key_from_log_2 = exec_rows_2[0]["idempotency_key"]
+    assert (
+        key_from_log_1 == key_from_log_2
+    ), "both executed rows must carry identical idempotency_key"
+    assert (
+        key_from_log_1 == expected_key
+    ), "logged key must match independently-derived expected key"
+
+    # Second call's verified row must expose idempotency='recalled' in checks.
+    verified_rows_2 = [
+        r for r in log.read("S") if r["action_id"] == r2["action_id"] and r["kind"] == "verified"
+    ]
+    assert len(verified_rows_2) == 1
+    assert (
+        verified_rows_2[0]["checks"].get("idempotency") == "recalled"
+    ), "second call's verified row must signal recall in checks.idempotency"
+
+    # Second call's executed row must be marked as a replay.
+    assert exec_rows_2[0].get("replayed") is True
 
 
 @pytest.mark.asyncio

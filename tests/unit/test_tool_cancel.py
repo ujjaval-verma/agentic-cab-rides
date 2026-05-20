@@ -285,10 +285,27 @@ async def test_cancel_request_uses_subject_kind_booking(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_retry_reuses_idempotency_key(harness) -> None:
-    """Two cancel_booking calls on the same booking with same fee/status produce the same key.
-    provider.cancel is invoked once total; the second call returns via the recalled branch.
-    The SECOND fee quote returns the same value (state unchanged)."""
+async def test_cancel_retry_reuses_idempotency_key(
+    harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Key-determinism for cancel: same (booking_id, fee_cents, status_at_quote) → same key.
+
+    The full end-to-end recall path for cancel (second call collides with first call's claim
+    and short-circuits via claim_or_recall) is NOT testable at T27 scope because after a
+    successful first cancel the booking status transitions to "cancelled", so the second call
+    derives a DIFFERENT key (status_at_quote changes), and the status-guard catches it rather
+    than the recall branch.
+
+    The true retry scenario for cancel (agent retries after network drop mid-execute, before
+    provider.cancel returns, so booking status is still "confirmed" on retry) requires the
+    "in_progress" claim status from T30 (restart-survival semantics) to short-circuit correctly.
+    See docs/FOLLOWUPS.md — "Restart-survival semantics for claim_or_recall".
+
+    What IS provable at T27:
+    - The intent-bound key is deterministic: same inputs → same key, always.
+    - The executed row carries the idempotency_key field.
+    - The gate is invoked exactly once (first call only; tested via OnceApproveChannel).
+    """
     from agentic_cab.core.ids import cancel_idempotency_key
 
     store, log, clock, sim = harness
@@ -298,7 +315,13 @@ async def test_cancel_retry_reuses_idempotency_key(harness) -> None:
     assert booking is not None
     status_at_quote = booking.status
 
-    # First cancel: gate approves, collect executed row's idempotency_key
+    # Quote the fee before the cancel so we can independently derive the expected key.
+    fee_before_cancel = await sim.quote_cancel_fee(booking_id)
+    expected_key = cancel_idempotency_key(
+        booking_id, fee_before_cancel.amount_cents, status_at_quote
+    )
+
+    # First (and only) cancel: gate approves once, key captured via spy_factory.
     invoke_count = 0
 
     class OnceApproveChannel:
@@ -334,34 +357,32 @@ async def test_cancel_retry_reuses_idempotency_key(harness) -> None:
     key_first_call = captured_keys[0]
 
     # The executed row must carry the idempotency_key field.
-    # Note: the log layer applies PII redaction to string values, so the stored key may differ
-    # from the raw hex if the digest happens to match a phone-number pattern. We assert the field
-    # is present and non-empty; determinism is verified via the helper calls below.
     exec_rows_1 = [
         r for r in log.read("S") if r["action_id"] == r1["action_id"] and r["kind"] == "executed"
     ]
     assert len(exec_rows_1) == 1
     assert exec_rows_1[0].get("idempotency_key"), "executed row must carry idempotency_key"
 
-    # Second cancel: same booking_id. The booking is now 'cancelled'.
-    # The key derivation uses the ORIGINAL fee + status — but for the replay path,
-    # claim_or_recall short-circuits. We verify key derivation is deterministic:
-    fee = await sim.quote_cancel_fee(booking_id)
-    # After cancel, booking status is 'cancelled' — the second call hits quote first,
-    # then derives key from (booking_id, fee.amount_cents, 'cancelled').
-    # The idempotency claim short-circuits because the booking is now cancelled and
-    # the new status differs — so this tests a different path (status guard, not recall).
-    # Instead verify: same inputs → same key (pure determinism check).
-    key_a = cancel_idempotency_key(booking_id, fee.amount_cents, status_at_quote)
-    key_b = cancel_idempotency_key(booking_id, fee.amount_cents, status_at_quote)
+    # Key-determinism: same (booking_id, fee_cents, status_at_quote) → same key, always.
+    key_a = cancel_idempotency_key(booking_id, fee_before_cancel.amount_cents, status_at_quote)
+    key_b = cancel_idempotency_key(booking_id, fee_before_cancel.amount_cents, status_at_quote)
     assert key_a == key_b, "same inputs must produce same idempotency key"
-    assert key_a == key_first_call, "first call and deterministic derivation must match"
+    assert key_a == key_first_call, "key_factory output and direct derivation must match"
+    assert key_a == expected_key, "pre-computed expected key must match actual key used"
 
-    # Different fee → different key
-    key_different_fee = cancel_idempotency_key(booking_id, fee.amount_cents + 1, status_at_quote)
+    # Different fee → different key (different intent → different key, no accidental collision).
+    key_different_fee = cancel_idempotency_key(
+        booking_id, fee_before_cancel.amount_cents + 1, status_at_quote
+    )
     assert key_different_fee != key_a
 
-    assert invoke_count == 1, "gate must only be invoked once"
+    # Different status → different key.
+    key_different_status = cancel_idempotency_key(
+        booking_id, fee_before_cancel.amount_cents, "pending"
+    )
+    assert key_different_status != key_a
+
+    assert invoke_count == 1, "gate must only be invoked once across the full cancel"
 
 
 @pytest.mark.asyncio
