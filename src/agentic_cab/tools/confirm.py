@@ -23,10 +23,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.core.fingerprint import fingerprint
 from agentic_cab.core.ids import new_action_id, new_idempotency_key
 from agentic_cab.core.ports import (
+    ActionLog,
     BookingProvider,
     Clock,
     ConfirmationChannel,
@@ -90,7 +90,7 @@ async def confirm_booking(
     *,
     provider: BookingProvider,
     store: StateStore,
-    log: JSONLActionLog,
+    log: ActionLog,
     channel: ConfirmationChannel,
     clock: Clock,
     session_id: str,

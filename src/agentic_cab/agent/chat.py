@@ -31,6 +31,14 @@ from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
 from agentic_cab.agent.loop import ToolHandler, run_turn
 from agentic_cab.core.ids import new_session_id, new_turn_id
+from agentic_cab.core.ports import (
+    ActionLog,
+    BookingProvider,
+    Clock,
+    ConfirmationChannel,
+    GeocoderPort,
+    StateStore,
+)
 from agentic_cab.tools.cancel import CancelArgs, cancel_booking
 from agentic_cab.tools.confirm import ConfirmArgs, confirm_booking
 from agentic_cab.tools.discover import DiscoverArgs, discover_options
@@ -89,16 +97,20 @@ _TOOL_DEFS = [
 
 def build_handlers(
     *,
-    sim: UberSimAdapter,
-    store: SqliteStateStore,
-    log: JSONLActionLog,
-    clock: SystemClock,
-    channel: CLIConfirmationChannel,
-    geocoder: NominatimGeocoder,
+    sim: BookingProvider,
+    store: StateStore,
+    log: ActionLog,
+    clock: Clock,
+    channel: ConfirmationChannel,
+    geocoder: GeocoderPort,
     session_id: str,
     turn_id_ref: list[str],
 ) -> dict[str, ToolHandler]:
     """Build the seven tool handlers.
+
+    All parameters are typed as port protocols so any conforming adapter
+    (including test fakes like FrozenClock or ScriptedConfirmationChannel)
+    can be passed without a pyright strict error.
 
     turn_id_ref is a mutable one-element list so handlers always use the
     *current* turn_id without rebinding the closure on every turn.

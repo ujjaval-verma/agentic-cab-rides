@@ -6,9 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.core.ids import new_action_id
-from agentic_cab.core.ports import BookingProvider, Clock
+from agentic_cab.core.ports import ActionLog, BookingProvider, Clock
 
 
 class PrepareArgs(BaseModel):
@@ -19,7 +18,7 @@ async def prepare_booking(
     args: PrepareArgs,
     *,
     provider: BookingProvider,
-    log: JSONLActionLog,
+    log: ActionLog,
     clock: Clock,
     session_id: str,
     turn_id: str,
