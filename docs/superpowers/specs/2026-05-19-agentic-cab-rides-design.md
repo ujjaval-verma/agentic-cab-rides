@@ -2,15 +2,15 @@
 
 **Date:** 2026-05-19
 **Status:** Approved for implementation planning
-**Scope:** 48h take-home prototype. Working end-to-end, engineering rigor demonstrable, not production-hardened.
+**Scope:** Prototype. Working end-to-end, engineering rigor demonstrable, not production-hardened.
 
 ---
 
-## 1. Problem & graded properties
+## 1. Problem & target properties
 
 Build a system where a Claude agent books cab rides end-to-end: discover, compare, book, track, cancel.
 
-The brief grades three architectural properties harder than feature completeness:
+Three architectural properties matter more than feature completeness:
 
 1. **A swappable platform adapter** — "if we asked you to plug in Lyft or Zocdoc, what changes?" The Zocdoc hint is deliberate; the adapter must abstract over more than ride-share.
 2. **Confirmation gates** — the agent must be *structurally unable* to book without explicit user approval.
@@ -22,7 +22,7 @@ Deliverables: repo (3-min clone-to-run), 5 transcripts (happy path / price compa
 
 - **Python 3.12+**, `uv`-managed
 - **Pydantic v2** for all typed contracts
-- **Anthropic SDK** native tool use (no LangChain — hides the rigor being graded)
+- **Anthropic SDK** native tool use (no LangChain — hides the rigor we want visible)
 - **FastAPI + vanilla HTML/JS** for web UI (no build step, no npm)
 - **Rich** for CLI rendering
 - **pytest** with parameterized provider contract suite
@@ -365,7 +365,7 @@ invariants:
 **Render pipeline** (`scripts/render_transcript.py`):
 - Reads chat history JSONL + action log JSONL
 - Emits `transcripts/<name>.md` with sections: Scenario header (name/seed/repro command), Conversation, Action log highlights (collapsed), Invariants (pass/fail)
-- `make transcripts` regenerates all 5. Rendered MDs are **committed** so the grader sees them without running.
+- `make transcripts` regenerates all 5. Rendered MDs are **committed** so reviewers can inspect them without running.
 
 **Determinism:** Claude with `temperature=0`, pinned model ID, stable versioned system prompt. ~5% wording drift accepted; invariants are what's asserted.
 

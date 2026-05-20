@@ -16,7 +16,7 @@
 
 The remaining additions: one intent-router rule in the agent's tool-call resolution, and a new tool surface variant (`reschedule_appointment` replaces `cancel_booking` semantics — Zocdoc rescheduling is the dominant flow). The tool layer's fingerprint logic, the `ConfirmationChannel` design, the four-row action log, and the SQLite idempotency table are unchanged.
 
-*The fact that "swap to Zocdoc" requires no edits below the tool layer is the architectural payoff this take-home was designed to surface.*
+*The fact that "swap to Zocdoc" requires no edits below the tool layer is the architectural payoff this design was meant to surface.*
 
 ## 2. What breaks first in production
 

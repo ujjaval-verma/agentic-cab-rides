@@ -6,11 +6,11 @@ The repo's name is `agentic-cab-rides` because the visible deliverable today is 
 
 ## What this is
 
-A take-home prototype that demonstrates three properties the brief grades hardest:
+A prototype that demonstrates three properties:
 
 1. **A swappable platform adapter.** A generic `BookingProvider` port over `Intent → Option → Draft → Booking`. Adding Lyft = a new adapter passing the contract test suite. Adding Zocdoc = one new `AppointmentIntent` variant + a new adapter + an intent router. *Agent tools, confirmation gate, action log, fingerprint logic: unchanged.*
 2. **Structural confirmation gates.** State-mutating tools (`confirm_booking`, `cancel_booking`) cannot self-approve. Every gated call goes through a `ConfirmationChannel` whose decision the agent does not control — CLI reads from `/dev/tty`, the web UI uses a button click, scenario mode uses a scripted approver. Fingerprints reject mutated drafts before any provider call.
-3. **A replayable action log.** Append-only JSONL emitting four row kinds per gated action: `requested → verified → executed → outcome`, linked by `action_id`. The log answers, for every attempt, what was requested, what was verified, what executed, and what happened — exactly the brief's phrasing.
+3. **A replayable action log.** Append-only JSONL emitting four row kinds per gated action: `requested → verified → executed → outcome`, linked by `action_id`. The log answers, for every attempt, what was requested, what was verified, what executed, and what happened.
 
 ## Status
 

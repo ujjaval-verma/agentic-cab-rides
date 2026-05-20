@@ -1,6 +1,6 @@
 # CLAUDE.md — agentic-cab-rides
 
-This repo is a 48h take-home: an AI agent that books cab rides end-to-end, with a swappable platform adapter, structural confirmation gates, and a replayable action log. The harness here is graded too — process discipline matters as much as the artifact.
+This repo is a prototype: an AI agent that books cab rides end-to-end, with a swappable platform adapter, structural confirmation gates, and a replayable action log. The harness here matters too — process discipline is part of the artifact.
 
 **Read first:** the spec at `docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`. It owns every contract. This file owns the invariants and how to work in the repo.
 
@@ -15,7 +15,7 @@ This repo is a 48h take-home: an AI agent that books cab rides end-to-end, with 
 
 **SOLID + refactor-scan** are owned by `slice-delivery` (Rigor pillar). Consult after every green test, not as an afterthought at PR time. Tests pin non-determinism via dependency injection, not via `_override` fields on production types.
 
-Do not use LangChain, LlamaIndex, instructor, dspy, or any ORM. The Anthropic SDK and stdlib `sqlite3` are sufficient and demonstrate the engineering discipline being graded.
+Do not use LangChain, LlamaIndex, instructor, dspy, or any ORM. The Anthropic SDK and stdlib `sqlite3` are sufficient and keep the engineering discipline visible.
 
 ## Invariants — never violate without an explicit spec update
 
@@ -23,7 +23,7 @@ Do not use LangChain, LlamaIndex, instructor, dspy, or any ORM. The Anthropic SD
 2. **The confirmation gate is structurally enforced.** Every state-mutating action (`confirm_booking`, `cancel_booking`) goes through a `ConfirmationChannel`. The agent never sees a `confirmed=True` parameter; the channel owns the y/n decision. Idempotency-key replays do not re-invoke the channel (the original approval is canonical; see spec §10a "Idempotency replay vs. structural gate"). CLI reads from `/dev/tty`, not stdin.
 3. **Fingerprint check before every gated provider call.** Tool layer computes `sha256(canonical_json(option_snapshot))` at `prepare`, re-verifies at `confirm`, and aborts on mismatch. A draft whose params were mutated between prepare and confirm must never reach the provider.
 4. **Re-quote before confirm.** Inside `confirm_booking`, after fingerprint check, re-call `provider.discover()`. If price drift exceeds the threshold, return `PriceChanged` with a new draft — do not invoke the gate with stale price.
-5. **Idempotency keys are required.** `BookingProvider.confirm` and `cancel` take an `idempotency_key`. SQLite enforces `UNIQUE`. `claim_or_recall` short-circuits the second provider call. In this prototype the tool layer mints keys per call (a ULID at the top of `confirm_booking`); making keys intent-bound — so an agent retry after a timeout reuses the same key — is a known gap tracked in `docs/FOLLOWUPS.md` and called out in `WRITEUP.md` as the first thing that breaks after the basics.
+5. **Idempotency keys are required.** `BookingProvider.confirm` and `cancel` take an `idempotency_key`. SQLite enforces `UNIQUE`. `claim_or_recall` short-circuits the second provider call. In this prototype the tool layer mints keys per call (a ULID at the top of `confirm_booking`); making keys intent-bound — so an agent retry after a timeout reuses the same key — is a known gap tracked in `docs/FOLLOWUPS.md` and called out in `WRITEUP.md` as the first thing that breaks in production.
 6. **The action log emits four row kinds per gated action.** `requested` → `verified` → `executed` → `outcome`, linked by `action_id`. Append-only JSONL at `logs/<session_id>.jsonl`. `verified.result == "rejected"` short-circuits — no `executed` row follows. Read-only tools emit `requested` + `outcome` only.
 7. **Persistence split is fixed.** SQLite (`data/state.db`) for drafts, bookings, booking_events, idempotency_keys. JSONL for action log, chat history, geocode cache. Do not move append-only artifacts into SQLite — the audit story depends on flat files.
 8. **PII redaction at the log boundary.** Raw address text never enters logs; only `{formatted, lat, lng}`. Phone numbers and names through `redact()`.
@@ -77,7 +77,7 @@ The repo has two kinds of markdown: docs that travel with the code (versioned, r
 | Path | Purpose |
 |---|---|
 | `CLAUDE.md` (root) | Invariants every session must respect |
-| `README.md` (root) | 3-min quickstart for the grader |
+| `README.md` (root) | 3-min quickstart for first-time readers |
 | `docs/superpowers/specs/*.md` | Design specs (date-prefixed) |
 | `docs/superpowers/plans/*.md` | Implementation plans (output of `writing-plans`) |
 | `docs/PHASES.md` | Static contract: Definition of Done + phases with acceptance bullets. No status field — git log is the tracker. |
