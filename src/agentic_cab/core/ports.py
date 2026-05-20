@@ -11,7 +11,7 @@ from typing import Any, ClassVar, Literal, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel
 
-from agentic_cab.core.types import AddressRef, Booking, BookingEvent, Draft, Intent, Option
+from agentic_cab.core.types import AddressRef, Booking, BookingEvent, Draft, Intent, Money, Option
 
 # ---------- BookingProvider ----------
 
@@ -30,6 +30,8 @@ class BookingProvider(Protocol):
     async def track(self: Self, booking_id: str) -> Booking: ...
 
     async def cancel(self: Self, booking_id: str, idempotency_key: str) -> Booking: ...
+
+    async def quote_cancel_fee(self: Self, booking_id: str) -> Money: ...
 
 
 # ---------- ConfirmationChannel ----------

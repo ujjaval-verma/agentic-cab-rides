@@ -101,6 +101,31 @@ class UberSimAdapter:
             raise ValueError(f"unknown booking: {booking_id}")
         return b
 
+    @staticmethod
+    def _compute_fee(status: str) -> Money:
+        """Single source of truth for cancel-fee policy (T24 will reuse this).
+
+        confirmed               → $0.00 (free cancel before driver assigned)
+        driver_assigned |
+          en_route | arrived   → $5.00 flat
+        in_progress | completed→ raises ValueError (cannot cancel)
+        cancelled | failed     → $0.00 (no-op cancel)
+        """
+        if status in {"confirmed"}:
+            return Money(amount_cents=0, currency="USD")
+        if status in {"driver_assigned", "en_route", "arrived"}:
+            return Money(amount_cents=500, currency="USD")
+        if status in {"in_progress", "completed"}:
+            raise ValueError(f"cannot cancel; ride already in progress (status={status!r})")
+        # cancelled | failed
+        return Money(amount_cents=0, currency="USD")
+
+    async def quote_cancel_fee(self: Self, booking_id: str) -> Money:
+        b = self._store.get_booking(booking_id)
+        if b is None:
+            raise ValueError(f"unknown booking: {booking_id}")
+        return self._compute_fee(b.status)
+
     async def cancel(self: Self, booking_id: str, idempotency_key: str) -> Booking:
         # P2 wires the gate; P1 keeps this minimal but contract-shaped.
         b = self._store.get_booking(booking_id)
