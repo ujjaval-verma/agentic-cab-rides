@@ -34,4 +34,4 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 
 ## Operational
 
-- [ ] **`make reset` should re-apply `schema.sql` after wiping `data/`.** Currently it deletes `data/` and recreates an empty directory; the first run after reset relies on startup schema application. Make reset explicit: `rm -rf data && mkdir -p data && uv run python -m agentic_cab init-db`. — P1 state_store slice.
+- (none yet)
