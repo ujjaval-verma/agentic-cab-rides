@@ -25,6 +25,9 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 - [ ] **Restart-survival semantics for claim_or_recall.** P1 returns status='new' for an in-progress (claimed-but-not-finalised) idempotency_keys row, which lets the caller retry the provider call with the same key. P3 should introduce status='in_progress' alongside intent-bound keys so a single canonical recovery path exists. — T7 Ralph B1.
 - [ ] **SqliteStateStore thread-safety for FastAPI web path.** Connection opened with default check_same_thread=True. Web path (P4/P5) will hit "objects can only be used in same thread" if a shared store is used across asyncio handlers. Fix: connection-per-request or check_same_thread=False with locking. — T7 Ralph N7.
 - [ ] **StateStore.get_draft_consumed_at accessor.** tools/confirm.py uses store._conn directly with `type: ignore[attr-defined]` to query consumed_at, bypassing the StateStore Protocol. Add a public `get_draft_consumed_at(draft_id) -> datetime | None` method (or extend `get_draft` to return consumed_at) and remove the reach-in. — T13 Ralph F2.
+- [ ] **Scenario YAML top-level `seed` field is unused.** runner.py only consumes `sim.rng_seed`; the top-level `seed` is parsed but ignored. Use it as a single canonical seed source (derive `sim.rng_seed` from it, or remove the top-level field). — T15 Ralph.
+- [ ] **Scenario YAML `clock.mode` not validated.** runner.py always constructs FrozenClock regardless of `clock.mode` value. Add a guard that raises if `clock.mode != "frozen"` (interactive mode is a different code path). — T15 Ralph.
+- [ ] **`_by_action` raises KeyError on rows missing `action_id`.** All current log rows include `action_id` per invariant 6, but a defensive `.get("action_id", "")` would prevent hard failures if a malformed log is fed to the invariant checkers. — T15 Ralph.
 
 ## Tests / coverage gaps
 
