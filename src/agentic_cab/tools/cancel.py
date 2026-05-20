@@ -27,11 +27,11 @@ from typing import Any
 from pydantic import BaseModel
 
 from agentic_cab.adapters.action_log import JSONLActionLog
-from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.core.fingerprint import canonical_json
 from agentic_cab.core.ids import new_action_id, new_idempotency_key
 from agentic_cab.core.ports import (
     BookingProvider,
+    Clock,
     ConfirmationChannel,
     ConfirmationRequest,
     StateStore,
@@ -62,7 +62,7 @@ async def cancel_booking(
     store: StateStore,
     log: JSONLActionLog,
     channel: ConfirmationChannel,
-    clock: FrozenClock,
+    clock: Clock,
     session_id: str,
     turn_id: str,
     key_factory: Callable[[], str] = new_idempotency_key,

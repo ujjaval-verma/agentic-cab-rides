@@ -1,4 +1,4 @@
-"""CLI entry point. Subcommands: init-db, render-transcripts (more coming in P2+)."""
+"""CLI entry point. Subcommands: init-db, render-transcripts, repl (more coming in P2+)."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import yaml
 
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.state_store import SqliteStateStore
+from agentic_cab.agent.chat import run_repl
 from agentic_cab.render.transcript import render
 from agentic_cab.scenarios.invariants import evaluate
 from agentic_cab.scenarios.runner import run_scenario
@@ -107,6 +108,12 @@ def render_transcripts(
 
     if assert_invariants and not all_passed:
         sys.exit(1)
+
+
+@app.command("repl")
+def repl() -> None:
+    """Interactive CLI agent (CLIConfirmationChannel via /dev/tty)."""
+    asyncio.run(run_repl())
 
 
 if __name__ == "__main__":

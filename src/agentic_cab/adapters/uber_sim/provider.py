@@ -7,10 +7,10 @@ import random
 from datetime import timedelta
 from typing import ClassVar, Self
 
-from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.core.fingerprint import fingerprint
 from agentic_cab.core.ids import new_draft_id
+from agentic_cab.core.ports import Clock
 from agentic_cab.core.types import (
     Booking,
     CancellationInfo,
@@ -40,9 +40,7 @@ class UberSimAdapter:
     name = "uber-sim"
     supported_intent_kinds: ClassVar[set[str]] = {"ride"}
 
-    def __init__(
-        self: Self, store: SqliteStateStore, clock: FrozenClock, rng_seed: int = 0
-    ) -> None:
+    def __init__(self: Self, store: SqliteStateStore, clock: Clock, rng_seed: int = 0) -> None:
         self._store = store
         self._clock = clock
         self._rng = random.Random(rng_seed)
