@@ -23,6 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from agentic_cab.core.constants import RE_QUOTE_DRIFT_THRESHOLD_CENTS
 from agentic_cab.core.fingerprint import fingerprint
 from agentic_cab.core.ids import confirm_idempotency_key, new_action_id
 from agentic_cab.core.ports import (
@@ -156,8 +157,40 @@ async def confirm_booking(
     # Narrowing: _validate_draft guarantees draft is not None when rejection is None
     draft: Draft = draft_or_none  # type: ignore[assignment]
 
-    # 3. Re-quote (P1 stub — drift always 0; P3 retrofits real provider.discover() call).
+    # 3. Re-quote — real provider.discover() call (spec §7 + T28).
+    # If draft has no intent_snapshot (legacy P1 drafts), drift = 0 (no re-quote possible).
     requote_drift_cents = 0
+    _new_draft_id_for_requote: str | None = None
+    if draft.intent_snapshot is not None:
+        fresh_options = await provider.discover(draft.intent_snapshot)
+        # Match by vehicle_class (option_id changes each discover call)
+        _draft_vc = draft.option_snapshot.details.vehicle_class
+        _matched = next(
+            (o for o in fresh_options if o.details.vehicle_class == _draft_vc),
+            None,
+        )
+        if _matched is not None:
+            requote_drift_cents = (
+                _matched.price.amount_cents - draft.option_snapshot.price.amount_cents
+            )
+            if abs(requote_drift_cents) > RE_QUOTE_DRIFT_THRESHOLD_CENTS:
+                # Mint a new draft for the agent to work with at the new price
+                new_draft = await provider.prepare(_matched.option_id)
+                _new_draft_id_for_requote = new_draft.draft_id
+                price_changed_checks: dict[str, Any] = {
+                    "draft_found": True,
+                    "fingerprint_match": True,
+                    "requote_price_drift_cents": requote_drift_cents,
+                    "new_draft_id": _new_draft_id_for_requote,
+                }
+                _emit_verified(price_changed_checks, "rejected", "price_changed")
+                return _emit_outcome(
+                    "price_changed",
+                    {
+                        "new_draft_id": _new_draft_id_for_requote,
+                        "new_price_cents": _matched.price.amount_cents,
+                    },
+                )
 
     # 4. Idempotency claim (invariant 5). Key derived from (draft_id, fingerprint) so an
     # agent retry after a network timeout produces the same key and hits claim_or_recall

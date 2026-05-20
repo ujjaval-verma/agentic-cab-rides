@@ -364,9 +364,9 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
 
 
 @pytest.mark.asyncio
-async def test_price_drift_branch_is_stubbed_in_p1(harness) -> None:
-    """P1 sets requote_price_drift_cents=0 without re-discovering. Documents the stub;
-    P3 will land real re-quote alongside intent-bound idempotency keys (FOLLOWUPS)."""
+async def test_price_drift_is_zero_with_no_surge(harness) -> None:
+    """P3 real re-quote: when no surge curve is set, drift from provider.discover()
+    is 0 (same price at prepare-time and confirm-time for stable fares)."""
     store, log, clock, sim = harness
     draft_id = await _prepare(sim, log, clock)
     ch = ScriptedConfirmationChannel(script=[{"match": "UberX", "action": "approve"}], clock=clock)

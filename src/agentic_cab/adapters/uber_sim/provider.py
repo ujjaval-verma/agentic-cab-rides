@@ -89,14 +89,23 @@ class UberSimAdapter:
         self._booking_created_at: dict[str, datetime] = {}
         # Exposed for tests: price cents used in last confirm re-quote
         self.last_confirm_price_cents: int = 0
+        # Track whether any draft has been prepared (re-quote context signal)
+        self._any_draft_prepared: bool = False
 
     async def discover(self: Self, intent: Intent) -> list[Option]:
         km = _km(intent.pickup.lat, intent.pickup.lng, intent.dropoff.lat, intent.dropoff.lng)
         est_min = max(1, int(km * 2))
         now = self._clock.now()
 
+        # on_confirm=True when force_surge_on_confirm is set and a draft has been prepared
+        # (re-quote context: discover is being called from within confirm_booking).
+        _on_confirm_requote = (
+            self._any_draft_prepared
+            and self._surge_curve is not None
+            and self._surge_curve.force_surge_on_confirm
+        )
         surge_mult = (
-            surge_evaluate(self._surge_curve, now, on_confirm=False)
+            surge_evaluate(self._surge_curve, now, on_confirm=_on_confirm_requote)
             if self._surge_curve is not None
             else Decimal("1")
         )
@@ -136,6 +145,7 @@ class UberSimAdapter:
             intent_snapshot=intent_snap,
         )
         self._store.put_draft(draft)
+        self._any_draft_prepared = True  # signal re-quote context for subsequent discover calls
         return draft
 
     async def confirm(self: Self, draft_id: str, idempotency_key: str) -> Booking:
