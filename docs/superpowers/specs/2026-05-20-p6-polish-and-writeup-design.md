@@ -35,13 +35,13 @@ Bring the repo to deliverable state: a fresh reader can clone, run, read the arc
 Target ~150–250 lines. Sections:
 
 1. **One-paragraph orientation** — what the system is (agent → tools → ports → adapters), what it does (book gated rides), what it deliberately is not (multi-tenant, paid).
-2. **Layer diagram** — ASCII, three layers thick, with dependency-direction arrows pointing down only. CLI/Web → Agent → Tools → Ports → Adapters. Each layer labelled with its primary file path.
-3. **Port table** — five rows: `BookingProvider`, `ConfirmationChannel`, `ActionLog`, `StateStore`, `Clock`. Columns: `port (file)`, `one-line responsibility`, `today's impls`. Pulls directly from `core/ports.py`.
-4. **Invariants-to-layer map** — small table mapping each `CLAUDE.md` invariant (1–14) to the layer that enforces it. Surfaces *where* a reader looks to verify a given guarantee.
+2. **Layer diagram** — mermaid `graph TD`, rendered inline by GitHub (native support since 2022, no plugin). Dependency-direction arrows point down only. CLI/Web → Agent → Tools → Ports → Adapters. Each node labelled with its primary file path. Mermaid is chosen over ASCII because the audience reads this on github.com; the only thing lost is rendering in `cat`/`grep`, which is not the target surface for an architecture doc.
+3. **Port table** — markdown table, five rows: `BookingProvider`, `ConfirmationChannel`, `ActionLog`, `StateStore`, `Clock`. Columns: `port (file)`, `one-line responsibility`, `today's impls`. Pulls directly from `core/ports.py`. Kept as markdown (not mermaid) so it reads cleanly in both rendered and raw form.
+4. **Invariants-to-layer map** — markdown table mapping each `CLAUDE.md` invariant (1–14) to the layer that enforces it. Surfaces *where* a reader looks to verify a given guarantee.
 5. **Persistence split** — short paragraph: SQLite for relational/transactional state, JSONL for append-only audit. Why the split, not just the what.
 6. **Pointers** — three links: design spec, phases, writeup. No deep linking into `docs/scratch/`.
 
-Excluded by design: per-port walkthroughs, sequence diagrams, data-flow examples. The 1-pager spirit of the rest of the docs governs.
+Excluded by design: per-port walkthroughs, mermaid sequence diagrams, data-flow examples. The 1-pager spirit of the rest of the docs governs. Format remains `.md` (not `.html`) — GitHub renders `.html` as raw source in repo views, so `.md` is strictly better for the first-impression reader path the brief depends on.
 
 ### 4.2 WRITEUP.md — **full rewrite**
 
