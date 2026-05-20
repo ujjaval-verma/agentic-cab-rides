@@ -1,6 +1,6 @@
 # Writeup — Marketplace Swap & Production Failure Modes
 
-> **Status: P3 complete (T26–T32 shipped).** This writeup reflects the full P3 state as of 2026-05-20. P4–P6 will add scenario expansion, streaming CLI output, and a real third-party adapter.
+> **Status: P4 complete.** All five scenarios render with green invariants (01 happy-path, 02 price-comparison, 03 bad-address, 04 surge-on-confirm, 05 cancel-with-fee). P5–P6 will add streaming CLI output and a real third-party adapter.
 
 ---
 
