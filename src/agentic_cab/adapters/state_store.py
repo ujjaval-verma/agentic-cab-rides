@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
+import threading
+from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, Self
@@ -15,12 +18,35 @@ _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
 class SqliteStateStore:
-    def __init__(self: Self, db_path: Path) -> None:
+    """SQLite-backed state store.
+
+    Args:
+        db_path: Path to the SQLite file. Parent directories are created on demand.
+        check_same_thread: Passed directly to ``sqlite3.connect``. Set to ``False``
+            for the FastAPI web path, which runs handlers on different asyncio
+            threads. When ``False``, a ``threading.Lock`` serialises every write so
+            concurrent writes do not corrupt the database. Read operations on SQLite
+            are safe without locking because WAL mode allows concurrent readers.
+    """
+
+    def __init__(self: Self, db_path: Path, *, check_same_thread: bool = True) -> None:
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self._db_path))  # default isolation (deferred)
+        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=check_same_thread)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
+        # Serialise writes across threads when check_same_thread=False.
+        self._write_lock: threading.Lock | None = None if check_same_thread else threading.Lock()
+
+    @contextlib.contextmanager
+    def _write(self: Self) -> Generator[sqlite3.Connection, None, None]:
+        """Context manager that acquires the write lock (if set) and commits the transaction."""
+        if self._write_lock is not None:
+            with self._write_lock, self._conn:
+                yield self._conn
+        else:
+            with self._conn:
+                yield self._conn
 
     @property
     def db_path(self: Self) -> Path:
@@ -29,8 +55,8 @@ class SqliteStateStore:
 
     def apply_schema(self: Self) -> None:
         sql = _SCHEMA_PATH.read_text()
-        with self._conn:
-            self._conn.executescript(sql)
+        with self._write() as conn:
+            conn.executescript(sql)
 
     # --- Drafts ---
 
@@ -38,8 +64,8 @@ class SqliteStateStore:
         intent_json: str | None = None
         if draft.intent_snapshot is not None:
             intent_json = draft.intent_snapshot.model_dump_json()
-        with self._conn:
-            self._conn.execute(
+        with self._write() as conn:
+            conn.execute(
                 "INSERT INTO drafts"
                 "(draft_id, option_snapshot, fingerprint, created_at, expires_at, intent_snapshot)"
                 " VALUES (?, ?, ?, ?, ?, ?)",
@@ -75,8 +101,8 @@ class SqliteStateStore:
         )
 
     def consume_draft(self: Self, draft_id: str, at: datetime) -> bool:
-        with self._conn:
-            cur = self._conn.execute(
+        with self._write() as conn:
+            cur = conn.execute(
                 "UPDATE drafts SET consumed_at = ? WHERE draft_id = ? AND consumed_at IS NULL",
                 (at.isoformat(), draft_id),
             )
@@ -96,8 +122,8 @@ class SqliteStateStore:
 
     def put_booking(self: Self, booking: Booking) -> None:
         now = datetime.now(UTC).isoformat()
-        with self._conn:
-            self._conn.execute(
+        with self._write() as conn:
+            conn.execute(
                 """INSERT INTO bookings(booking_id, draft_id, provider, status, summary,
                                         created_at, updated_at, cancelled_at, cancellation)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -137,12 +163,12 @@ class SqliteStateStore:
     def update_booking_status(
         self: Self, booking_id: str, status: str, event: BookingEvent
     ) -> None:
-        with self._conn:
-            self._conn.execute(
+        with self._write() as conn:
+            conn.execute(
                 "UPDATE bookings SET status = ?, updated_at = ? WHERE booking_id = ?",
                 (status, event.ts.isoformat(), booking_id),
             )
-            self._conn.execute(
+            conn.execute(
                 "INSERT INTO booking_events(booking_id, ts, kind, payload) VALUES (?, ?, ?, ?)",
                 (
                     booking_id,
@@ -181,8 +207,8 @@ class SqliteStateStore:
             # call with the same key. P3 restart-survival hardens this with intent-bound
             # keys and a proper "in_progress" status — tracked in FOLLOWUPS.md.
             return ClaimResult(status="new", booking=None)
-        with self._conn:
-            self._conn.execute(
+        with self._write() as conn:
+            conn.execute(
                 "INSERT INTO idempotency_keys(key, scope, booking_id, response_blob, created_at)"
                 " VALUES (?, ?, NULL, NULL, ?)",
                 (key, scope, datetime.now(UTC).isoformat()),
@@ -190,8 +216,8 @@ class SqliteStateStore:
         return ClaimResult(status="new", booking=None)
 
     def finalize_idempotency(self: Self, key: str, booking: Booking) -> None:
-        with self._conn:
-            self._conn.execute(
+        with self._write() as conn:
+            conn.execute(
                 "UPDATE idempotency_keys SET booking_id = ?, response_blob = ? WHERE key = ?",
                 (booking.booking_id, booking.model_dump_json(), key),
             )
