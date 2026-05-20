@@ -258,9 +258,8 @@ async def _run_happy_path_sequence(
         session_id=session_id,
         turn_id=turn_id,
     )
-    assert (
-        confirm_result["status"] == "confirmed"
-    ), f"Expected 'confirmed', got {confirm_result['status']!r}"
+    got_status = confirm_result["status"]
+    assert got_status == "confirmed", f"Expected 'confirmed', got {got_status!r}"
     return str(confirm_result["booking_id"])
 
 
@@ -411,9 +410,8 @@ async def test_repl_web_parity_happy_path(tmp_path: Path) -> None:
     web_normalized = _normalize_log(web_rows)
 
     for i, (r_row, w_row) in enumerate(zip(repl_normalized, web_normalized, strict=True)):
-        assert (
-            r_row == w_row
-        ), f"Row {i} diverges between REPL and web paths:\n  REPL: {r_row}\n  Web:  {w_row}"
+        msg = f"Row {i} diverges between REPL and web paths:\n  REPL: {r_row}\n  Web:  {w_row}"
+        assert r_row == w_row, msg
 
     # 3. Both paths ended with a confirmed booking.
     repl_booking = repl_store.get_booking(repl_booking_id)
@@ -428,9 +426,9 @@ async def test_repl_web_parity_happy_path(tmp_path: Path) -> None:
     assert repl_booking.status == web_booking.status
 
     # 4. Both bookings carry the same price (deterministic UberSim at fixed seed + clock).
-    assert (
-        repl_booking.summary.price.amount_cents == web_booking.summary.price.amount_cents
-    ), f"Price mismatch: REPL={repl_booking.summary.price}, web={web_booking.summary.price}"
+    repl_cents = repl_booking.summary.price.amount_cents
+    web_cents = web_booking.summary.price.amount_cents
+    assert repl_cents == web_cents, f"Price mismatch: REPL={repl_cents}¢, web={web_cents}¢"
 
     # 5. Final outcome rows both show status=confirmed.
     repl_outcome = next(
