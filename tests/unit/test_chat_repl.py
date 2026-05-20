@@ -134,9 +134,10 @@ def _stub_client_end_message(text: str = "Done.") -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_repl_exits_on_quit(tmp_path: Path) -> None:
-    """REPL exits cleanly when the user types /quit."""
-    inputs = iter(["/quit"])
+@pytest.mark.parametrize("quit_cmd", ["/quit", "/exit"])
+async def test_repl_exits_on_quit(tmp_path: Path, quit_cmd: str) -> None:
+    """REPL exits cleanly when the user types /quit or /exit."""
+    inputs = iter([quit_cmd])
 
     def _input_source() -> str | None:
         return next(inputs, None)

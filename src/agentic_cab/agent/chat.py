@@ -231,7 +231,7 @@ async def _repl_loop(
 
     console.print(
         Panel(
-            "Agentic Cab Rides — type your request or [bold]/quit[/bold] to exit.",
+            "Agentic Cab Rides — type your request or [bold]/exit[/bold] to leave.",
             title="[cyan]agent[/cyan]",
             border_style="cyan",
         )
@@ -246,7 +246,7 @@ async def _repl_loop(
         user_input = user_input.strip()
         if not user_input:
             continue
-        if user_input == "/quit":
+        if user_input in {"/exit", "/quit"}:
             console.print("[dim]Goodbye.[/dim]")
             break
 
