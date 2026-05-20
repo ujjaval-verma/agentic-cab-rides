@@ -65,11 +65,16 @@ def test_scenario_confirmation_has_channel(scenario_path: Path) -> None:
     assert "channel" in conf, f"{scenario_path.name}: confirmation.channel is required"
 
 
+def _unknown_invariant_kinds(scn: dict) -> list[str]:
+    """Return the list of invariant.kind values in ``scn`` not present in CHECKERS."""
+    invariants = scn.get("invariants") or []
+    return [inv["kind"] for inv in invariants if inv["kind"] not in CHECKERS]
+
+
 @pytest.mark.parametrize("scenario_path", _PATHS, ids=_scenario_ids(_PATHS))
 def test_scenario_invariant_kinds_are_known(scenario_path: Path) -> None:
     scn = yaml.safe_load(scenario_path.read_text())
-    invariants = scn.get("invariants") or []
-    unknown = [inv["kind"] for inv in invariants if inv["kind"] not in CHECKERS]
+    unknown = _unknown_invariant_kinds(scn)
     assert not unknown, (
         f"{scenario_path.name} references unknown invariant kinds: {unknown}. "
         f"Known kinds: {sorted(CHECKERS)}"
@@ -99,5 +104,5 @@ def test_validator_catches_unknown_invariant_kind(
     bad_path.write_text(yaml.safe_dump(bad))
 
     scn = yaml.safe_load(bad_path.read_text())
-    unknown = [inv["kind"] for inv in scn["invariants"] if inv["kind"] not in CHECKERS]
+    unknown = _unknown_invariant_kinds(scn)
     assert unknown == ["no_such_checker"]
