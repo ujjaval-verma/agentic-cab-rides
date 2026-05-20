@@ -45,9 +45,8 @@ async def test_idempotency_replay_same_key_same_booking(
     b1 = await provider.confirm(draft.draft_id, idempotency_key=key)
     b2 = await provider.confirm(draft.draft_id, idempotency_key=key)
 
-    assert (
-        b1.booking_id == b2.booking_id
-    ), "Same idempotency key must return the same booking_id on replay"
+    # Same idempotency key must return the same booking_id on replay
+    assert b1.booking_id == b2.booking_id
 
 
 @pytest.mark.contract
@@ -70,9 +69,8 @@ async def test_idempotency_different_key_different_booking(
     draft2 = await provider.prepare(options2[0].option_id)
     b2 = await provider.confirm(draft2.draft_id, idempotency_key="keyBeta2222222222222222222")
 
-    assert (
-        b1.booking_id != b2.booking_id
-    ), "Different idempotency keys must produce different bookings"
+    # Different idempotency keys must produce different bookings
+    assert b1.booking_id != b2.booking_id
 
 
 @pytest.mark.contract
@@ -153,9 +151,8 @@ async def test_fingerprint_stable_under_no_op_re_quote(
     canonical_updates = {"option_id": "canonical", "expires_at": opts1[0].expires_at}
     fp1 = compute_fp(opts1[0].model_copy(update=canonical_updates))
     fp2 = compute_fp(opts2[0].model_copy(update=canonical_updates))
-    assert (
-        fp1 == fp2
-    ), "Option content (excluding option_id/expires_at) must be stable across re-discover"
+    # Option content (excluding option_id/expires_at) must be stable across re-discover
+    assert fp1 == fp2
 
 
 @pytest.mark.contract
