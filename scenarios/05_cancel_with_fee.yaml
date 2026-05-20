@@ -1,0 +1,33 @@
+name: 05_cancel_with_fee
+description: >
+  User books an UberX, then asks to cancel.  Agent quotes the fee,
+  user approves, booking is cancelled.  Exercises the second gated
+  tool (cancel_booking) and confirms the four-row log pattern is
+  emitted for it as well.
+seed: 5
+clock:
+  start: "2026-05-19T12:00:00+00:00"
+  mode: frozen
+sim:
+  rng_seed: 5
+confirmation:
+  channel: scripted
+  script:
+    - match: "UberX"
+      action: approve
+    - match: "Cancel "
+      action: approve
+user_turns:
+  - "Book me a ride from 37.7749,-122.4194 (Market & Powell) to 37.7849,-122.4094 (Union Square)."
+  - "UberX please — confirm."
+  - "Cancel the booking now — go ahead and cancel it."
+invariants:
+  - kind: four_row_pattern
+    tool: "confirm_booking"
+  - kind: four_row_pattern
+    tool: "cancel_booking"
+  - kind: gate_invoked_for_tool
+    tool: "cancel_booking"
+  - kind: no_double_booking
+  - kind: action_log_contains
+    where: {kind: "outcome", tool: "cancel_booking", status: "cancelled"}
