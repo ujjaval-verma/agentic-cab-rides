@@ -179,6 +179,47 @@ async def test_idempotency_replay_short_circuits_second_provider_call(harness) -
 
 
 @pytest.mark.asyncio
+async def test_provider_exception_closes_log_with_outcome(harness, monkeypatch) -> None:
+    """If provider.confirm raises, action_id must still close with an outcome row.
+    Invariant 6 protects against orphaned verified=ok rows with no executed/outcome."""
+    store, log, clock, sim = harness
+    draft_id = await _prepare(sim, log, clock)
+    ch = ScriptedConfirmationChannel(script=[{"match": "UberX", "action": "approve"}], clock=clock)
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("provider exploded")
+
+    monkeypatch.setattr(sim, "confirm", boom)
+
+    with pytest.raises(RuntimeError, match="provider exploded"):
+        await confirm_booking(
+            ConfirmArgs(draft_id=draft_id),
+            provider=sim,
+            store=store,
+            log=log,
+            channel=ch,
+            clock=clock,
+            session_id="S",
+            turn_id="T",
+        )
+
+    # Find the action_id for this confirm by looking at the last requested row
+    confirm_requested = [
+        r for r in log.read("S") if r["kind"] == "requested" and r.get("tool") == "confirm_booking"
+    ]
+    assert len(confirm_requested) == 1
+    action_id = confirm_requested[0]["action_id"]
+    rows = [r for r in log.read("S") if r["action_id"] == action_id]
+    # verified=ok happened, but then provider raised. We must have an outcome.
+    kinds = [r["kind"] for r in rows]
+    assert "verified" in kinds
+    assert kinds[-1] == "outcome"
+    outcome = rows[-1]
+    assert outcome["status"] == "error"
+    assert "provider exploded" in (outcome.get("error") or "")
+
+
+@pytest.mark.asyncio
 async def test_price_drift_branch_is_stubbed_in_p1(harness) -> None:
     """P1 sets requote_price_drift_cents=0 without re-discovering. Documents the stub;
     P3 will land real re-quote alongside intent-bound idempotency keys (FOLLOWUPS)."""

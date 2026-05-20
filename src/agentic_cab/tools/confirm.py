@@ -77,7 +77,16 @@ def _validate_draft(
             "fingerprint mismatch",
         )
 
-    return draft, {"draft_found": True, "draft_expired": False, "fingerprint_match": True}, None
+    return (
+        draft,
+        {
+            "draft_found": True,
+            "draft_expired": False,
+            "already_consumed": False,
+            "fingerprint_match": True,
+        },
+        None,
+    )
 
 
 async def confirm_booking(
@@ -204,26 +213,38 @@ async def confirm_booking(
     # 6. Emit verified (ok) — after gate passes
     _emit_verified(base_checks, "ok")
 
-    # 7. Execute provider call
-    booking = await provider.confirm(draft.draft_id, idempotency_key=key)
-    log.emit(
-        {
-            "ts": clock.now().isoformat(),
-            "session_id": session_id,
-            "action_id": action_id,
-            "kind": "executed",
-            "provider": provider.name,
-            "method": "confirm",
-            "idempotency_key": key,
-            "request": {"draft_id": args.draft_id},
-            "latency_ms": 0,
-            "replayed": False,
-        }
-    )
-
-    # 8. Consume draft + finalize idempotency record
-    store.consume_draft(args.draft_id, at=clock.now())
-    store.finalize_idempotency(key, booking=booking)
+    # 7 + 8. Execute + persist (try/except so the action_id always closes)
+    try:
+        booking = await provider.confirm(draft.draft_id, idempotency_key=key)
+        log.emit(
+            {
+                "ts": clock.now().isoformat(),
+                "session_id": session_id,
+                "action_id": action_id,
+                "kind": "executed",
+                "provider": provider.name,
+                "method": "confirm",
+                "idempotency_key": key,
+                "request": {"draft_id": args.draft_id},
+                "latency_ms": 0,
+                "replayed": False,
+            }
+        )
+        store.consume_draft(args.draft_id, at=clock.now())
+        store.finalize_idempotency(key, booking=booking)
+    except Exception as e:  # re-raise after closing the action_id in the log
+        log.emit(
+            {
+                "ts": clock.now().isoformat(),
+                "session_id": session_id,
+                "action_id": action_id,
+                "kind": "outcome",
+                "status": "error",
+                "result": None,
+                "error": str(e),
+            }
+        )
+        raise
 
     return _emit_outcome("confirmed", {"booking_id": booking.booking_id})
 
