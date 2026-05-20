@@ -21,7 +21,6 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 
 ## Tests / coverage gaps
 
-- [ ] **Scenario YAML secret scan.** Pre-commit doesn't currently check committed scenario YAMLs for accidental `sk-ant-...` patterns. Add a hook: `grep -RnE "sk-(ant|live|test)-[A-Za-z0-9]" scenarios/` — P0 hardening if time, otherwise P6 polish.
 - [ ] **PII redaction integration test.** `redact()` must be applied at the log boundary; today only the spec describes this. Add a test that feeds a `RideIntent` containing `"pickup at Jane Doe's house, 555-1234"` and asserts no substring of that raw text appears in the resulting JSONL. — P1 action_log slice.
 
 ## Product / UX
