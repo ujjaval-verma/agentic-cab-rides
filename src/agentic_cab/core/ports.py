@@ -80,7 +80,7 @@ class ActionLog(Protocol):
 
 
 class ClaimResult(BaseModel):
-    status: Literal["new", "recalled"]
+    status: Literal["new", "recalled", "in_progress"]
     booking: Booking | None = None  # populated only when status == "recalled"
 
 

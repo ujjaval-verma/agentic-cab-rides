@@ -85,16 +85,19 @@ def test_claim_or_recall_new_then_recalled(store: SqliteStateStore) -> None:
     assert second.booking.booking_id == "B1"
 
 
-def test_claim_or_recall_in_progress_returns_new(store: SqliteStateStore) -> None:
-    """Claimed but never finalised → on re-call with same key, return status='new'
-    so the caller can retry. Documents the P1 recovery semantic; P3 swaps to
-    status='in_progress' with intent-bound keys."""
+def test_claim_or_recall_in_progress_returns_in_progress(store: SqliteStateStore) -> None:
+    """Claimed but never finalised → on re-call with same key, return status='in_progress'.
+
+    P3 restart-survival semantic (T30): a claimed-but-not-finalised row signals
+    that a prior call is in-flight (or crashed). The caller must NOT re-issue a
+    provider call; instead it surfaces 'in_progress' to the agent.
+    """
     key = "K-CRASH"
     first = store.claim_or_recall(key, scope="confirm")
     assert first.status == "new"
     # simulate crash: no finalize_idempotency call
     second = store.claim_or_recall(key, scope="confirm")
-    assert second.status == "new"
+    assert second.status == "in_progress"
     assert second.booking is None
 
 

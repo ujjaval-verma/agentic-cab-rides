@@ -203,10 +203,10 @@ class SqliteStateStore:
             if booking_id is not None and response_blob is not None:
                 booking = Booking.model_validate_json(response_blob)
                 return ClaimResult(status="recalled", booking=booking)
-            # In-progress: previous claim wasn't finalised. Caller may retry the provider
-            # call with the same key. P3 restart-survival hardens this with intent-bound
-            # keys and a proper "in_progress" status — tracked in FOLLOWUPS.md.
-            return ClaimResult(status="new", booking=None)
+            # Row exists but not yet finalised: a prior call claimed the key but has not
+            # completed (process crash or concurrent retry). Return "in_progress" so the
+            # caller can surface the race without issuing a duplicate provider call.
+            return ClaimResult(status="in_progress", booking=None)
         with self._write() as conn:
             conn.execute(
                 "INSERT INTO idempotency_keys(key, scope, booking_id, response_blob, created_at)"
