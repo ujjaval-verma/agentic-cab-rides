@@ -51,6 +51,8 @@ Adapters          (UberSimAdapter, CLI/Web/Scripted ConfirmationChannel, System/
 
 **Invariant:** Agent → Tools → Ports → Adapters. No upward edges. Each layer is independently testable.
 
+<!-- spec-amendment: 2026-05-20 --> `GeocoderPort` is part of the port layer (`core/ports.py`); adapters such as `NominatimGeocoder` implement it, and the tool layer depends only on the Protocol.
+
 ## 4. Core type contracts
 
 ```python

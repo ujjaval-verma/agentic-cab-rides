@@ -1,6 +1,7 @@
 """All port Protocols. Adapters depend on this; the agent never imports an adapter directly.
 
-See spec §3 (layers), §5 (BookingProvider), §6 (ConfirmationChannel), §10a (StateStore).
+See spec §3 (layers), §5 (BookingProvider), §6 (ConfirmationChannel), §10 (GeocoderPort),
+§10a (StateStore).
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from typing import Any, ClassVar, Literal, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel
 
-from agentic_cab.core.types import Booking, BookingEvent, Draft, Intent, Option
+from agentic_cab.core.types import AddressRef, Booking, BookingEvent, Draft, Intent, Option
 
 # ---------- BookingProvider ----------
 
@@ -108,3 +109,11 @@ class StateStore(Protocol):
     ) -> ClaimResult: ...
 
     def finalize_idempotency(self: Self, key: str, booking: Booking) -> None: ...
+
+
+# ---------- GeocoderPort ----------
+
+
+@runtime_checkable
+class GeocoderPort(Protocol):
+    async def geocode(self: Self, query: str) -> AddressRef: ...

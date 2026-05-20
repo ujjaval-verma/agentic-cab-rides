@@ -14,7 +14,6 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 
 ## Architecture / engineering
 
-- [ ] **GeocoderPort Protocol.** `geocode_address` tool (P2) needs a Protocol in `core/ports.py` so the tool layer doesn't import `NominatimGeocoder` directly. One method: `async def geocode(self, query: str) -> AddressRef: ...`. — T4 Ralph N1.
 - [ ] **ConfirmationResult coherence validator.** Add a `model_validator(mode="after")` asserting `(approved and reason == "approved") or (not approved and reason != "approved")`. Today the model permits incoherent states like `approved=True, reason="declined"`. Low blast radius for prototype but a latent inconsistency. — T4 Ralph N2.
 - [ ] **Typed ConfirmationRequest.details.** Replace `details: dict[str, Any]` with a `ConfirmationDetails` Pydantic model (price: Money, eta_seconds, pickup, dropoff, vehicle_class) so the web channel's SSE payload has a typed contract. — T4 Ralph Q2.
 - [ ] **`BookingStatus` type alias for `StateStore.update_booking_status`.** The `status: str` parameter is loose — ideally a `Literal[...]` alias exported from `types.py` so callers are type-checked. Non-blocking for P2/P3 (adapter will be strict internally); promote when `Booking.status` type is referenced in a third location. — T4 Ralph review.
