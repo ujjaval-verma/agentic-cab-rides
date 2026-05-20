@@ -1,0 +1,30 @@
+name: 03_bad_address
+description: >
+  Dropoff address "123 Main St" is ambiguous (confidence 0.3, two
+  alternates).  Agent surfaces alternates; user picks the Anytown, CA
+  one and confirms.  Booking proceeds.
+seed: 3
+clock:
+  start: "2026-05-19T12:00:00+00:00"
+  mode: frozen
+sim:
+  rng_seed: 3
+confirmation:
+  channel: scripted
+  script:
+    - match: "UberX"
+      action: approve
+user_turns:
+  - "Book me a ride from 37.7749,-122.4194 (Market & Powell) to 123 Main St."
+  - "Use the Anytown, CA one — 34.0522,-118.2437."
+  - "UberX please — confirm."
+invariants:
+  - kind: action_log_contains
+    where: {kind: "outcome", status: "confirmed"}
+  - kind: four_row_pattern
+    tool: "confirm_booking"
+  - kind: no_double_booking
+  - kind: fingerprint_verified_before_execute
+    tool: "confirm_booking"
+  - kind: gate_invoked_for_tool
+    tool: "confirm_booking"
