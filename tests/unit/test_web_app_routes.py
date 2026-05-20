@@ -1,9 +1,9 @@
 """Tests for FastAPI web app routes (web/app.py).
 
-SSE streaming via TestClient has a limitation: the starlette TestClient does not
-fully support SSE event iteration natively. For event streaming tests we use
-httpx with stream=True to read raw SSE lines. The pending_confirmation roundtrip
-is tested by setting up a channel directly and calling POST /confirmations.
+Route registration is verified; full SSE delivery is exercised by
+SessionEventBus + WebConfirmationChannel unit tests and the T32 manual flow.
+The pending_confirmation roundtrip is tested by setting up a channel directly
+and calling POST /confirmations.
 """
 
 from __future__ import annotations

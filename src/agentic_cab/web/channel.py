@@ -1,5 +1,8 @@
 """WebConfirmationChannel — gate over SSE pending-future.
 
+Lives in web/ rather than adapters/ because it depends on the SSE bus;
+placing it under adapters/ would create an upward layer edge.
+
 The browser posts to /confirmations/{subject_id} which calls resolve(); the agent's
 await on request() then unblocks with the user's decision.
 

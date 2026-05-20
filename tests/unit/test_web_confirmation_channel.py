@@ -1,4 +1,4 @@
-"""Tests for WebConfirmationChannel (adapters/confirmation/web.py)."""
+"""Tests for WebConfirmationChannel (web/channel.py)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from agentic_cab.adapters.confirmation.web import WebConfirmationChannel
 from agentic_cab.core.ports import ConfirmationChannel, ConfirmationRequest
+from agentic_cab.web.channel import WebConfirmationChannel
 from agentic_cab.web.sse import SessionEventBus
 
 _SESSION = "sess-web-confirm"

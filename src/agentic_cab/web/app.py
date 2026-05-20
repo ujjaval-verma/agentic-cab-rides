@@ -32,7 +32,6 @@ from sse_starlette.sse import EventSourceResponse
 
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.clock import SystemClock
-from agentic_cab.adapters.confirmation.web import WebConfirmationChannel
 from agentic_cab.adapters.geocoding.cache import GeocodeCache
 from agentic_cab.adapters.geocoding.nominatim import NominatimGeocoder
 from agentic_cab.adapters.state_store import SqliteStateStore
@@ -41,6 +40,7 @@ from agentic_cab.agent.chat import _TOOL_DEFS as _AGENT_TOOL_DEFS
 from agentic_cab.agent.chat import build_handlers
 from agentic_cab.agent.loop import run_turn
 from agentic_cab.core.ids import new_turn_id
+from agentic_cab.web.channel import WebConfirmationChannel
 from agentic_cab.web.sse import SessionEventBus
 
 _log = structlog.get_logger(__name__)
