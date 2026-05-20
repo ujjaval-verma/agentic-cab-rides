@@ -26,6 +26,8 @@ from agentic_cab.tools.geocode import DESCRIPTION as GEOCODE_DESCRIPTION
 from agentic_cab.tools.geocode import GeocodeArgs, geocode_address
 from agentic_cab.tools.prepare import PrepareArgs, prepare_booking
 from agentic_cab.tools.registry import pydantic_to_anthropic_tool
+from agentic_cab.tools.track import DESCRIPTION as TRACK_DESCRIPTION
+from agentic_cab.tools.track import TrackArgs, track_booking
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -70,6 +72,11 @@ async def run_scenario(
             description="Confirm a draft (gated — user will be asked to approve).",
             args_model=ConfirmArgs,
         ),
+        pydantic_to_anthropic_tool(
+            name="track_booking",
+            description=TRACK_DESCRIPTION,
+            args_model=TrackArgs,
+        ),
     ]
     turn_id = new_turn_id()
     common: dict[str, Any] = dict(
@@ -103,11 +110,15 @@ async def run_scenario(
             **common,
         )
 
+    async def _track(a: dict[str, Any]) -> dict[str, Any]:
+        return await track_booking(TrackArgs(**a), **common)
+
     handlers: dict[str, ToolHandler] = {
         "geocode_address": _geocode,
         "discover_options": _discover,
         "prepare_booking": _prepare,
         "confirm_booking": _confirm,
+        "track_booking": _track,
     }
     client = Anthropic()
     history: list[dict[str, Any]] = []
