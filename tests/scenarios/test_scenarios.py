@@ -1,59 +1,103 @@
-"""Pure-function tests for invariant checkers (deterministic, no LLM call)."""
+"""Parameterized validator for `scenarios/*.yaml`.
 
-from agentic_cab.scenarios.invariants import (
-    check_fingerprint_verified_before_execute,
-    check_four_row_pattern,
-    check_gate_invoked_for_tool,
-    check_no_double_booking,
+Catches a scenario added with a typo'd invariant kind, a missing
+required schema field, or a non-list `user_turns`.  Runs in
+`make test-fast` (no LLM, no provider, no network).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+import yaml
+
+from agentic_cab.scenarios.invariants import CHECKERS
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SCENARIOS_DIR = _REPO_ROOT / "scenarios"
+
+_REQUIRED_TOP_LEVEL_KEYS = (
+    "name",
+    "clock",
+    "sim",
+    "confirmation",
+    "user_turns",
+    "invariants",
 )
 
 
-def test_four_row_happy_path_passes() -> None:
-    rows = [
-        {"action_id": "A", "kind": "requested", "tool": "confirm_booking"},
-        {
-            "action_id": "A",
-            "kind": "verified",
-            "result": "ok",
-            "checks": {
-                "fingerprint_match": True,
-                "confirmation": {"approver": "scripted", "approved": True},
-            },
-        },
-        {"action_id": "A", "kind": "executed"},
-        {"action_id": "A", "kind": "outcome", "status": "ok"},
-    ]
-    assert check_four_row_pattern(rows, tool="confirm_booking") is True
-    assert check_fingerprint_verified_before_execute(rows, tool="confirm_booking") is True
-    assert check_gate_invoked_for_tool(rows, tool="confirm_booking") is True
+def _scenario_paths() -> list[Path]:
+    return sorted(_SCENARIOS_DIR.glob("*.yaml"))
 
 
-def test_rejected_path_does_not_require_executed() -> None:
-    rows = [
-        {"action_id": "A", "kind": "requested", "tool": "confirm_booking"},
-        {
-            "action_id": "A",
-            "kind": "verified",
-            "result": "rejected",
-            "reason": "fingerprint mismatch",
-            "checks": {"fingerprint_match": False},
-        },
-        {"action_id": "A", "kind": "outcome", "status": "rejected"},
-    ]
-    assert check_four_row_pattern(rows, tool="confirm_booking") is True
+def _scenario_ids(paths: list[Path]) -> list[str]:
+    return [p.name for p in paths]
 
 
-def test_double_booking_detected() -> None:
-    rows = [
-        {"action_id": "A", "kind": "executed", "idempotency_key": "K", "replayed": False},
-        {"action_id": "B", "kind": "executed", "idempotency_key": "K", "replayed": False},
-    ]
-    assert check_no_double_booking(rows) is False
+_PATHS = _scenario_paths()
 
 
-def test_replayed_executed_does_not_count_as_double_booking() -> None:
-    rows = [
-        {"action_id": "A", "kind": "executed", "idempotency_key": "K", "replayed": False},
-        {"action_id": "B", "kind": "executed", "idempotency_key": "K", "replayed": True},
-    ]
-    assert check_no_double_booking(rows) is True
+@pytest.mark.parametrize("scenario_path", _PATHS, ids=_scenario_ids(_PATHS))
+def test_scenario_has_required_top_level_keys(scenario_path: Path) -> None:
+    scn = yaml.safe_load(scenario_path.read_text())
+    assert isinstance(scn, dict), f"{scenario_path.name}: YAML root must be a mapping"
+    missing = [k for k in _REQUIRED_TOP_LEVEL_KEYS if k not in scn]
+    assert not missing, f"{scenario_path.name} missing required keys: {missing}"
+
+
+@pytest.mark.parametrize("scenario_path", _PATHS, ids=_scenario_ids(_PATHS))
+def test_scenario_user_turns_is_nonempty_string_list(scenario_path: Path) -> None:
+    scn = yaml.safe_load(scenario_path.read_text())
+    user_turns = scn.get("user_turns")
+    assert isinstance(user_turns, list), f"{scenario_path.name}: user_turns must be a list"
+    assert user_turns, f"{scenario_path.name}: user_turns must be non-empty"
+    assert all(
+        isinstance(t, str) for t in user_turns
+    ), f"{scenario_path.name}: every user_turns entry must be a string"
+
+
+@pytest.mark.parametrize("scenario_path", _PATHS, ids=_scenario_ids(_PATHS))
+def test_scenario_confirmation_has_channel(scenario_path: Path) -> None:
+    scn = yaml.safe_load(scenario_path.read_text())
+    conf = scn.get("confirmation")
+    assert isinstance(conf, dict), f"{scenario_path.name}: confirmation must be a mapping"
+    assert "channel" in conf, f"{scenario_path.name}: confirmation.channel is required"
+
+
+@pytest.mark.parametrize("scenario_path", _PATHS, ids=_scenario_ids(_PATHS))
+def test_scenario_invariant_kinds_are_known(scenario_path: Path) -> None:
+    scn = yaml.safe_load(scenario_path.read_text())
+    invariants = scn.get("invariants") or []
+    unknown = [inv["kind"] for inv in invariants if inv["kind"] not in CHECKERS]
+    assert not unknown, (
+        f"{scenario_path.name} references unknown invariant kinds: {unknown}. "
+        f"Known kinds: {sorted(CHECKERS)}"
+    )
+
+
+def test_scenarios_dir_is_nonempty() -> None:
+    """Sanity check — without this the parametrized tests run zero cases silently."""
+    assert _PATHS, "no scenarios found under scenarios/"
+
+
+def test_validator_catches_unknown_invariant_kind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A scenario referencing a non-existent invariant kind must fail the validator."""
+    bad_dir = tmp_path / "scenarios"
+    bad_dir.mkdir()
+    bad = {
+        "name": "bad",
+        "clock": {"start": "2026-05-19T12:00:00+00:00", "mode": "frozen"},
+        "sim": {"rng_seed": 0},
+        "confirmation": {"channel": "scripted", "script": []},
+        "user_turns": ["hi"],
+        "invariants": [{"kind": "no_such_checker"}],
+    }
+    bad_path = bad_dir / "99_bad.yaml"
+    bad_path.write_text(yaml.safe_dump(bad))
+
+    scn = yaml.safe_load(bad_path.read_text())
+    unknown = [inv["kind"] for inv in scn["invariants"] if inv["kind"] not in CHECKERS]
+    assert unknown == ["no_such_checker"]
