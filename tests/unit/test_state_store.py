@@ -116,3 +116,21 @@ def test_get_draft_consumed_at_returns_timestamp_after_consume(store: SqliteStat
     result = store.get_draft_consumed_at("D1")
     assert result is not None
     assert result == consumed_time
+
+
+def test_get_draft_consumed_at_returns_utc_aware_even_for_naive_stored_value(
+    store: SqliteStateStore,
+) -> None:
+    """A naive ISO string in the DB (no UTC offset) must still yield a UTC-aware datetime."""
+    store.put_draft(_draft())
+    # Directly insert a naive ISO string to simulate a pre-fix or foreign-written row.
+    store._conn.execute(
+        "UPDATE drafts SET consumed_at = ? WHERE draft_id = ?",
+        ("2026-05-19T12:01:00", "D1"),
+    )
+    store._conn.commit()
+    result = store.get_draft_consumed_at("D1")
+    assert result is not None
+    assert result.tzinfo is not None
+    assert result.tzinfo == UTC
+    assert result == datetime(2026, 5, 19, 12, 1, 0, tzinfo=UTC)

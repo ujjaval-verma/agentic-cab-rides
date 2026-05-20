@@ -80,7 +80,8 @@ class SqliteStateStore:
         ).fetchone()
         if row is None or row[0] is None:
             return None
-        return datetime.fromisoformat(row[0])
+        dt = datetime.fromisoformat(row[0])
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
     # --- Bookings ---
 
