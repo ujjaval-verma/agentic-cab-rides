@@ -26,6 +26,7 @@ If a slice's plan conflicts with the spec, **update the spec first** (in a separ
 - **Commit messages carry the phase scope.** `feat(P3): wire surge curves into pricing` lets `git log --grep='(P3)'` reconstruct progress in 1 second.
 - **Do not create GitHub Issues for slices.** Only for durable external blockers or post-launch backlog.
 - **No idle green work.** If local gates + CI imply LGTM, land. Don't sit on green branches.
+- **"Shipped" means `origin/main`, not local `HEAD`.** A slice is not done until pushed AND the remote CI run on `main` is green. `git log @{u}..HEAD --oneline` lists commits that are locally landed but not yet shipped — that's debt, not progress.
 
 ### 2. Rigor — prove the change
 
@@ -76,7 +77,8 @@ If a slice's plan conflicts with the spec, **update the spec first** (in a separ
 5. Commit. Conventional Commits format with **phase scope**: `feat(P1):`, `fix(P3):`, `refactor(P2):`, `test(P3):`. Docs/chore commits don't need a phase scope.
 6. For non-trivial slices: **Ralph loop.** Spawn an adversarial-review subagent (see below). Distill dispositions into the commit message body. Address blocking feedback on-branch before the commit lands.
 7. Verify phase acceptance bullet(s) the slice was supposed to move: `make verify && make transcripts-ci`.
-8. Move to next slice.
+8. **`git push`.** Wait for `gh run list --limit 1 --branch main` to show green. If CI fails, fix in a new commit on `main` — never force-push.
+9. Move to next slice.
 
 ## Ralph loop — how to invoke
 

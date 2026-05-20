@@ -9,7 +9,7 @@ UV ?= uv
 
 .PHONY: help install hooks repl web transcripts transcripts-ci \
         test test-fast verify lint typecheck fmt fmt-check \
-        clean reset replay status demo
+        clean reset replay status demo ship ci-status
 
 help: ## Show this help
 	awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -73,15 +73,25 @@ replay: ## Pretty-print a session log: `make replay SESSION=<id>`
 	@test -n "$(SESSION)" || (echo "usage: make replay SESSION=<session_id>"; exit 1)
 	$(UV) run python scripts/replay.py $(SESSION)
 
-status: ## One-screen orientation: branch, dirty files, recent commits, slice tracker
+status: ## One-screen orientation: branch, dirty, unpushed, recent commits, per-phase counts
 	echo "─── branch ───"
 	git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "(not a git repo)"
 	echo "─── dirty ───"
 	git status --short 2>/dev/null | head -20 || true
+	echo "─── unpushed (committed locally, not yet shipped) ───"
+	git log @{u}..HEAD --oneline 2>/dev/null || echo "(no upstream tracking branch set)"
 	echo "─── recent ───"
 	git log --oneline -10 2>/dev/null || true
-	echo "─── by phase ───"
-	git log --oneline 2>/dev/null | grep -oE '\(P[0-9]\)' | sort | uniq -c | sort -rn || true
+	echo "─── shipped by phase (origin/main) ───"
+	git log origin/main --oneline 2>/dev/null | grep -oE '\(P[0-9]\)' | sort | uniq -c | sort -rn || true
+
+ship: ## Push current branch to origin and report CI status (use after `make verify` green)
+	git push
+	@sleep 2
+	gh run list --limit 3 --branch "$$(git rev-parse --abbrev-ref HEAD)" 2>/dev/null || echo "(gh not installed or not authenticated)"
+
+ci-status: ## Latest CI runs for current branch
+	gh run list --limit 5 --branch "$$(git rev-parse --abbrev-ref HEAD)"
 
 demo: ## Run the happy-path scenario and tail the action log
 	$(UV) run python -m agentic_cab run-scenario 01_happy_path

@@ -22,6 +22,7 @@ A slice is **done** only when *all* of these hold:
 - [ ] Net-new follow-ups extracted to `docs/FOLLOWUPS.md` — never inline `TODO`
 - [ ] Non-trivial slices: Ralph-loop review captured (dispositions in commit body, raw review in `docs/scratch/.review-*.md` if verbose)
 - [ ] All 14 invariants in `CLAUDE.md` still hold
+- [ ] **Pushed to `origin/main` and CI is green.** A slice is *not* shipped until `git push` lands and the GitHub Actions run on the merge commit is green. Local commits do not count. Verify with `gh run list --limit 1 --branch main` after pushing.
 
 A **phase** is done when every slice's DOD is met *and* the phase's acceptance bullets below are all satisfied.
 
@@ -33,10 +34,14 @@ No tracker file. To see status:
 
 ```bash
 make status                                 # branch, dirty, recent commits, per-phase counts
-git log --oneline | grep '(P3)'             # all P3 slices delivered
-git log --oneline --grep='(P[0-9])'         # full phase-scoped history
-make verify && make transcripts-ci          # full gate status
+git log origin/main --oneline | grep '(P3)' # P3 slices SHIPPED (pushed to remote)
+git log origin/main --grep='(P[0-9])'       # full shipped phase history
+git log @{u}..HEAD --oneline                # locally committed but not yet pushed (= not shipped)
+make verify && make transcripts-ci          # local gate status
+gh run list --limit 5 --branch main         # remote CI status
 ```
+
+**"Shipped" means `origin/main`, not local `HEAD`.** A green local gate is necessary but not sufficient. The slice is not done until pushed and CI green on the remote.
 
 ---
 
