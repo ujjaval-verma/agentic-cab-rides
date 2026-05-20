@@ -330,12 +330,10 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
         assert r2["status"] == "confirmed"
 
         # Core assertion: exactly one provider.confirm call across both tool invocations.
-        assert (
-            spy.call_count == 1
-        ), f"provider.confirm must be called exactly once; got {spy.call_count}"
+        assert spy.call_count == 1  # provider.confirm must be called exactly once
 
     # Same booking_id returned from both calls.
-    assert r2["booking_id"] == booking_id_1, "recall branch must return the original booking_id"
+    assert r2["booking_id"] == booking_id_1  # recall branch must return original booking_id
 
     # Both executed rows carry identical idempotency_key.
     exec_rows_1 = [
@@ -348,24 +346,19 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
     assert len(exec_rows_2) == 1
     key_from_log_1 = exec_rows_1[0]["idempotency_key"]
     key_from_log_2 = exec_rows_2[0]["idempotency_key"]
-    assert (
-        key_from_log_1 == key_from_log_2
-    ), "both executed rows must carry identical idempotency_key"
+    # Both executed rows must carry identical keys (structural idempotency guarantee).
+    assert key_from_log_1 == key_from_log_2
     # The log layer applies PII redaction, so logged keys may differ textually from the raw
-    # sha256 hex.  We verify raw key determinism independently (same inputs → same output),
-    # which is what matters for idempotency correctness.
-    assert expected_key == confirm_idempotency_key(
-        draft.draft_id, draft.fingerprint
-    ), "confirm_idempotency_key must be deterministic for the same inputs"
+    # sha256 hex.  Verify raw key determinism independently (same inputs → same output).
+    assert expected_key == confirm_idempotency_key(draft.draft_id, draft.fingerprint)
 
     # Second call's verified row must expose idempotency='recalled' in checks.
     verified_rows_2 = [
         r for r in log.read("S") if r["action_id"] == r2["action_id"] and r["kind"] == "verified"
     ]
     assert len(verified_rows_2) == 1
-    assert (
-        verified_rows_2[0]["checks"].get("idempotency") == "recalled"
-    ), "second call's verified row must signal recall in checks.idempotency"
+    # second call's verified row must signal recall in checks.idempotency
+    assert verified_rows_2[0]["checks"].get("idempotency") == "recalled"
 
     # Second call's executed row must be marked as a replay.
     assert exec_rows_2[0].get("replayed") is True
