@@ -197,6 +197,22 @@ async def confirm_booking(
     # instead of re-booking. draft.fingerprint is available after _validate_draft.
     key = key_factory(draft.draft_id, draft.fingerprint)
     claim = store.claim_or_recall(key, scope="confirm")
+
+    # Concurrent or restarted caller: a prior claim exists but was never finalised.
+    # Do NOT call the provider again — emit in_progress and let the agent re-prompt.
+    if claim.status == "in_progress":
+        _emit_verified(
+            {
+                "draft_found": True,
+                "fingerprint_match": True,
+                "requote_price_drift_cents": requote_drift_cents,
+                "idempotency": "in_progress",
+            },
+            "rejected",
+            "concurrent claim in progress",
+        )
+        return _emit_outcome("in_progress", {"reason": "concurrent claim"})
+
     if claim.status == "recalled" and claim.booking is not None:
         _emit_verified(
             {

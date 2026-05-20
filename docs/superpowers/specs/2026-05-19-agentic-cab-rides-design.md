@@ -211,6 +211,14 @@ Row kinds, all linked by `action_id`:
 <!-- spec-amendment: 2026-05-20 -->
 Every row (requested/verified/executed/outcome) carries a `tool` field — added 2026-05-20 to make plain-grep diagnostics work without an action_id join.
 
+<!-- spec-amendment: 2026-05-20 -->
+**`outcome.status = "in_progress"`** — added T30 (restart-survival). Emitted by `confirm_booking`
+when `claim_or_recall` returns `status="in_progress"` (a prior claim exists but was never
+finalised — process crash or concurrent retry). The `verified` row carries
+`checks.idempotency = "in_progress"` and `result = "rejected"`. No `executed` row follows
+(invariant 6: `verified.result == "rejected"` short-circuits). The agent should surface this
+to the user and may retry after confirming the prior call's outcome is resolved.
+
 ## 9. UberSimAdapter
 
 **Pricing** (in-process, fully deterministic):
