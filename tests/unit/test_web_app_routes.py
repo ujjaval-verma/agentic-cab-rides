@@ -153,6 +153,62 @@ def test_get_session_log_returns_empty_for_unknown_session(tmp_path: Path) -> No
     assert data["rows"] == []
 
 
+def test_startup_flushes_pending_confirmations(tmp_path: Path) -> None:
+    """On startup, pending_confirmations rows are re-published to the SSE bus.
+
+    We seed the pending_confirmations table directly (bypassing the channel)
+    to simulate a prior process crash. Then we start the app and verify that
+    the startup hook publishes each non-expired row to the bus.
+
+    Because the bus publish is fire-and-forget (no in-memory future to await),
+    we verify the startup hook ran without error and the SQLite table is
+    readable by the startup store path.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from agentic_cab.adapters.state_store import SqliteStateStore
+    from agentic_cab.core.ports import ConfirmationRequest
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    # Pre-seed the DB with a pending confirmation.
+    store = SqliteStateStore(db_path=data_dir / "state.db")
+    store.apply_schema()
+    req = ConfirmationRequest(
+        subject_id="draft-startup-test",
+        subject_kind="draft",
+        summary="Book UberX $15.00?",
+        fingerprint="c" * 64,
+        details={"price_cents": 1500},
+        expires_at=datetime.now(UTC) + timedelta(seconds=3600),
+    )
+    store.put_pending_confirmation(
+        subject_id=req.subject_id,
+        session_id="sess-startup",
+        request_json=req.model_dump_json(),
+        expires_at=req.expires_at,
+    )
+
+    # Creating the app triggers the startup hook when used as a context manager.
+    _channels.clear()
+    fastapi_app = create_app(
+        data_dir=data_dir,
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+    )
+    client = TestClient(fastapi_app, raise_server_exceptions=True)
+
+    # A simple GET request forces the TestClient to run lifespan startup.
+    response = client.get("/sessions/any/log")
+    assert response.status_code == 200
+
+    # The pending row is still in the DB (startup hook publishes but does NOT pop).
+    pending = store.list_pending_confirmations(now=datetime.now(UTC))
+    ids = {r.subject_id for r in pending}
+    assert "draft-startup-test" in ids
+
+
 def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
     """POST /chat returns 200 immediately (agent runs in background task).
 

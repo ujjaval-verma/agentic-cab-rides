@@ -15,6 +15,7 @@ adapters/ may import from here (invariant 1).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 from collections.abc import AsyncGenerator
@@ -102,7 +103,34 @@ def create_app(
     _data_dir.mkdir(parents=True, exist_ok=True)
     _log_dir.mkdir(parents=True, exist_ok=True)
 
-    app = FastAPI(title="Agentic Cab Rides")
+    @contextlib.asynccontextmanager
+    async def _lifespan(a: FastAPI) -> AsyncGenerator[None, None]:
+        """Re-publish pending confirmations that survived a prior process crash."""
+        store = SqliteStateStore(db_path=_data_dir / "state.db", check_same_thread=False)
+        store.apply_schema()
+        clock = SystemClock()
+        pending = store.list_pending_confirmations(now=clock.now())
+        for req in pending:
+            _log.info(
+                "web.startup.flush_pending_confirmation",
+                subject_id=req.subject_id,
+            )
+            # Publish into the session's SSE channel so a reloaded browser tab
+            # can render the confirmation modal.
+            _bus.publish(
+                req.subject_id,  # session_id is the discriminator; subject_id used as key
+                {
+                    "kind": "pending_confirmation",
+                    "subject_id": req.subject_id,
+                    "subject_kind": req.subject_kind,
+                    "summary": req.summary,
+                    "fingerprint": req.fingerprint,
+                    "expires_at": req.expires_at.isoformat(),
+                },
+            )
+        yield  # app runs here
+
+    app = FastAPI(title="Agentic Cab Rides", lifespan=_lifespan)
 
     # Mount static files (CSS, JS) — served under /static/
     if _STATIC_DIR.exists():
