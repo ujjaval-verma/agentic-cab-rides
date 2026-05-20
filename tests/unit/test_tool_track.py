@@ -131,6 +131,30 @@ async def test_emits_requested_then_outcome_only(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_runner_kwargs_no_clock_no_type_error(tmp_path: Path) -> None:
+    """Regression: runner._track passes (provider, log, session_id, turn_id) — no clock.
+
+    If track_booking ever gained a required `clock` param, or the runner stopped
+    threading kwargs explicitly, this would raise TypeError immediately.
+    """
+    log = JSONLActionLog(log_dir=tmp_path / "logs")
+    booking = _make_booking("BID-REG")
+    provider = _StubProvider(booking)
+
+    # Replicate the exact kwargs the runner threads (no clock, no store, no channel)
+    result = await track_booking(
+        TrackArgs(booking_id="BID-REG"),
+        provider=provider,
+        log=log,
+        session_id="S-REG",
+        turn_id="T-REG",
+    )
+
+    assert result["booking_id"] == "BID-REG"
+    assert result["status"] == "en_route"
+
+
+@pytest.mark.asyncio
 async def test_unknown_booking_returns_error_dict_no_raise(tmp_path: Path) -> None:
     log = JSONLActionLog(log_dir=tmp_path / "logs")
     provider = _StubProvider(ValueError("unknown booking"))

@@ -118,7 +118,13 @@ async def run_scenario(
         )
 
     async def _track(a: dict[str, Any]) -> dict[str, Any]:
-        return await track_booking(TrackArgs(**a), **common)
+        return await track_booking(
+            TrackArgs(**a),
+            provider=sim,
+            log=log,
+            session_id=session_id,
+            turn_id=turn_id,
+        )
 
     async def _list_active(a: dict[str, Any]) -> dict[str, Any]:
         return await list_active_bookings(
