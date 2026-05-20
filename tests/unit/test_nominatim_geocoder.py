@@ -57,6 +57,30 @@ _MULTI_RESULT = [
     },
 ]
 
+_MULTI_RESULT_HIGH_IMPORTANCE = [
+    {
+        "display_name": "Golden Gate Bridge, San Francisco, CA, USA",
+        "lat": "37.8199",
+        "lon": "-122.4783",
+        "importance": 0.85,
+        "address": {"bridge": "Golden Gate Bridge", "city": "San Francisco"},
+    },
+    {
+        "display_name": "Golden Gate Park, San Francisco, CA, USA",
+        "lat": "37.7694",
+        "lon": "-122.4862",
+        "importance": 0.78,
+        "address": {"leisure": "park", "city": "San Francisco"},
+    },
+    {
+        "display_name": "Golden Gate Avenue, San Francisco, CA, USA",
+        "lat": "37.7810",
+        "lon": "-122.4310",
+        "importance": 0.72,
+        "address": {"road": "Golden Gate Avenue", "city": "San Francisco"},
+    },
+]
+
 
 def _make_http_mock(json_data: list[dict[str, Any]]) -> AsyncMock:
     """Return an httpx.AsyncClient mock whose .get() returns *json_data*."""
@@ -108,9 +132,7 @@ def test_cache_hit_avoids_http_call(tmp_path: Path) -> None:
     )
     g._cache.put("Market & Powell, San Francisco", cached)
 
-    result = asyncio.get_event_loop().run_until_complete(
-        g.geocode("Market & Powell, San Francisco")
-    )
+    result = asyncio.run(g.geocode("Market & Powell, San Francisco"))
 
     http.get.assert_not_called()
     assert result == cached
@@ -125,7 +147,7 @@ def test_cache_miss_triggers_exactly_one_http_call(tmp_path: Path) -> None:
     http = _make_http_mock(_SINGLE_RESULT)
     g = _make_geocoder(tmp_path, http)
 
-    asyncio.get_event_loop().run_until_complete(g.geocode("Market & Powell, San Francisco"))
+    asyncio.run(g.geocode("Market & Powell, San Francisco"))
 
     assert http.get.call_count == 1
 
@@ -134,7 +156,7 @@ def test_user_agent_header_is_set(tmp_path: Path) -> None:
     http = _make_http_mock(_SINGLE_RESULT)
     g = _make_geocoder(tmp_path, http)
 
-    asyncio.get_event_loop().run_until_complete(g.geocode("Market & Powell, San Francisco"))
+    asyncio.run(g.geocode("Market & Powell, San Francisco"))
 
     call_kwargs = http.get.call_args
     headers = (
@@ -157,9 +179,7 @@ def test_single_result_maps_to_high_confidence_address_ref(tmp_path: Path) -> No
     http = _make_http_mock(_SINGLE_RESULT)
     g = _make_geocoder(tmp_path, http)
 
-    result = asyncio.get_event_loop().run_until_complete(
-        g.geocode("Market & Powell, San Francisco")
-    )
+    result = asyncio.run(g.geocode("Market & Powell, San Francisco"))
 
     assert result.formatted == _SINGLE_RESULT[0]["display_name"]
     assert result.lat == pytest.approx(37.7836)
@@ -172,7 +192,7 @@ def test_multi_result_maps_to_low_confidence_with_alternates(tmp_path: Path) -> 
     http = _make_http_mock(_MULTI_RESULT)
     g = _make_geocoder(tmp_path, http)
 
-    result = asyncio.get_event_loop().run_until_complete(g.geocode("123 Main St"))
+    result = asyncio.run(g.geocode("123 Main St"))
 
     # Top result is chosen as the primary
     assert result.formatted == _MULTI_RESULT[0]["display_name"]
@@ -183,15 +203,33 @@ def test_multi_result_maps_to_low_confidence_with_alternates(tmp_path: Path) -> 
     assert len(alternates) >= 2
 
 
+def test_multi_result_high_importance_returns_empty_alternates(tmp_path: Path) -> None:
+    """High-confidence results ALWAYS have alternates=[], even when Nominatim returns many.
+
+    Structural invariant: low confidence ⇔ non-empty alternates. High-confidence results
+    must never populate alternates regardless of how many runner-ups Nominatim returned.
+    """
+    http = _make_http_mock(_MULTI_RESULT_HIGH_IMPORTANCE)
+    g = _make_geocoder(tmp_path, http)
+
+    result = asyncio.run(g.geocode("Golden Gate"))
+
+    assert result.confidence >= 0.5, "top importance 0.85 should yield high-confidence"
+    assert result.provider_metadata == {"alternates": []}, (
+        "high-confidence result must always have alternates=[] "
+        f"regardless of runner-up count; got {result.provider_metadata}"
+    )
+
+
 def test_result_is_written_to_cache_after_http_call(tmp_path: Path) -> None:
     http = _make_http_mock(_SINGLE_RESULT)
     g = _make_geocoder(tmp_path, http)
 
-    asyncio.get_event_loop().run_until_complete(g.geocode("Market & Powell, San Francisco"))
+    asyncio.run(g.geocode("Market & Powell, San Francisco"))
 
     # Second call should hit cache, not HTTP
     http.get.reset_mock()
-    asyncio.get_event_loop().run_until_complete(g.geocode("Market & Powell, San Francisco"))
+    asyncio.run(g.geocode("Market & Powell, San Francisco"))
     http.get.assert_not_called()
 
 
@@ -213,7 +251,7 @@ def test_throttle_sleep_called_after_network_call(tmp_path: Path) -> None:
         call_order.append("http_get")
         return await original_get(*args, **kwargs)
 
-    http.get = tracked_get  # type: ignore[method-assign]
+    http.get = AsyncMock(side_effect=tracked_get)
 
     async def run() -> None:
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
@@ -232,7 +270,7 @@ def test_throttle_sleep_called_after_network_call(tmp_path: Path) -> None:
         sleep_idx = next(i for i, v in enumerate(call_order) if v.startswith("sleep"))
         assert http_idx < sleep_idx, f"Expected http before sleep; got {call_order}"
 
-    asyncio.get_event_loop().run_until_complete(run())
+    asyncio.run(run())
 
 
 def test_second_call_within_one_second_waits(tmp_path: Path) -> None:
@@ -258,4 +296,4 @@ def test_second_call_within_one_second_waits(tmp_path: Path) -> None:
             first_sleep_count = len(sleep_calls)
             assert first_sleep_count >= 1
 
-    asyncio.get_event_loop().run_until_complete(run())
+    asyncio.run(run())

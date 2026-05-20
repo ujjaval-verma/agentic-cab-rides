@@ -7,12 +7,11 @@ Confidence-mapping rationale (spec §10 low-confidence structural signal):
     we treat the result as ambiguous: confidence = min(top_importance, 0.45).
     This keeps confidence < 0.5, which is the structural low-confidence signal.
     The remaining results (up to 4) populate provider_metadata["alternates"].
-  - If Nominatim returns MULTIPLE results whose top importance is >= 0.5, we still return
-    the top result as high-confidence (confidence = min(importance, 1.0)) but populate
-    alternates so callers can see the runner-up candidates.
-  - High-confidence results always have provider_metadata={"alternates": []} when there
-    is no ambiguity, or with populated alternates if the top result is clear but others
-    exist (confidence >= 0.5 in both cases — the structural signal is < 0.5).
+  - If Nominatim returns MULTIPLE results whose top importance is >= 0.5, we return the
+    top result as high-confidence (confidence = min(importance, 1.0)) with
+    provider_metadata={"alternates": []}. Runner-ups are discarded — the structural
+    invariant is "low confidence ⇔ non-empty alternates"; high-confidence ALWAYS has
+    alternates=[], independent of how many results Nominatim returned.
 
 Throttle (Nominatim ToS — max 1 req/sec):
   - One asyncio.Lock guards the HTTP call.
@@ -113,7 +112,7 @@ class NominatimGeocoder:
         lng = float(top["lon"])
 
         if len(results) > 1 and top_importance < _AMBIGUITY_IMPORTANCE_THRESHOLD:
-            # Ambiguous: low-confidence structural signal
+            # Ambiguous: low-confidence structural signal; non-empty alternates required.
             confidence = min(top_importance, 0.45)
             alternates = [
                 {
@@ -124,16 +123,10 @@ class NominatimGeocoder:
                 for r in rest
             ]
         else:
-            # Clear winner or single result
+            # Clear winner or single result: high-confidence, alternates MUST be empty.
+            # Structural invariant: high-confidence ⇔ alternates=[].
             confidence = min(top_importance, 1.0)
-            alternates = [
-                {
-                    "formatted": str(r["display_name"]),
-                    "lat": float(r["lat"]),
-                    "lng": float(r["lon"]),
-                }
-                for r in rest
-            ]
+            alternates: list[dict[str, object]] = []
 
         return AddressRef(
             raw=query,

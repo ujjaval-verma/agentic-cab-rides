@@ -26,6 +26,7 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 - [ ] **Scenario YAML top-level `seed` field is unused.** runner.py only consumes `sim.rng_seed`; the top-level `seed` is parsed but ignored. Use it as a single canonical seed source (derive `sim.rng_seed` from it, or remove the top-level field). — T15 Ralph.
 - [ ] **Scenario YAML `clock.mode` not validated.** runner.py always constructs FrozenClock regardless of `clock.mode` value. Add a guard that raises if `clock.mode != "frozen"` (interactive mode is a different code path). — T15 Ralph.
 - [ ] **`_by_action` raises KeyError on rows missing `action_id`.** All current log rows include `action_id` per invariant 6, but a defensive `.get("action_id", "")` would prevent hard failures if a malformed log is fed to the invariant checkers. — T15 Ralph.
+- [ ] **NominatimGeocoder throttle Lock has no concurrency test (T19 review I1).** The current `test_second_call_within_one_second_waits` serializes calls sequentially; a true concurrency test would fire two `asyncio.gather`'d calls and assert the second was delayed ~1s. The Lock could be removed today without test failure. — P3+.
 
 ## Tests / coverage gaps
 

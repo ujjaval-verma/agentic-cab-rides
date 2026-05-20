@@ -40,6 +40,7 @@ async def discover_options(
             lat=args.pickup_lat,
             lng=args.pickup_lng,
             confidence=1.0,
+            provider_metadata={"alternates": []},
         ),
         dropoff=AddressRef(
             raw=args.dropoff_address,
@@ -47,6 +48,7 @@ async def discover_options(
             lat=args.dropoff_lat,
             lng=args.dropoff_lng,
             confidence=1.0,
+            provider_metadata={"alternates": []},
         ),
         when="now",
         party_size=args.party_size,
