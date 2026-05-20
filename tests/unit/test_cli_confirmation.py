@@ -92,5 +92,28 @@ class TestCLIConfirmationChannel:
             clock=_make_clock(),
             tty_path="/nonexistent/tty",
         )
-        with pytest.raises(OSError, match=r"No such file or directory|nonexistent"):
+        with pytest.raises(OSError, match=r"No such file or directory"):
             await channel.request(_make_request())
+
+    @pytest.mark.asyncio
+    async def test_eof_on_readline_returns_declined(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """EOFError on tty.readline() (disconnected tty) must produce a decline — not propagate."""
+        from unittest import mock
+
+        fake_tty = mock.MagicMock()
+        fake_tty.__enter__ = mock.Mock(return_value=fake_tty)
+        fake_tty.__exit__ = mock.Mock(return_value=False)
+        fake_tty.readline.side_effect = EOFError
+
+        monkeypatch.setattr("builtins.open", mock.Mock(return_value=fake_tty))
+
+        channel = CLIConfirmationChannel(
+            clock=_make_clock(),
+            tty_path="/dev/tty",
+        )
+        result = await channel.request(_make_request())
+
+        assert result.approved is False
+        assert result.reason == "declined"
+        assert result.approved_at is None
+        assert result.approver is None

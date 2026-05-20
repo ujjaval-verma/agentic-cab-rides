@@ -55,8 +55,12 @@ class CLIConfirmationChannel:
         # Exclusively read from tty_path — never fall back to sys.stdin.
         # If tty_path cannot be opened, raise immediately (OSError / FileNotFoundError).
         # There is NO silent fallback; that is the bug this design guards against.
+        # EOFError on readline() means the tty was disconnected — treat as decline.
         with open(self._tty_path) as tty:
-            line = tty.readline()
+            try:
+                line = tty.readline()
+            except EOFError:
+                line = ""
 
         response = line.strip().lower()
         approved = response in {"y", "yes"}
