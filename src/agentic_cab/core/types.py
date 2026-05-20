@@ -23,6 +23,10 @@ class AddressRef(BaseModel):
     lat: float
     lng: float
     confidence: float  # [0.0, 1.0]; <0.5 is the bad-address signal (P2/P3)
+    provider_metadata: dict[str, object] = Field(default_factory=dict)
+    # Low-confidence structural signal (spec §10): confidence < 0.5 AND
+    # provider_metadata["alternates"] is a non-empty list of candidate dicts.
+    # High-confidence results have provider_metadata={"alternates": []} (present, empty).
 
 
 class RideIntent(BaseModel):
