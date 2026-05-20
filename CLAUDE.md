@@ -1,0 +1,84 @@
+# CLAUDE.md — agentic-cab-rides
+
+This repo is a 48h take-home: an AI agent that books cab rides end-to-end, with a swappable platform adapter, structural confirmation gates, and a replayable action log. The harness here is graded too — process discipline matters as much as the artifact.
+
+**Read first:** the spec at `docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`. It owns every contract. This file owns the invariants and how to work in the repo.
+
+## Skills to invoke
+
+- **`slice-delivery`** — invoke for any non-trivial change. It owns the slice lifecycle, the Ralph review loop, TDD scope, and the start-lane gate.
+- **`superpowers:writing-plans`** then **`superpowers:executing-plans`** — drive the slice queue from the spec.
+- **`superpowers:test-driven-development`** — for fingerprint, idempotency, and provider contract work.
+- **`superpowers:systematic-debugging`** — when a test fails or behavior diverges from the spec.
+- **`handoff`** — when pausing mid-slice across sessions; writes to `$TMPDIR`, not the repo.
+- **`superpowers:verification-before-completion`** — before any "done" claim. Evidence required.
+
+Do not use LangChain, LlamaIndex, instructor, dspy, or any ORM. The Anthropic SDK and stdlib `sqlite3` are sufficient and demonstrate the engineering discipline being graded.
+
+## Invariants — never violate without an explicit spec update
+
+1. **Layer dependency direction is strict.** CLI/Web → Agent → Tools → Ports → Adapters. No upward edges. The agent never touches an adapter directly; it only sees tools.
+2. **The confirmation gate is structurally enforced.** Every state-mutating action (`confirm_booking`, `cancel_booking`) goes through a `ConfirmationChannel`. The agent never sees a `confirmed=True` parameter; the channel owns the y/n decision. CLI reads from `/dev/tty`, not stdin.
+3. **Fingerprint check before every gated provider call.** Tool layer computes `sha256(canonical_json(option_snapshot))` at `prepare`, re-verifies at `confirm`, and aborts on mismatch. A draft whose params were mutated between prepare and confirm must never reach the provider.
+4. **Re-quote before confirm.** Inside `confirm_booking`, after fingerprint check, re-call `provider.discover()`. If price drift exceeds the threshold, return `PriceChanged` with a new draft — do not invoke the gate with stale price.
+5. **Idempotency keys are required.** `BookingProvider.confirm` and `cancel` take an `idempotency_key`. SQLite enforces `UNIQUE`. `claim_or_recall` short-circuits the second provider call. The agent must reuse the same key on retry — keys are intent-bound, not call-bound.
+6. **The action log emits four row kinds per gated action.** `requested` → `verified` → `executed` → `outcome`, linked by `action_id`. Append-only JSONL at `logs/<session_id>.jsonl`. `verified.result == "rejected"` short-circuits — no `executed` row follows. Read-only tools emit `requested` + `outcome` only.
+7. **Persistence split is fixed.** SQLite (`data/state.db`) for drafts, bookings, booking_events, idempotency_keys. JSONL for action log, chat history, geocode cache. Do not move append-only artifacts into SQLite — the audit story depends on flat files.
+8. **PII redaction at the log boundary.** Raw address text never enters logs; only `{formatted, lat, lng}`. Phone numbers and names through `redact()`.
+9. **Determinism in scenarios.** `temperature=0`, model ID pinned in `core/constants.py`, seeded `random.Random` instances passed via DI, `FrozenClock` in scenario mode. No module-level `random` or `datetime.now()` reads.
+10. **Money is `Money(amount_cents: int, currency: str)`, never a float.**
+11. **IDs are ULIDs.** Sortable, no DB index entropy. `session_id`, `turn_id`, `action_id`, `draft_id`, `idempotency_key`.
+12. **No `--no-verify`. Ever.** Settings deny list enforces. If a hook is wrong, change it in a separate commit with a one-line rationale.
+13. **No `TODO`/`FIXME`/`XXX` in code.** Promote to `docs/FOLLOWUPS.md` or fix now. Ruff `FIX` rule enforces.
+14. **No `print()` outside the CLI/web rendering layer or scripts.** Use `structlog`. Ruff `T20` enforces.
+
+## Golden commands
+
+```bash
+make install         # uv sync + install pre-commit + pre-push hooks
+make repl            # CLI agent (CLIConfirmationChannel)
+make web             # FastAPI + browser at :8000 (WebConfirmationChannel)
+make transcripts     # Regenerate all 5 transcripts from scenarios/
+make test            # Full pytest suite
+make test-fast       # Unit + contract only
+make verify          # Pre-push gate: fmt-check + lint + typecheck + test-fast
+make replay SESSION=<id>   # Pretty-print a session log
+make reset           # Wipe data/, logs/, chat/
+make status          # Orientation: branch, dirty files, recent commits, current slice
+make help            # Discover targets
+```
+
+`python -m agentic_cab run-scenario <name>` runs a single scenario directly. The Makefile is the discovery surface — every command goes through it so hooks and humans use the same path.
+
+## Repo conventions
+
+- **`uv` for everything.** `uv sync`, `uv run`, `uv lock`. `uv.lock` is committed.
+- **`ruff` for lint and format.** Single tool, configured in `pyproject.toml`. No black/isort/flake8.
+- **`pyright` strict** on `core/` and `tools/`; `basic` elsewhere.
+- **`pytest` markers:** `contract` (provider contract suite), `scenario` (end-to-end with LLM), `slow`. `test-fast` excludes the last two.
+- **Conventional Commits** for messages (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
+- **One concern per commit.** No bundling refactors with features.
+- **Worktrees** under `../agentic-cab-rides-<slug>` when running parallel slices.
+
+## Determinism / model pin
+
+- Model: `claude-opus-4-7` (or whatever is pinned in `src/agentic_cab/core/constants.py:MODEL_ID`). Do not change without re-rendering all 5 transcripts.
+- `temperature=0` for the agent and any subagent reviewer.
+- Scenarios use `FrozenClock` and seeded RNG; interactive mode uses `SystemClock` and `random.Random(os.urandom(8))`.
+
+## Where to put things
+
+- New ports: `src/agentic_cab/core/ports.py`
+- New types: `src/agentic_cab/core/types.py`
+- New tools: `src/agentic_cab/tools/<name>.py` (one file per tool)
+- New adapters: `src/agentic_cab/adapters/<area>/<name>.py`
+- New scenarios: `scenarios/<NN>_<slug>.yaml` + invariants
+- Contract tests: `tests/contract/`
+- Unit tests: `tests/unit/`
+- Scenario tests: `tests/scenarios/`
+- Follow-ups: `docs/FOLLOWUPS.md` (never inline `TODO`)
+- Slice tracker: `docs/build-progress.md` (created in the writing-plans step)
+
+## When something is unclear
+
+Re-read the spec section the work touches before asking. Most ambiguity is resolved there. If the spec is genuinely ambiguous, ask once with a specific quote, then update the spec in the same PR as the resolution.

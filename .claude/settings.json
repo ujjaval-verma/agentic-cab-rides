@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(uv:*)",
+      "Bash(uv run *)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(pyright:*)",
+      "Bash(python -m agentic_cab *)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git worktree:*)",
+      "Bash(gh pr *)",
+      "Bash(gh run *)",
+      "Bash(gh issue *)",
+      "Bash(jq:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(tree:*)",
+      "Bash(mkdir:*)",
+      "Bash(touch:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Read(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/**)",
+      "Edit(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/**)",
+      "Write(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/**)"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~/*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(git commit -n:*)",
+      "Bash(git push --no-verify:*)",
+      "Bash(*--no-verify*)",
+      "Bash(curl * | sh:*)",
+      "Bash(curl * | bash:*)",
+      "Read(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/.env)",
+      "Read(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/data/**)",
+      "Write(//Users/tenacity/src/ujjaval-verma/agentic-cab-rides/.env)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "make -s status 2>/dev/null || (git -C \"$CLAUDE_PROJECT_DIR\" log --oneline -5 2>/dev/null; git -C \"$CLAUDE_PROJECT_DIR\" status --short 2>/dev/null)"
+          }
+        ]
+      }
+    ]
+  }
+}

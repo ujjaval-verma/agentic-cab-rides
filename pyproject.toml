@@ -1,0 +1,124 @@
+[project]
+name = "agentic-cab-rides"
+version = "0.1.0"
+description = "An AI agent that books cab rides end-to-end, with a swappable platform adapter, structural confirmation gates, and a replayable action log."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Ujjaval Verma" }]
+
+dependencies = [
+    "anthropic>=0.40",
+    "pydantic>=2.7",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "typer>=0.12",
+    "rich>=13.9",
+    "structlog>=24.4",
+    "python-ulid>=3.0",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.115",
+    "pyright>=1.1.385",
+    "ruff>=0.7.0",
+    "pre-commit>=4.0",
+    "syrupy>=4.7",
+]
+
+[project.scripts]
+agentic-cab = "agentic_cab.__main__:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentic_cab"]
+
+# ---------- ruff ----------
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pyflakes/pycodestyle
+    "I",                # isort
+    "N",                # pep8-naming
+    "UP",               # pyupgrade
+    "B",                # bugbear
+    "SIM",              # simplify
+    "RUF",              # ruff-specific
+    "PL",               # pylint
+    "PT",               # pytest-style
+    "ANN",              # annotations (enforces typing)
+    "TID",              # tidy imports
+    "T20",              # no print() / pprint outside renderers
+    "FBT",              # boolean-trap
+    "RET",              # return statements
+    "PIE",              # misc
+    "FIX",              # forbid TODO/FIXME/XXX in code (track in docs/FOLLOWUPS.md)
+]
+ignore = [
+    "ANN401",   # allow Any in narrowly-typed escape hatches (provider_metadata)
+    "PLR0913",  # tool functions sometimes need many params; Pydantic models address this
+    "PLR2004",  # magic value comparisons in tests are fine
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "PLR2004", "S101"]
+"src/agentic_cab/agent/chat.py" = ["T20"]
+"src/agentic_cab/web/**" = ["T20"]
+"scripts/**" = ["T20"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ---------- pyright ----------
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportMissingImports = "error"
+reportMissingTypeStubs = false
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+
+[[tool.pyright.executionEnvironments]]
+# Strict typing where it matters: contracts, fingerprints, tool gate logic.
+root = "src/agentic_cab/core"
+typeCheckingMode = "strict"
+
+[[tool.pyright.executionEnvironments]]
+root = "src/agentic_cab/tools"
+typeCheckingMode = "strict"
+
+# ---------- pytest ----------
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "-q",
+]
+asyncio_mode = "auto"
+markers = [
+    "contract: provider contract tests, parameterized across all adapters",
+    "scenario: end-to-end scenario runs (may invoke the LLM)",
+    "slow: tests that take longer than 1s",
+]
