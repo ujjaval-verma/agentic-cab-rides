@@ -27,6 +27,7 @@ If a slice's plan conflicts with the spec, **update the spec first** (in a separ
 - **Do not create GitHub Issues for slices.** Only for durable external blockers or post-launch backlog.
 - **No idle green work.** If local gates + CI imply LGTM, land. Don't sit on green branches.
 - **"Shipped" means `origin/main`, not local `HEAD`.** A slice is not done until pushed AND the remote CI run on `main` is green. `git log @{u}..HEAD --oneline` lists commits that are locally landed but not yet shipped — that's debt, not progress.
+- **Parallel worktrees for genuinely independent slices.** When a phase has slices with no shared edits (different tool files, different adapter areas, disjoint test files), dispatch them concurrently via `git worktree add ../agentic-cab-rides-<slug> -b <branch> origin/main`. The plan must mark which slices are independent; default is sequential. Cap at 3 active worktrees. Integration happens on `main` after each worktree ships — never merge worktree-to-worktree.
 
 ### 2. Rigor — prove the change
 
@@ -40,7 +41,7 @@ If a slice's plan conflicts with the spec, **update the spec first** (in a separ
   - **Tests follow DI, not field-overrides.** If a test needs to pin non-determinism (clock, RNG, idempotency key, retry policy), inject a collaborator at the function/constructor boundary. Do NOT add `_override` fields to production Pydantic models, env-var escape hatches, or module-level monkeypatches. Tests should survive a refactor that swaps the underlying mechanism, as long as the public interface is intact.
 - **Within a slice, vertical tracer bullets.** One test → minimal code to pass → next test. Do NOT write all the implementation then all the tests. Confirm the happy path first; expand incrementally.
 - **TDD where it pays, fixtures where it doesn't, no tests where it would be ceremony.** See `## TDD scope` below.
-- **Adversarial review (Ralph loop) for any non-trivial slice.** Before claiming done, spawn a subagent with `Agent(subagent_type=feature-dev:code-reviewer)` (or `general-purpose` if specialist unavailable) and a prompt naming the slice's spec section + invariants. Address blocking feedback on-branch. Distill dispositions into the commit message body (or `docs/scratch/.review-<slug>.md` if verbose). Merge confidence requires Ralph evidence, not just green CI.
+- **Adversarial review (Ralph loop) — batched by slice family, not per task.** Group related slices (e.g., all four P2 tools, or both confirmation channels) and run one Ralph pass over the family once the last member is green. Spawn `Agent(subagent_type=feature-dev:code-reviewer)` (or `general-purpose` if unavailable) with a prompt naming the family's spec sections + invariants + the commit SHAs in scope. A single-task Ralph is reserved for slices that touch a structural invariant alone (e.g., `tools/confirm.py`, `core/fingerprint.py`, idempotency table changes) — those still get their own pass. The plan must declare each slice's Ralph disposition: **family-batched / standalone / none (trivial)**. Address blocking feedback on-branch; distill dispositions into the family's last commit body (or `docs/scratch/.review-<family>.md` if verbose). Merge confidence requires Ralph evidence, not just green CI.
 - **Never `--no-verify`.** If a hook fails, fix the cause. If the hook is wrong, change the hook in a separate commit with a one-line rationale. This is enforced by `.claude/settings.json` deny list.
 - **Determinism.** `temperature=0`, pinned model ID, seeded RNG, `FrozenClock` in scenarios. If a test flakes, fix the cause; do not retry.
 - **Evidence required to mark a slice ✓.** For tool/adapter slices: contract test green + unit tests green + relevant scenario(s) still render with invariants passing. For UI slices: screenshot + console/network clean. For agent/prompt slices: at least one scenario re-rendered with passing invariants.
@@ -70,7 +71,7 @@ Run tests after each refactor step. If a refactor breaks a test that *should* ha
 | Surface | Discipline |
 |---|---|
 | `core/fingerprint.py` | **TDD strict.** Includes hypothesis property tests (order-independent, whitespace-insensitive). |
-| `core/types.py` (Pydantic models) | Smoke tests only; Pydantic enforces shape. |
+| `core/types.py` (Pydantic models) | **No tests.** Pydantic enforces shape; smoke tests are ceremony. Add a test only when a `model_validator` encodes a non-trivial cross-field invariant — and then test the invariant, not the field shapes. |
 | `BookingProvider` contract suite | **TDD strict.** Every new adapter must pass without modification. |
 | `tools/confirm.py` (gate, re-quote, fingerprint check) | **TDD strict.** Unit tests with fake `BookingProvider` + scripted `ConfirmationChannel` + assertion on action log rows. |
 | `tools/cancel.py` | Same as confirm. |
@@ -95,7 +96,7 @@ Run tests after each refactor step. If a refactor breaks a test that *should* ha
 3. Run the **refactor scan** (see Rigor §"Refactor scan") against the slice's diff. Re-run tests after each refactor step. SOLID checklist applies — especially DIP if the slice added new import edges.
 4. Run `make verify` and at least the smallest affected scenario via `make transcripts`.
 5. Commit. Conventional Commits format with **phase scope**: `feat(P1):`, `fix(P3):`, `refactor(P2):`, `test(P3):`. Docs/chore commits don't need a phase scope.
-6. For non-trivial slices: **Ralph loop.** Spawn an adversarial-review subagent (see below). Distill dispositions into the commit message body. Address blocking feedback on-branch before the commit lands.
+6. **Ralph loop per the slice's declared disposition** (family-batched / standalone / none). For family-batched slices, the Ralph pass runs after the family's final commit and gates the whole family's push. For standalone slices, it runs before the commit lands. Distill dispositions into the commit body (or family-tail commit body); address blocking feedback on-branch.
 7. Verify phase acceptance bullet(s) the slice was supposed to move: `make verify && make transcripts-ci`.
 8. **`git push`.** Wait for `gh run list --limit 1 --branch main` to show green. If CI fails, fix in a new commit on `main` — never force-push.
 9. Move to next slice.
