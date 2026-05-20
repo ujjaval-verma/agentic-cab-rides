@@ -77,12 +77,11 @@ def test_claim_or_recall_new_then_recalled(store: SqliteStateStore) -> None:
     key = "K1"
     first = store.claim_or_recall(key, scope="confirm")
     assert first.status == "new"
-    assert first.booking is None
+    assert first.booking_id is None
     store.finalize_idempotency(key, booking=booking)
     second = store.claim_or_recall(key, scope="confirm")
     assert second.status == "recalled"
-    assert second.booking is not None
-    assert second.booking.booking_id == "B1"
+    assert second.booking_id == "B1"
 
 
 def test_claim_or_recall_in_progress_returns_in_progress(store: SqliteStateStore) -> None:
@@ -98,7 +97,7 @@ def test_claim_or_recall_in_progress_returns_in_progress(store: SqliteStateStore
     # simulate crash: no finalize_idempotency call
     second = store.claim_or_recall(key, scope="confirm")
     assert second.status == "in_progress"
-    assert second.booking is None
+    assert second.booking_id is None
 
 
 def test_schema_apply_is_idempotent(store: SqliteStateStore) -> None:

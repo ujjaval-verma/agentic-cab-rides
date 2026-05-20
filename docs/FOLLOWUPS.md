@@ -31,7 +31,6 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 
 - [ ] **Fingerprint property test: permutations.** Current test only reverses dict insertion order; replace with st.permutations or hypothesis shuffling to cover arbitrary key orderings. — T3 Ralph N1.
 - [ ] **Tighten `fingerprint()` parameter type to Option.** Today accepts any BaseModel; spec §4 only requires Option. — T3 Ralph Q1.
-- [ ] **Booking.events round-trip inconsistency.** claim_or_recall's recalled Booking carries the events list as serialised at finalize_idempotency time. get_booking reconstructs a Booking with no events (events table not joined). Decide canonical semantics in P3 contract suite design — possibly: claim_or_recall returns only booking_id and T13 re-fetches via get_booking. — T7 Ralph Q1.
 - [ ] **Filter `approved_at: null` from declined verified rows.** When the user declines, the `verified.checks.confirmation` dump includes `approved_at: null`. Spec §8 examples only show the field when approved. Consider filtering on the declined path to keep audit rows tight, or update spec §8 to acknowledge the null. — T13 Ralph A5.
 ## Product / UX
 

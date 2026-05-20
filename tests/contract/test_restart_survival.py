@@ -111,8 +111,7 @@ def test_finalised_key_recalled_across_store_instances(tmp_path: Path) -> None:
 
     second = store_b.claim_or_recall(key, scope="confirm")
     assert second.status == "recalled"
-    assert second.booking is not None
-    assert second.booking.booking_id == booking.booking_id
+    assert second.booking_id == booking.booking_id
 
     # If we were tracking provider calls, confirm would be called 0 times here.
     # The recall short-circuit in confirm_booking ensures no double-book.
@@ -144,7 +143,7 @@ def test_in_progress_key_visible_across_store_instances(tmp_path: Path) -> None:
     store_b = _make_store(db_path)
     second = store_b.claim_or_recall(crash_key, scope="confirm")
     assert second.status == "in_progress"
-    assert second.booking is None
+    assert second.booking_id is None
 
 
 # ---------------------------------------------------------------------------

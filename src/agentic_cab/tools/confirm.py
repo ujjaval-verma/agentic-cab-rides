@@ -219,7 +219,10 @@ async def confirm_booking(
         )
         return _emit_outcome("in_progress", {"reason": "concurrent claim"})
 
-    if claim.status == "recalled" and claim.booking is not None:
+    if claim.status == "recalled" and claim.booking_id is not None:
+        # Re-fetch from the store so events and status are current (closes Booking.events
+        # round-trip inconsistency: finalize_idempotency snapshot may have stale events).
+        _bk = store.get_booking(claim.booking_id)
         _emit_verified(
             {
                 "draft_found": True,
@@ -244,7 +247,9 @@ async def confirm_booking(
                 "replayed": True,
             }
         )
-        return _emit_outcome("confirmed", {"booking_id": claim.booking.booking_id})
+        return _emit_outcome(
+            "confirmed", {"booking_id": _bk.booking_id if _bk else claim.booking_id}
+        )
 
     # 5. Gate (invariant 2) — ConfirmationChannel owns the y/n decision
     req = ConfirmationRequest(

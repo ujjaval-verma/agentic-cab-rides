@@ -90,7 +90,7 @@ class ActionLog(Protocol):
 
 class ClaimResult(BaseModel):
     status: Literal["new", "recalled", "in_progress"]
-    booking: Booking | None = None  # populated only when status == "recalled"
+    booking_id: str | None = None  # populated only when status == "recalled"; caller re-fetches
 
 
 @runtime_checkable

@@ -79,6 +79,7 @@ ignore = [
 "tests/**" = ["ANN", "PLR2004", "PLC0415", "S101"]
 "src/agentic_cab/agent/chat.py" = ["T20"]
 "src/agentic_cab/web/**" = ["T20", "PLR0915"]
+"src/agentic_cab/tools/confirm.py" = ["PLR0915"]  # 4-path confirm_booking is necessarily long
 "scripts/**" = ["T20"]
 "src/agentic_cab/__main__.py" = ["FBT"]  # Typer CLI flags require bool defaults
 

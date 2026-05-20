@@ -60,7 +60,7 @@ def test_claim_returns_new_for_fresh_key(store: SqliteStateStore) -> None:
     """A key never seen before must return status='new'."""
     result = store.claim_or_recall("fresh-key-001", scope="confirm")
     assert result.status == "new"
-    assert result.booking is None
+    assert result.booking_id is None
 
 
 def test_finalized_claim_returns_recalled(store: SqliteStateStore) -> None:
@@ -77,8 +77,7 @@ def test_finalized_claim_returns_recalled(store: SqliteStateStore) -> None:
 
     second = store.claim_or_recall(key, scope="confirm")
     assert second.status == "recalled"
-    assert second.booking is not None
-    assert second.booking.booking_id == "B-ip-1"
+    assert second.booking_id == "B-ip-1"
 
 
 def test_claimed_but_not_finalized_returns_in_progress(store: SqliteStateStore) -> None:
@@ -94,4 +93,4 @@ def test_claimed_but_not_finalized_returns_in_progress(store: SqliteStateStore) 
     # Second caller (same process or restarted process) hits the same key.
     second = store.claim_or_recall(key, scope="confirm")
     assert second.status == "in_progress"
-    assert second.booking is None
+    assert second.booking_id is None

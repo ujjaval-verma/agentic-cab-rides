@@ -214,19 +214,20 @@ class SqliteStateStore:
             booking_id: str | None = existing[0]
             response_blob: str | None = existing[1]
             if booking_id is not None and response_blob is not None:
-                booking = Booking.model_validate_json(response_blob)
-                return ClaimResult(status="recalled", booking=booking)
+                # Return only the booking_id; callers re-fetch via get_booking so events
+                # are consistent (closes the Booking.events round-trip inconsistency).
+                return ClaimResult(status="recalled", booking_id=booking_id)
             # Row exists but not yet finalised: a prior call claimed the key but has not
             # completed (process crash or concurrent retry). Return "in_progress" so the
             # caller can surface the race without issuing a duplicate provider call.
-            return ClaimResult(status="in_progress", booking=None)
+            return ClaimResult(status="in_progress", booking_id=None)
         with self._write() as conn:
             conn.execute(
                 "INSERT INTO idempotency_keys(key, scope, booking_id, response_blob, created_at)"
                 " VALUES (?, ?, NULL, NULL, ?)",
                 (key, scope, datetime.now(UTC).isoformat()),
             )
-        return ClaimResult(status="new", booking=None)
+        return ClaimResult(status="new", booking_id=None)
 
     def finalize_idempotency(self: Self, key: str, booking: Booking) -> None:
         with self._write() as conn:

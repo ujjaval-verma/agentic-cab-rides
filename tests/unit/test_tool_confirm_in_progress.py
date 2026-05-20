@@ -81,7 +81,7 @@ class _InProgressStore:
         return []
 
     def claim_or_recall(self, key: str, scope: Literal["confirm", "cancel"]) -> ClaimResult:
-        return ClaimResult(status="in_progress", booking=None)
+        return ClaimResult(status="in_progress", booking_id=None)
 
     def finalize_idempotency(self, key: str, booking: Booking) -> None: ...
 

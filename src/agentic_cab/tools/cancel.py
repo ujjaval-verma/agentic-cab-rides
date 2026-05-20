@@ -149,7 +149,10 @@ async def cancel_booking(
     # canonical.
     key = key_factory(args.booking_id, fee.amount_cents, status_at_quote)
     claim = store.claim_or_recall(key, scope="cancel")
-    if claim.status == "recalled" and claim.booking is not None:
+    if claim.status == "recalled" and claim.booking_id is not None:
+        # Re-fetch from the store so events and status are current (closes Booking.events
+        # round-trip inconsistency: finalize_idempotency snapshot may have stale events).
+        recalled_booking = store.get_booking(claim.booking_id)
         _emit_verified(
             {
                 "booking_found": True,
@@ -173,7 +176,8 @@ async def cancel_booking(
                 "replayed": True,
             }
         )
-        return _emit_outcome("cancelled", {"booking_id": claim.booking.booking_id})
+        booking_id_out = recalled_booking.booking_id if recalled_booking else claim.booking_id
+        return _emit_outcome("cancelled", {"booking_id": booking_id_out})
 
     # Step 4: Reject terminal / non-cancellable statuses (AFTER idempotency recall check).
     if booking.status in _ALREADY_TERMINAL:
