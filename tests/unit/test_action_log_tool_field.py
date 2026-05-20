@@ -136,9 +136,7 @@ async def test_every_row_kind_carries_tool_field_confirm(tmp_path: Path) -> None
     assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]
 
     for row in rows:
-        assert (
-            row.get("tool") == "confirm_booking"
-        ), f"Row kind={row['kind']!r} missing or wrong tool field: {row}"
+        assert row.get("tool") == "confirm_booking"
 
 
 @pytest.mark.asyncio
@@ -160,6 +158,4 @@ async def test_every_row_kind_carries_tool_field_track(tmp_path: Path) -> None:
     assert [r["kind"] for r in rows] == ["requested", "outcome"]
 
     for row in rows:
-        assert (
-            row.get("tool") == "track_booking"
-        ), f"Row kind={row['kind']!r} missing or wrong tool field: {row}"
+        assert row.get("tool") == "track_booking"
