@@ -7,9 +7,11 @@ SHELL := /usr/bin/env bash
 
 UV ?= uv
 
-.PHONY: help install hooks repl web transcripts transcripts-ci \
+.PHONY: help install hooks link-env repl web transcripts transcripts-ci \
         test test-fast verify lint typecheck fmt fmt-check \
         clean reset replay status demo ship ci-status
+
+ENV_SRC := $(HOME)/.config/agentic-cab-rides/.env
 
 help: ## Show this help
 	awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -22,6 +24,31 @@ install: ## uv sync (incl. dev deps) + install pre-commit hooks
 hooks: ## (Re)install git hooks only
 	$(UV) run pre-commit install --install-hooks
 	$(UV) run pre-commit install --hook-type pre-push
+
+link-env: ## Symlink ./.env -> ~/.config/agentic-cab-rides/.env (shared across worktrees)
+	@if [ ! -f "$(ENV_SRC)" ]; then \
+		echo "error: $(ENV_SRC) does not exist"; \
+		echo "       first-time setup: mkdir -p $$(dirname $(ENV_SRC)) && chmod 700 $$(dirname $(ENV_SRC))"; \
+		echo "                         cp .env.example $(ENV_SRC) && chmod 600 $(ENV_SRC)"; \
+		echo "                         then edit $(ENV_SRC) and populate ANTHROPIC_API_KEY"; \
+		exit 1; \
+	fi
+	@if [ -L .env ]; then \
+		if [ "$$(readlink .env)" = "$(ENV_SRC)" ]; then \
+			echo ".env already linked to $(ENV_SRC)"; \
+			exit 0; \
+		fi; \
+		echo "error: .env is a symlink pointing elsewhere ($$(readlink .env))"; \
+		echo "       remove it manually if you want to relink"; \
+		exit 1; \
+	fi
+	@if [ -e .env ]; then \
+		echo "error: .env exists as a regular file in this worktree"; \
+		echo "       remove it manually (rm .env) if you want to switch to the symlinked secret"; \
+		exit 1; \
+	fi
+	ln -s "$(ENV_SRC)" .env
+	@echo "linked .env -> $(ENV_SRC)"
 
 repl: ## Interactive CLI agent (CLIConfirmationChannel via /dev/tty)
 	$(UV) run python -m agentic_cab repl

@@ -26,7 +26,16 @@ Tracker = `git log --oneline --grep='(P[0-9])'`. There is no status file; status
 ```bash
 git clone <repo>
 cd agentic-cab-rides
-cp .env.example .env                         # then edit .env: ANTHROPIC_API_KEY=sk-ant-...
+
+# First-time secret setup (once per machine — kept outside the repo so multiple
+# worktrees share one canonical key file; rotate in one place):
+mkdir -p ~/.config/agentic-cab-rides && chmod 700 ~/.config/agentic-cab-rides
+cp .env.example ~/.config/agentic-cab-rides/.env && chmod 600 ~/.config/agentic-cab-rides/.env
+$EDITOR ~/.config/agentic-cab-rides/.env     # set ANTHROPIC_API_KEY=sk-ant-...
+
+# Per worktree (idempotent):
+make link-env                                # symlinks ./.env -> ~/.config/agentic-cab-rides/.env
+
 make install                                 # uv sync + install pre-commit + pre-push hooks
 make repl                                    # CLI agent
 # or
