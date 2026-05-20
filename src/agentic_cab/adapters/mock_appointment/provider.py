@@ -18,7 +18,7 @@ from datetime import timedelta
 from typing import ClassVar, Self
 
 from agentic_cab.core.fingerprint import fingerprint
-from agentic_cab.core.ids import new_draft_id
+from agentic_cab.core.ids import new_draft_id, new_idempotency_key
 from agentic_cab.core.ports import Clock
 from agentic_cab.core.types import (
     AppointmentIntent,
@@ -130,7 +130,7 @@ class MockAppointmentProvider:
             raise ValueError(f"unknown draft_id: {draft_id!r}")
 
         booking = Booking(
-            booking_id=f"appt-bk-{idempotency_key[:8]}",
+            booking_id=f"appt-bk-{new_idempotency_key()}",
             draft_id=draft_id,
             status="confirmed",
             provider=self.name,
