@@ -7,18 +7,23 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 import yaml
 from anthropic import Anthropic
 
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.adapters.confirmation.scripted import ScriptedConfirmationChannel
+from agentic_cab.adapters.geocoding.cache import GeocodeCache
+from agentic_cab.adapters.geocoding.nominatim import NominatimGeocoder
 from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
 from agentic_cab.agent.loop import ToolHandler, run_turn
 from agentic_cab.core.ids import new_session_id, new_turn_id
 from agentic_cab.tools.confirm import ConfirmArgs, confirm_booking
 from agentic_cab.tools.discover import DiscoverArgs, discover_options
+from agentic_cab.tools.geocode import DESCRIPTION as GEOCODE_DESCRIPTION
+from agentic_cab.tools.geocode import GeocodeArgs, geocode_address
 from agentic_cab.tools.prepare import PrepareArgs, prepare_booking
 from agentic_cab.tools.registry import pydantic_to_anthropic_tool
 
@@ -41,8 +46,15 @@ async def run_scenario(
     log = JSONLActionLog(log_dir=log_dir)
     sim = UberSimAdapter(store=store, clock=clock, rng_seed=scn["sim"]["rng_seed"])
     channel = ScriptedConfirmationChannel(script=scn["confirmation"]["script"], clock=clock)
+    geocode_cache = GeocodeCache(fixtures_dir=data_dir / "geocode_fixtures")
+    geocoder = NominatimGeocoder(cache=geocode_cache, http=httpx.AsyncClient())
 
     tools = [
+        pydantic_to_anthropic_tool(
+            name="geocode_address",
+            description=GEOCODE_DESCRIPTION,
+            args_model=GeocodeArgs,
+        ),
         pydantic_to_anthropic_tool(
             name="discover_options",
             description="Find available ride options for a pickup→dropoff intent.",
@@ -68,6 +80,15 @@ async def run_scenario(
         turn_id=turn_id,
     )
 
+    async def _geocode(a: dict[str, Any]) -> dict[str, Any]:
+        return await geocode_address(
+            GeocodeArgs(**a),
+            geocoder=geocoder,
+            log=log,
+            session_id=session_id,
+            turn_id=turn_id,
+        )
+
     async def _discover(a: dict[str, Any]) -> dict[str, Any]:
         return await discover_options(DiscoverArgs(**a), **common)
 
@@ -83,6 +104,7 @@ async def run_scenario(
         )
 
     handlers: dict[str, ToolHandler] = {
+        "geocode_address": _geocode,
         "discover_options": _discover,
         "prepare_booking": _prepare,
         "confirm_booking": _confirm,
