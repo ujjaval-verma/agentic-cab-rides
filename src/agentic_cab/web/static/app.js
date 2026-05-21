@@ -23,8 +23,43 @@ const modalFpShortEl = document.getElementById("modal-fingerprint-short");
 const btnCopyFp      = document.getElementById("btn-copy-fingerprint");
 const btnApprove     = document.getElementById("btn-approve");
 const btnDecline     = document.getElementById("btn-decline");
+const connStatusEl   = document.getElementById("conn-status");
 
 let pendingFingerprint = "";
+
+// ---- Connection-status pill (single source of truth, never writes to chat) ----
+//
+// EventSource auto-reconnects on transient drops. We surface the *current*
+// state via a pill in the header rather than appending stale messages into the
+// chat thread on every flap.
+//
+//   onopen  → state "connected", briefly visible, then auto-hide
+//   onerror + readyState=CONNECTING (0) → state "reconnecting" (debounced 500ms
+//     to avoid flicker when reconnect is near-instant)
+//   onerror + readyState=CLOSED (2)     → state "disconnected" (sticky, asks
+//     for a refresh)
+let connState = "init";
+let reconnectingTimer = null;
+let connectedTimer = null;
+
+function setConnStatus(state) {
+  if (connState === state) return;
+  connState = state;
+  clearTimeout(connectedTimer);
+  if (state === "connected") {
+    connStatusEl.textContent = "connected";
+    connStatusEl.className = "conn-status conn-status--connected";
+    connectedTimer = setTimeout(() => {
+      connStatusEl.className = "conn-status conn-status--hidden";
+    }, 1500);
+  } else if (state === "reconnecting") {
+    connStatusEl.textContent = "reconnecting…";
+    connStatusEl.className = "conn-status conn-status--reconnecting";
+  } else if (state === "disconnected") {
+    connStatusEl.textContent = "disconnected — refresh the page";
+    connStatusEl.className = "conn-status conn-status--disconnected";
+  }
+}
 
 // ---- State ----
 let pendingSubjectId = null;
@@ -119,6 +154,12 @@ document.addEventListener("keydown", (e) => {
 function connectEventStream() {
   const es = new EventSource("/events?session_id=" + encodeURIComponent(sessionId));
 
+  es.onopen = () => {
+    clearTimeout(reconnectingTimer);
+    reconnectingTimer = null;
+    setConnStatus("connected");
+  };
+
   es.onmessage = (ev) => {
     let row;
     try {
@@ -142,8 +183,20 @@ function connectEventStream() {
   };
 
   es.onerror = () => {
-    // Reconnect automatically — EventSource does this by default.
-    addChatMessage("[system] connection lost, reconnecting…", "error");
+    // EventSource auto-reconnects when readyState is CONNECTING (0). Only
+    // when it gives up (CLOSED == 2) do we ask the user to refresh.
+    if (es.readyState === EventSource.CLOSED) {
+      clearTimeout(reconnectingTimer);
+      setConnStatus("disconnected");
+      return;
+    }
+    // Debounce the "reconnecting" pill so a near-instant reconnect doesn't
+    // flicker the header.
+    if (!reconnectingTimer) {
+      reconnectingTimer = setTimeout(() => {
+        if (es.readyState !== EventSource.OPEN) setConnStatus("reconnecting");
+      }, 500);
+    }
   };
 }
 
