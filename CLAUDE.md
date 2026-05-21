@@ -2,14 +2,14 @@
 
 This repo is a prototype: an AI agent that books cab rides end-to-end, with a swappable platform adapter, structural confirmation gates, and a replayable action log. The harness here matters too — process discipline is part of the artifact.
 
-**Read first:** the spec at `docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`. It owns every contract. This file owns the invariants and how to work in the repo.
+**Read first:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layer diagram, ports, type contracts, the `confirm_booking` core flow, and the invariant audit map. This file owns the invariants and how to work in the repo.
 
 ## Skills to invoke
 
 - **`slice-delivery`** — invoke for any non-trivial change. It owns the slice lifecycle, the Ralph review loop, TDD scope, and the start-lane gate.
-- **`superpowers:writing-plans`** then **`superpowers:executing-plans`** — drive the slice queue from the spec.
+- **`superpowers:writing-plans`** then **`superpowers:executing-plans`** — drive the slice queue from `docs/ARCHITECTURE.md` + `docs/PHASES.md`. New plans land in `docs/plans/YYYY-MM-DD-<slug>.md`.
 - **`superpowers:test-driven-development`** — for fingerprint, idempotency, and provider contract work.
-- **`superpowers:systematic-debugging`** — when a test fails or behavior diverges from the spec.
+- **`superpowers:systematic-debugging`** — when a test fails or behavior diverges from the architecture contract.
 - **`handoff`** — when pausing mid-slice across sessions; writes to `$TMPDIR`, not the repo.
 - **`superpowers:verification-before-completion`** — before any "done" claim. Evidence required.
 
@@ -79,10 +79,9 @@ The repo has two kinds of markdown: docs that travel with the code (versioned, r
 |---|---|
 | `CLAUDE.md` (root) | Invariants every session must respect |
 | `README.md` (root) | 3-min quickstart for first-time readers |
-| `docs/superpowers/specs/*.md` | Design specs (date-prefixed) |
-| `docs/superpowers/plans/*.md` | Implementation plans (output of `writing-plans`) |
+| `docs/ARCHITECTURE.md` | Layer diagram, ports, type contracts, core flow, invariant audit map (the durable design home) |
+| `docs/plans/*.md` | Implementation plans (output of `writing-plans`), date-prefixed |
 | `docs/PHASES.md` | Static contract: Definition of Done + phases with acceptance bullets. No status field — git log is the tracker. |
-| `docs/ARCHITECTURE.md` | Layer diagram + port boundaries |
 | `docs/WRITEUP.md` | The 1-pager deliverable |
 | `docs/FOLLOWUPS.md` | The only legal home for TODO-class items |
 | `transcripts/*.md` | Generated, but committed — the deliverable artifact |
@@ -133,4 +132,4 @@ Will this doc still be useful in 7 days?
 
 ## When something is unclear
 
-Re-read the spec section the work touches before asking. Most ambiguity is resolved there. If the spec is genuinely ambiguous, ask once with a specific quote, then update the spec in the same PR as the resolution.
+Re-read the relevant section of `docs/ARCHITECTURE.md` (or the invariant above) before asking. Most ambiguity is resolved there. If the architecture doc is genuinely ambiguous, ask once with a specific quote, then update it in the same PR as the resolution.

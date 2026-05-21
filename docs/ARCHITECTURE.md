@@ -7,9 +7,11 @@ the layer below it; nothing reaches across. This document maps that structure,
 the ports that separate the layers, and where each invariant in `CLAUDE.md`
 is enforced.
 
-For the full design rationale see
-[`docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`](superpowers/specs/2026-05-19-agentic-cab-rides-design.md).
-For the 1-pager deliverable see [`docs/WRITEUP.md`](WRITEUP.md).
+This file owns the durable architecture story. Invariants live in
+[`CLAUDE.md`](../CLAUDE.md); the phase contract lives in
+[`docs/PHASES.md`](PHASES.md); the 1-pager deliverable is
+[`docs/WRITEUP.md`](WRITEUP.md). Type and port definitions are authoritative
+in code (`src/agentic_cab/core/types.py`, `src/agentic_cab/core/ports.py`).
 
 ## Layer diagram
 
@@ -66,6 +68,97 @@ an invariant, read the file in the "Enforced in" column.
 | 13 | No `TODO`/`FIXME`/`XXX` in code | Ruff `FIX` rule, pre-commit |
 | 14 | No `print()` outside CLI/web/scripts | Ruff `T20` rule |
 
+## Type contracts (overview)
+
+Authoritative definitions live in `src/agentic_cab/core/types.py`. The shapes
+that the architecture leans on:
+
+- **`Intent`** is a tagged union (today: `RideIntent`; the Zocdoc swap adds
+  `AppointmentIntent`). `BookingProvider.supported_intent_kinds` routes intents
+  to capable adapters.
+- **`Option.details`** is a discriminated union (`kind` discriminator) so the
+  agent prompt stays typed across intent variants.
+- **`Draft`** carries `option_snapshot: Option` (frozen at prepare-time) and
+  `fingerprint: str` (`sha256(canonical_json(option_snapshot))`). The
+  fingerprint is the structural guard against mutation between prepare and
+  confirm.
+- **`Booking`** carries `summary: Option`, `events: list[BookingEvent]`, an
+  optional `cancellation: CancellationInfo`, and `intent_hash` (used by the
+  cross-session dedup path — see below).
+- **`Money(amount_cents: int, currency: str)`** — never floats (invariant 10).
+
+## Core flow: `confirm_booking`
+
+The gated tool is where most invariants compose. The algorithm
+(`src/agentic_cab/tools/confirm.py`):
+
+1. **Load draft.** Reject if unknown, expired, or already consumed
+   (`consumed_at IS NOT NULL`). Drafts are single-use even though the
+   idempotency key is the durable double-booking barrier.
+2. **Recompute fingerprint** over `draft.option_snapshot`. Reject on mismatch
+   (invariant 3).
+3. **Re-quote** via `provider.discover()`. If price drift exceeds
+   `RE_QUOTE_DRIFT_THRESHOLD_CENTS`, re-prepare and return
+   `PriceChanged{new_draft_id, new_summary}` — the gate is never invoked at a
+   stale price (invariant 4).
+4. **Intent dedup.** Compute `intent_hash` over the user's stable intent
+   (pickup, dropoff, 10-minute-bucketed `when`, party size, vehicle class). If
+   an active booking exists for the same intent and no `intent_override_nonce`
+   was supplied, short-circuit with `duplicate_intent` and surface the existing
+   booking to the agent. No `executed` row follows (invariant 6).
+5. **Derive idempotency key.** `confirm_idempotency_key = sha256(canonical_json(
+   {intent_hash, generation, nonce, op:"confirm"}))`, where `generation` counts
+   prior terminal bookings for this intent (lets the user legitimately re-book
+   after a previous trip finishes). The key is invariant across `draft_id`
+   regeneration and across process restarts — closing cross-session dedup
+   (scenario `06_cross_session_dedup`).
+6. **`store.claim_or_recall(key, "confirm")`.** If recalled, short-circuit
+   with a `replayed=true` executed row and return the recalled booking — the
+   original channel approval is canonical for this key (no re-prompt).
+7. **`await channel.request(ConfirmationRequest(...))`.** If approved →
+   `provider.confirm(draft_id, idempotency_key)`; persist the Booking and
+   `store.finalize_idempotency(key, booking)`. A user-decline calls
+   `release_claim` so a retry with identical intent re-derives the same key
+   but finds it fresh — declines do not become poison pills.
+
+`cancel_booking` is one tool, two-phase under the hood: quote fee → gate on
+fee → execute. Cancel keys are bound to `(booking_id, fee_cents, status_at_quote)`.
+
+## Action log row shapes
+
+Per-session JSONL at `logs/<session_id>.jsonl`. Every gated action emits four
+rows linked by `action_id`; read-only tools emit `requested` + `outcome` only.
+
+```json
+// requested
+{"ts":"...","session_id":"...","turn_id":"...","action_id":"...",
+ "kind":"requested","tool":"confirm_booking","args":{...},"actor":"agent"}
+
+// verified
+{"ts":"...","action_id":"...","tool":"confirm_booking","kind":"verified",
+ "checks":{"draft_found":true,"fingerprint_match":true,
+           "requote_price_drift_cents":0,
+           "confirmation":{"approved":true,"approver":"cli-tty","approved_at":"..."}},
+ "result":"ok"}      // or "rejected" with "reason"
+
+// executed
+{"ts":"...","action_id":"...","tool":"confirm_booking","kind":"executed",
+ "provider":"uber-sim","method":"confirm","idempotency_key":"...",
+ "request":{...},"latency_ms":143}
+
+// outcome
+{"ts":"...","action_id":"...","tool":"confirm_booking","kind":"outcome",
+ "status":"ok","result":{...},"error":null}
+```
+
+`verified.result == "rejected"` short-circuits — no `executed` row follows
+(invariant 6). PII redaction (raw address text, phone, names) happens at the
+log boundary in `adapters/action_log.py::redact` (invariant 8).
+
+Outcome statuses today: `ok`, `rejected`, `price_changed`, `in_progress`
+(claim exists but was never finalised — process crash or concurrent retry),
+`duplicate_intent`, `error`.
+
 ## Persistence split
 
 Two durable surfaces, deliberately not merged:
@@ -89,5 +182,4 @@ and described in `CLAUDE.md` invariant 7.
 
 - [`docs/WRITEUP.md`](WRITEUP.md) — the 1-pager deliverable.
 - [`docs/PHASES.md`](PHASES.md) — phase contract.
-- [`docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`](superpowers/specs/2026-05-19-agentic-cab-rides-design.md)
-  — full design spec.
+- [`CLAUDE.md`](../CLAUDE.md) — invariants every session must respect.

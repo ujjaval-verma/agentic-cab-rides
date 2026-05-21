@@ -38,7 +38,18 @@ different intent kind.
 
 ## 2. What breaks first in production
 
-**Cross-session idempotency.** Hardened. The confirm key is now bound to a hash of the user's stable intent (pickup, dropoff, time bucket, party size, vehicle class) rather than the per-session `draft_id`, with a generation counter for legitimate re-bookings and an agent-supplied nonce for the explicit "yes, book another" path. See `docs/superpowers/specs/2026-05-20-cross-session-idempotency-design.md`.
+**Cross-session idempotency.** Hardened. The confirm key is now bound to a
+hash of the user's stable intent (pickup, dropoff, 10-minute-bucketed `when`,
+party size, vehicle class) rather than the per-session `draft_id`, with a
+generation counter (incremented when prior bookings for the same intent reach
+a terminal status — legitimate re-bookings) and an agent-supplied
+`intent_override_nonce` for the explicit "yes, book another" path. The key
+survives `draft_id` regeneration and process restart; an active duplicate
+intent surfaces as `outcome.status="duplicate_intent"` carrying the existing
+booking ID, and the agent must obtain explicit user confirmation before
+retrying with a nonce. See `docs/ARCHITECTURE.md` § "Core flow:
+`confirm_booking`" for the algorithm, and scenario `06_cross_session_dedup`
+for the proof.
 
 **Price drift quote ↔ confirm.** Mitigated. `confirm_booking` re-quotes
 via `provider.discover()` after the fingerprint check and before invoking
@@ -86,6 +97,5 @@ agent prose is not redacted today; only structured fields are.
 
 ---
 
-*See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for layer + port structure
-and [`docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`](superpowers/specs/2026-05-19-agentic-cab-rides-design.md)
-for the full design.*
+*See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for layer + port structure,
+core flow, and type contracts.*
