@@ -78,6 +78,20 @@ fix: persist options to SQLite (mirroring how drafts and bookings
 already persist) so `prepare()` re-hydrates from disk on a cache miss
 (`docs/FOLLOWUPS.md`).
 
+**Credential management.** Not mitigated. The repo's sole secret —
+`ANTHROPIC_API_KEY` — lives in a chmod-600 `.env` symlinked from
+`~/.config/agentic-cab-rides/.env` (`.env.example` also documents optional
+non-secret overrides like `ANTHROPIC_MODEL` and `NOMINATIM_USER_AGENT`,
+which can stay where they are). Fine for one developer on one laptop, but
+rotation requires editing a plaintext file in one place, there is no
+access audit, and there is no per-user key scoping. Production direction: load the key from a secret manager at
+process start. Two ergonomic local options without code changes — 1Password
+CLI (`op run --env-file=.env.op -- make repl`, where `.env.op` carries
+`ANTHROPIC_API_KEY=op://Private/anthropic/credential`) and Bitwarden CLI
+(`ANTHROPIC_API_KEY=$(bw get password anthropic-key) make repl`). A real
+deploy needs AWS Secrets Manager / GCP Secret Manager with rotation hooks
+and IAM-scoped access. Tracked in `docs/FOLLOWUPS.md`.
+
 Other landmines, one-line: payment auth scope is assumed (Uber-style
 pre-auth) — production needs SCA. Per-provider rate limits aren't
 implemented — without a token bucket and backoff, agent retries
