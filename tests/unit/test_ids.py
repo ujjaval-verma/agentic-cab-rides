@@ -22,26 +22,32 @@ def test_ids_are_sortable_by_creation():
     assert a < b  # ULIDs are time-monotonic at millisecond resolution
 
 
-# --- confirm_idempotency_key helpers ---
+# --- confirm_idempotency_key helpers (new signature: intent_hash, generation, nonce) ---
 
 
 def test_confirm_idempotency_key_is_deterministic() -> None:
-    key_a = confirm_idempotency_key("draft-123", "fp-abc")
-    key_b = confirm_idempotency_key("draft-123", "fp-abc")
+    key_a = confirm_idempotency_key("ih-abc", 0, None)
+    key_b = confirm_idempotency_key("ih-abc", 0, None)
     assert key_a == key_b
     assert isinstance(key_a, str)
-    assert len(key_a) == 64  # sha256 hex digest
+    assert len(key_a) == 64
 
 
-def test_confirm_idempotency_key_changes_with_fingerprint() -> None:
-    key_a = confirm_idempotency_key("draft-123", "fp-abc")
-    key_b = confirm_idempotency_key("draft-123", "fp-xyz")
+def test_confirm_idempotency_key_changes_with_intent_hash() -> None:
+    key_a = confirm_idempotency_key("ih-abc", 0, None)
+    key_b = confirm_idempotency_key("ih-xyz", 0, None)
     assert key_a != key_b
 
 
-def test_confirm_idempotency_key_changes_with_draft_id() -> None:
-    key_a = confirm_idempotency_key("draft-aaa", "fp-abc")
-    key_b = confirm_idempotency_key("draft-bbb", "fp-abc")
+def test_confirm_idempotency_key_changes_with_generation() -> None:
+    key_a = confirm_idempotency_key("ih-abc", 0, None)
+    key_b = confirm_idempotency_key("ih-abc", 1, None)
+    assert key_a != key_b
+
+
+def test_confirm_idempotency_key_changes_with_nonce() -> None:
+    key_a = confirm_idempotency_key("ih-abc", 0, None)
+    key_b = confirm_idempotency_key("ih-abc", 0, "nonce-x")
     assert key_a != key_b
 
 

@@ -96,7 +96,7 @@ async def confirm_booking(
     clock: Clock,
     session_id: str,
     turn_id: str,
-    key_factory: Callable[[str, str], str] = confirm_idempotency_key,
+    key_factory: Callable[[str, str], str] = confirm_idempotency_key,  # type: ignore[arg-type]
 ) -> dict[str, Any]:
     action_id = new_action_id()
     log.emit(

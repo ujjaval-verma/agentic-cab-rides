@@ -280,7 +280,7 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
     draft_id = await _prepare(sim, log, clock)
     draft = store.get_draft(draft_id)
     assert draft is not None
-    expected_key = confirm_idempotency_key(draft.draft_id, draft.fingerprint)
+    expected_key = confirm_idempotency_key(draft.draft_id, draft.fingerprint)  # type: ignore[call-arg]
 
     # Monkeypatch consume_draft to a no-op for the first call only, simulating the scenario
     # where the agent's process dies (or the network drops) AFTER provider.confirm succeeds
@@ -349,7 +349,7 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
     # Both executed rows must carry identical keys (structural idempotency guarantee).
     assert key_from_log_1 == key_from_log_2
     # Verify raw key determinism independently: same inputs → same output.
-    assert expected_key == confirm_idempotency_key(draft.draft_id, draft.fingerprint)
+    assert expected_key == confirm_idempotency_key(draft.draft_id, draft.fingerprint)  # type: ignore[call-arg]
 
     # Second call's verified row must expose idempotency='recalled' in checks.
     verified_rows_2 = [

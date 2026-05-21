@@ -99,7 +99,7 @@ def test_finalised_key_recalled_across_store_instances(tmp_path: Path) -> None:
     store_a.put_draft(draft)
     store_a.put_booking(booking)
 
-    key = confirm_idempotency_key(booking.draft_id, "f" * 64)
+    key = confirm_idempotency_key(booking.draft_id, "f" * 64)  # type: ignore[call-arg]
 
     first = store_a.claim_or_recall(key, scope="confirm")
     assert first.status == "new"

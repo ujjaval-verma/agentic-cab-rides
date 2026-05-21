@@ -3,17 +3,24 @@
 ULID factories: one per ID kind so call sites read as intent, not 'new_ulid'.
 
 Intent-bound idempotency keys: derived deterministically from intent state via sha256
-so that an agent retry after a network timeout produces the same key and collides on
-the existing claim_or_recall entry (no double-booking / double-cancel).
+so that an agent retry — including across process restarts — produces the same key
+and collides on the existing claim_or_recall entry (no double-booking / double-cancel).
+
+See `docs/superpowers/specs/2026-05-20-cross-session-idempotency-design.md`.
 """
 
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime
+from typing import Any
 
 from ulid import ULID
 
 from agentic_cab.core.fingerprint import canonical_json
+from agentic_cab.core.types import RideIntent
+
+_NOW_BUCKET_MINUTES = 10
 
 
 def _new() -> str:
@@ -40,34 +47,77 @@ def new_idempotency_key() -> str:
     return _new()
 
 
-def confirm_idempotency_key(draft_id: str, fingerprint: str) -> str:
+def _bucketed_now(now: datetime) -> str:
+    bucket_minute = (now.minute // _NOW_BUCKET_MINUTES) * _NOW_BUCKET_MINUTES
+    floored = now.replace(minute=bucket_minute, second=0, microsecond=0)
+    return floored.isoformat()
+
+
+def intent_hash(intent: Any, vehicle_class: str, *, now: datetime) -> str:
+    """Stable hash of the user's ride intent.
+
+    Inputs: pickup + dropoff (formatted/lat/lng), `when` (bucketed when "now"),
+    party_size, vehicle_class. Two requests for the same trip within a 10-minute
+    window hash identically; a different vehicle class, party size, or location
+    diverges the hash.
+
+    Ride-only. AppointmentIntent raises NotImplementedError — appointment hashing
+    is tracked in docs/FOLLOWUPS.md.
+    """
+    if not isinstance(intent, RideIntent):
+        raise NotImplementedError(
+            "intent_hash supports RideIntent only; appointment hashing is a follow-up"
+        )
+
+    when_repr: str = _bucketed_now(now) if intent.when == "now" else intent.when.isoformat()
+
+    payload = {
+        "pickup": {
+            "formatted": intent.pickup.formatted,
+            "lat": intent.pickup.lat,
+            "lng": intent.pickup.lng,
+        },
+        "dropoff": {
+            "formatted": intent.dropoff.formatted,
+            "lat": intent.dropoff.lat,
+            "lng": intent.dropoff.lng,
+        },
+        "when": when_repr,
+        "party_size": intent.party_size,
+        "vehicle_class": vehicle_class,
+    }
+    return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def confirm_idempotency_key(
+    intent_hash_hex: str,
+    generation: int,
+    nonce: str | None,
+) -> str:
     """Derive a deterministic idempotency key for a confirm_booking call.
 
-    Key is bound to (draft_id, fingerprint) so retries after a network timeout produce
-    the same key and hit the claim_or_recall short-circuit instead of re-booking.
+    Bound to (intent_hash, generation, nonce, op="confirm"). The `generation`
+    counter advances when a prior booking with this intent reached a terminal
+    status, letting the user legitimately re-book the same trip later. The
+    optional `nonce` is an agent-supplied disambiguator when the user has been
+    shown an existing active booking and explicitly asked for a second one.
+
     Returns a 64-char sha256 hex digest.
     """
-    payload = {"draft_id": draft_id, "fingerprint": fingerprint, "op": "confirm"}
+    payload = {
+        "intent_hash": intent_hash_hex,
+        "generation": generation,
+        "nonce": nonce,
+        "op": "confirm",
+    }
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
 
 def cancel_idempotency_key(booking_id: str, fee_cents: int, status_at_quote: str) -> str:
     """Derive a deterministic idempotency key for a cancel_booking call.
 
-    Key is bound to (booking_id, fee_cents, status_at_quote, op="cancel") so retries produce
-    the same key.  Two cancels quoted at different fee amounts are *different intents* (user
-    consented to a specific fee), so fee and status-at-quote are part of the key.
-
-    The ``"op": "cancel"`` discriminator prevents a confirm-scope key from colliding with a
-    cancel-scope key in the shared ``idempotency_keys`` table — without it, a confirm and a
-    cancel for the same booking_id+fee_cents+status combo would hash to the same value.
-
-    Note: the *gate-consent* fingerprint for a cancel action is computed separately by
-    ``_cancel_fingerprint`` in ``tools/cancel.py``.  That function deliberately omits
-    ``"op"`` because the gate is scoped to a single tool-call (no cross-scope collision is
-    possible there).  The two functions intentionally hash different payloads.
-
-    Returns a 64-char sha256 hex digest.
+    Unchanged by the cross-session idempotency rework — booking_id is already
+    stable across sessions for a given booking.
     """
     payload = {
         "booking_id": booking_id,
