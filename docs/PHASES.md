@@ -167,7 +167,7 @@ P5 (web UI) branches from P1 — the agent loop, tool surface, and one working s
 - `scenarios/02_price_comparison.yaml` — three classes surfaced, agent picks cheapest
 - `scenarios/03_bad_address.yaml` — Nominatim low-confidence → agent clarifies → user disambiguates
 - `scenarios/04_surge_on_confirm.yaml` — exercises the re-quote / `PriceChanged` path
-- `scenarios/05_cancel_with_fee.yaml` — gated cancellation with fee surfaced
+- `scenarios/05_cancellation.yaml` — gated cancellation; fee surfaced ($0 in this scenario since the ride hasn't started — see FOLLOWUPS for non-zero fee path)
 
 ---
 

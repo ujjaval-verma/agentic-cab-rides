@@ -31,10 +31,6 @@ from agentic_cab.tools.track import TrackArgs, track_booking
 
 _FROZEN_TS = "2026-05-20T12:00:00+00:00"
 _FROZEN_START = datetime.fromisoformat(_FROZEN_TS)
-# The action log applies _PHONE redaction, which matches the date portion of
-# ISO timestamps (digits + hyphens). Only the time suffix survives intact.
-# Asserting this suffix proves clock.now() was called, not datetime.now(UTC).
-_FROZEN_TS_SUFFIX = "T12:00:00+00:00"
 
 _EXPIRES = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
 
@@ -188,9 +184,7 @@ async def test_track_booking_uses_frozen_clock(tmp_path: Path) -> None:
     rows = log.read("S-TRACK")
     assert len(rows) == 2
     for row in rows:
-        assert (
-            _FROZEN_TS_SUFFIX in row["ts"]
-        ), f"Expected ts to contain {_FROZEN_TS_SUFFIX!r}, got {row['ts']!r}"
+        assert row["ts"] == _FROZEN_TS, f"Expected ts == {_FROZEN_TS!r}, got {row['ts']!r}"
 
 
 @pytest.mark.asyncio
@@ -212,9 +206,7 @@ async def test_geocode_address_uses_frozen_clock(tmp_path: Path) -> None:
     rows = log.read("S-GEO")
     assert len(rows) == 2
     for row in rows:
-        assert (
-            _FROZEN_TS_SUFFIX in row["ts"]
-        ), f"Expected ts to contain {_FROZEN_TS_SUFFIX!r}, got {row['ts']!r}"
+        assert row["ts"] == _FROZEN_TS, f"Expected ts == {_FROZEN_TS!r}, got {row['ts']!r}"
 
 
 @pytest.mark.asyncio
@@ -237,6 +229,4 @@ async def test_list_active_bookings_uses_frozen_clock(tmp_path: Path) -> None:
     rows = log.read("S-LIST")
     assert len(rows) == 2
     for row in rows:
-        assert (
-            _FROZEN_TS_SUFFIX in row["ts"]
-        ), f"Expected ts to contain {_FROZEN_TS_SUFFIX!r}, got {row['ts']!r}"
+        assert row["ts"] == _FROZEN_TS, f"Expected ts == {_FROZEN_TS!r}, got {row['ts']!r}"

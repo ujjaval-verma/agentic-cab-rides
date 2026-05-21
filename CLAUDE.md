@@ -27,7 +27,7 @@ Do not use LangChain, LlamaIndex, instructor, dspy, or any ORM. The Anthropic SD
 6. **The action log emits four row kinds per gated action.** `requested` → `verified` → `executed` → `outcome`, linked by `action_id`. Append-only JSONL at `logs/<session_id>.jsonl`. `verified.result == "rejected"` short-circuits — no `executed` row follows. Read-only tools emit `requested` + `outcome` only.
 7. **Persistence split is fixed.** SQLite (`data/state.db`) for drafts, bookings, booking_events, idempotency_keys. JSONL for action log, chat history, geocode cache. Do not move append-only artifacts into SQLite — the audit story depends on flat files.
 8. **PII redaction at the log boundary.** Raw address text never enters logs; only `{formatted, lat, lng}`. Phone numbers and names through `redact()`.
-9. **Determinism in scenarios.** `temperature=0`, model ID pinned in `core/constants.py`, seeded `random.Random` instances passed via DI, `FrozenClock` in scenario mode. No module-level `random` or `datetime.now()` reads.
+9. **Determinism in scenarios — partial, by design.** Model ID pinned in `core/constants.py` (`claude-opus-4-7`), seeded `random.Random` passed via DI, `FrozenClock` in scenario mode. No module-level `random` or `datetime.now()` reads. **Caveat:** `claude-opus-4-7` is an extended-thinking model and rejects the `temperature` parameter (HTTP 400), so the agent runs at the model's default sampling. `AGENT_TEMPERATURE = 0.0` in `core/constants.py` exists as documentation of intent only — it is **not** forwarded to the API. Consequence: provider, store, log, and clock layers are bit-deterministic across re-runs, but the agent's *reasoning chain* (which option it discusses first, exact prose, occasionally which tool it calls in ambiguous turns) can vary. All structural invariants checked by `tests/scenarios/` are insensitive to this — they assert on action-log shape, not LLM prose. Re-rendering transcripts may produce visually-different chat traces but identical four-row action-log structure.
 10. **Money is `Money(amount_cents: int, currency: str)`, never a float.**
 11. **IDs are ULIDs.** Sortable, no DB index entropy. `session_id`, `turn_id`, `action_id`, `draft_id`, `idempotency_key`.
 12. **No `--no-verify`. Ever.** Settings deny list enforces. If a hook is wrong, change it in a separate commit with a one-line rationale.
@@ -66,7 +66,7 @@ make help            # Discover targets
 ## Determinism / model pin
 
 - Model: `claude-opus-4-7` (or whatever is pinned in `src/agentic_cab/core/constants.py:MODEL_ID`). Do not change without re-rendering all 6 transcripts.
-- `temperature=0` for the agent and any subagent reviewer.
+- `temperature=0` is the documented intent but **not actually applied** — `claude-opus-4-7` rejects the parameter. See invariant 9 for the full caveat. Determinism is enforced only on the deterministic layers (provider, store, clock, RNG).
 - Scenarios use `FrozenClock` and seeded RNG; interactive mode uses `SystemClock` and `random.Random(os.urandom(8))`.
 
 ## Documentation: durable vs transient

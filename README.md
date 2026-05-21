@@ -60,6 +60,8 @@ Tracker = `git log --oneline --grep='(P[0-9])'`. There is no status file; status
 
 **Requires:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) (Python is installed by `uv` automatically; 3.12+ pinned in `.python-version`).
 
+> **TL;DR — assuming you already have `uv` and an Anthropic key set up, this is 3 commands:** `make link-env && make install && make repl`.
+
 ```bash
 git clone <repo>
 cd agentic-cab-rides
@@ -86,7 +88,7 @@ make transcripts                             # regenerate all 6 scenario transcr
 ## Deliverables (per the brief)
 
 - Working repo, clone-to-run in 3 minutes
-- 6 transcripts under [`transcripts/`](transcripts/): happy path, price comparison, bad address, surge/edge case, cancellation, cross-session dedup
+- 6 transcripts under [`transcripts/`](transcripts/): the 5 required (happy path, price comparison, bad address, surge/edge case, cancellation) plus a bonus cross-session-dedup scenario
 - 1-page writeup at [`docs/WRITEUP.md`](docs/WRITEUP.md) on swapping for a different marketplace and what breaks first in production
 
 ## Stack & non-negotiables

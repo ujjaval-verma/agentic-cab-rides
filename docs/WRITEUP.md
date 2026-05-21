@@ -80,19 +80,23 @@ fix: persist options to SQLite (mirroring how drafts and bookings
 already persist) so `prepare()` re-hydrates from disk on a cache miss
 (`docs/FOLLOWUPS.md`).
 
-**Credential management.** Not mitigated. The repo's sole secret —
-`ANTHROPIC_API_KEY` — lives in a chmod-600 `.env` symlinked from
-`~/.config/agentic-cab-rides/.env` (`.env.example` also documents optional
-non-secret overrides like `ANTHROPIC_MODEL` and `NOMINATIM_USER_AGENT`,
-which can stay where they are). Fine for one developer on one laptop, but
-rotation requires editing a plaintext file in one place, there is no
-access audit, and there is no per-user key scoping. Production direction: load the key from a secret manager at
-process start. Two ergonomic local options without code changes — 1Password
-CLI (`op run --env-file=.env.op -- make repl`, where `.env.op` carries
-`ANTHROPIC_API_KEY=op://Private/anthropic/credential`) and Bitwarden CLI
-(`ANTHROPIC_API_KEY=$(bw get password anthropic-key) make repl`). A real
-deploy needs AWS Secrets Manager / GCP Secret Manager with rotation hooks
-and IAM-scoped access. Tracked in `docs/FOLLOWUPS.md`.
+**Credential management.** Not mitigated. `ANTHROPIC_API_KEY` lives in a
+chmod-600 `.env` outside the repo — fine for one laptop, but no rotation
+audit, no per-user scoping, no broadcast on rotate. Production direction: a
+secret-manager loader at process start (1Password CLI / Bitwarden CLI for
+local dev; AWS or GCP Secrets Manager with IAM-scoped reads for deploys).
+Full sketch + concrete commands in [`docs/FOLLOWUPS.md`](FOLLOWUPS.md).
+
+**Agent-level determinism is partial.** `claude-opus-4-7` is an
+extended-thinking model and rejects the `temperature` parameter, so the
+agent runs at the model's default sampling. Provider, store, log, and
+clock layers are bit-deterministic via `FrozenClock` + seeded RNG; the
+agent's *reasoning prose* is not. Scenario invariants are written against
+action-log structure (which is deterministic), not against chat content
+(which can drift). Production fix: route scenario runs through a
+non-thinking model (e.g. Sonnet) with `temperature=0`, or assert only on
+the structured layers — the current contract suite already does the
+latter. CLAUDE.md invariant 9 documents this caveat explicitly.
 
 Other landmines, one-line: payment auth scope is assumed (Uber-style
 pre-auth) — production needs SCA. Per-provider rate limits aren't
@@ -109,7 +113,12 @@ agent prose is not redacted today; only structured fields are.
    works after CLI + web; closes the abstraction.
 3. **Real `LyftAdapter`** — empirical proof the contract holds against a
    second real provider, not just a second mock.
-4. **Payment authorization flow** — pre-confirm scope grant.
+4. **VCR-style record/replay for Anthropic SDK calls** — cassettes under
+   `fixtures/llm/`, mirroring the existing `fixtures/geocode/` pattern, so
+   scenario tests run in CI without an API key. Cuts cost without cutting
+   the behavioural coverage that today only runs on the developer's
+   laptop. See [`docs/FOLLOWUPS.md`](FOLLOWUPS.md).
+5. **Payment authorization flow** — pre-confirm scope grant.
 
 ---
 
