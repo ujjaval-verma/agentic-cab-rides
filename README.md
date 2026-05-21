@@ -16,6 +16,16 @@
   <img src="docs/assets/demo.gif" alt="Demo: booking a ride end-to-end" width="900"/>
 </div>
 
+### Web UI
+
+<table>
+  <tr>
+    <td align="center" width="33%"><a href="docs/assets/E2E%20Prompt%20Demo.png"><img src="docs/assets/E2E%20Prompt%20Demo.png" alt="End-to-end prompt + agent reasoning panel" width="320"/></a><br/><sub>End-to-end prompt</sub></td>
+    <td align="center" width="33%"><a href="docs/assets/Booking%20Confirmation.png"><img src="docs/assets/Booking%20Confirmation.png" alt="Booking confirmation gate" width="320"/></a><br/><sub>Confirmation gate</sub></td>
+    <td align="center" width="33%"><a href="docs/assets/Cancellation%20Confirmation.png"><img src="docs/assets/Cancellation%20Confirmation.png" alt="Cancellation confirmation gate" width="320"/></a><br/><sub>Cancellation gate</sub></td>
+  </tr>
+</table>
+
 The repo's name is `agentic-cab-rides` because the visible deliverable today is booking Uber rides — the architecture is intentionally not. The marketplace-agnostic adapter port means swapping Uber for Lyft is trivial; swapping for [Zocdoc](https://zocdoc.com) (not a cab service) requires only a new `Intent` variant and a new adapter. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design and [`docs/PHASES.md`](docs/PHASES.md) for what is shipped.
 
 ## What this is
