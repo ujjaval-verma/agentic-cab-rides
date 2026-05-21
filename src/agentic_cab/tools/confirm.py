@@ -173,6 +173,7 @@ def _handle_claim_shortcircuit(
     action_id: str,
     requote_drift_cents: int,
     emit_verified: Callable[..., None],
+    intent_hash_hex: str,
 ) -> tuple[str, dict[str, Any] | None] | None:
     """Handle in_progress and recalled short-circuits after claim_or_recall.
 
@@ -196,6 +197,11 @@ def _handle_claim_shortcircuit(
         # Re-fetch from the store so events and status are current (closes Booking.events
         # round-trip inconsistency: finalize_idempotency snapshot may have stale events).
         _bk = store.get_booking(claim.booking_id)
+        # Defensive heal: if the prior confirm crashed between finalize_idempotency and
+        # set_booking_intent_hash, intent_hash is NULL on the booking row. Writing it here
+        # is idempotent (overwrite is a no-op when already set) and ensures future dedup
+        # lookups via find_active_booking_by_intent_hash can find the booking.
+        store.set_booking_intent_hash(claim.booking_id, intent_hash_hex)
         emit_verified(
             {
                 "draft_found": True,
@@ -368,6 +374,7 @@ async def confirm_booking(
         action_id,
         requote_drift_cents,
         _emit_verified,
+        intent_hash_hex=ih,
     )
     if _claim_result is not None:
         return _emit_outcome(*_claim_result)

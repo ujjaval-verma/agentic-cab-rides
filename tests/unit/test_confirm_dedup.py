@@ -12,8 +12,8 @@ from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.adapters.confirmation.scripted import ScriptedConfirmationChannel
 from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
-from agentic_cab.core.ids import new_session_id, new_turn_id
-from agentic_cab.core.types import AddressRef, RideIntent
+from agentic_cab.core.ids import intent_hash, new_session_id, new_turn_id
+from agentic_cab.core.types import AddressRef, RideIntent, RideOptionDetails
 from agentic_cab.tools.confirm import ConfirmArgs, confirm_booking
 
 
@@ -44,8 +44,6 @@ def harness(tmp_path: Path):
 async def _prepare_draft(
     sim: UberSimAdapter, store: SqliteStateStore, clock: FrozenClock, intent: RideIntent
 ):
-    from agentic_cab.core.types import RideOptionDetails
-
     options = await sim.discover(intent)
     uberx = next(
         o
@@ -258,3 +256,80 @@ async def test_duplicate_intent_log_shape_no_executed_row(harness) -> None:
     outcome = next(r for r in rows if r["kind"] == "outcome")
     assert outcome["status"] == "duplicate_intent"
     assert outcome["result"]["existing_booking_id"] == r1["booking_id"]
+
+
+@pytest.mark.asyncio
+async def test_recall_path_heals_null_intent_hash(harness) -> None:
+    """Crash-recovery: if a prior confirm crashed between finalize_idempotency and
+    set_booking_intent_hash, the booking row has intent_hash IS NULL.  The recall
+    path must write the intent_hash so future dedup lookups can find the booking.
+
+    Simulates the crash by inserting an idempotency key pointing to a booking that
+    has no intent_hash set (i.e., set_booking_intent_hash was never called).
+    """
+    store, log, clock, sim = harness
+    intent = RideIntent(
+        pickup=_addr("A", 37.0, -122.0),
+        dropoff=_addr("B", 37.1, -122.1),
+        when="now",
+    )
+    # Compute the intent hash exactly as confirm_booking will.
+    ih = intent_hash(intent, "uberx", now=T0)
+
+    # Prepare a draft that will produce the right intent_hash when confirmed.
+    draft = await _prepare_draft(sim, store, clock, intent)
+
+    # First confirm — succeeds normally (this sets intent_hash correctly).
+    channel_first = ScriptedConfirmationChannel(
+        script=[{"match": "UberX", "action": "approve"}],
+        clock=clock,
+    )
+    session_id = new_session_id()
+    r1 = await confirm_booking(
+        ConfirmArgs(draft_id=draft.draft_id),
+        provider=sim,
+        store=store,
+        log=log,
+        channel=channel_first,
+        clock=clock,
+        session_id=session_id,
+        turn_id=new_turn_id(),
+    )
+    assert r1["status"] == "confirmed"
+    booking_id = r1["booking_id"]
+
+    # Simulate the crash: NULL out the intent_hash on the booking row so it looks
+    # like set_booking_intent_hash was never called after finalize_idempotency.
+    import sqlite3
+
+    with sqlite3.connect(str(store._db_path)) as conn:
+        conn.execute("UPDATE bookings SET intent_hash = NULL WHERE booking_id = ?", (booking_id,))
+
+    # Verify the setup: intent_hash IS NULL now, so find_active_booking_by_intent_hash
+    # returns None (the booking is invisible to the dedup lookup).
+    assert (
+        store.find_active_booking_by_intent_hash(ih) is None
+    ), "Test precondition: booking must NOT be found before the heal"
+
+    # Now call confirm_booking again with the same intent (new draft, same key derivation).
+    # generation=0 still (no terminal bookings with this intent_hash visible).
+    # claim_or_recall returns "recalled" because the idempotency key is already finalized.
+    draft2 = await _prepare_draft(sim, store, clock, intent)
+    channel_second = ScriptedConfirmationChannel(script=[], clock=clock)  # gate must not fire
+    r2 = await confirm_booking(
+        ConfirmArgs(draft_id=draft2.draft_id),
+        provider=sim,
+        store=store,
+        log=log,
+        channel=channel_second,
+        clock=clock,
+        session_id=session_id,
+        turn_id=new_turn_id(),
+    )
+    assert r2["status"] == "confirmed"
+    assert r2["booking_id"] == booking_id
+
+    # THE KEY ASSERTION: after the recall, intent_hash must be healed on the booking row.
+    healed = store.find_active_booking_by_intent_hash(ih)
+    assert healed is not None, "intent_hash must be healed on the recall path"
+    assert healed.booking_id == booking_id
