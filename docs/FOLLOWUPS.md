@@ -30,6 +30,8 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 
 - [ ] **`_PHONE` regex in `action_log.py` false-matches ISO date prefixes.** `_PHONE = re.compile(r"\+?\d[\d\-\(\)\s]{6,}\d")` matches `2026-05-20`, so every leaf-string `ts` field gets corrupted to `[redacted-phone]T12:00:00+00:00` when run through `redact()`. Pre-existing; A3 expanded the surface area by adding six more `clock.now().isoformat()` log emissions. Tighten the regex (e.g. require at least 7 consecutive digits, or anchor on `\b` + a minimum digit count) so dates are not redacted. — A3 review (commit 8a45cda).
 
+- [ ] **`SqliteStateStore` writes its own `created_at`/`updated_at` via `datetime.now(UTC)` instead of the injected `Clock`.** Three call sites: `claim_or_recall` (state_store.py:218 — hot path on every booking), `put_booking` (~line 137), `put_pending_confirmation` (~line 299). The adapter sits below the tool layer correctly, but invariant 9 says reads of `datetime.now()` should go through the `Clock` port. Under `FrozenClock` scenarios the stored timestamps drift from scenario time. Fix: inject `Clock` into `SqliteStateStore.__init__` (mirror the tool-layer pattern; do **not** add `_override` knobs). — PR #2 review.
+
 ## Tests / coverage gaps
 
 - [ ] **Fingerprint property test: permutations.** Current test only reverses dict insertion order; replace with st.permutations or hypothesis shuffling to cover arbitrary key orderings. — T3 Ralph N1.
