@@ -13,12 +13,11 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime
-from typing import Any
 
 from ulid import ULID
 
 from agentic_cab.core.fingerprint import canonical_json
-from agentic_cab.core.types import RideIntent
+from agentic_cab.core.types import Intent, RideIntent
 
 _NOW_BUCKET_MINUTES = 10
 
@@ -53,7 +52,7 @@ def _bucketed_now(now: datetime) -> str:
     return floored.isoformat()
 
 
-def intent_hash(intent: Any, vehicle_class: str, *, now: datetime) -> str:
+def intent_hash(intent: Intent, vehicle_class: str, *, now: datetime) -> str:
     """Stable hash of the user's ride intent.
 
     Inputs: pickup + dropoff (formatted/lat/lng), `when` (bucketed when "now"),

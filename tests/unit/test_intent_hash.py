@@ -98,7 +98,7 @@ def test_appointment_intent_raises_not_implemented() -> None:
         location=_addr("Clinic", 37.0, -122.0),
     )
     with pytest.raises(NotImplementedError):
-        intent_hash(appt, "uberx", now=T0)  # type: ignore[arg-type]
+        intent_hash(appt, "uberx", now=T0)
 
 
 # --- new confirm_idempotency_key ---

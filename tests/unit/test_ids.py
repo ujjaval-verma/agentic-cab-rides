@@ -1,6 +1,5 @@
 from agentic_cab.core.ids import (
     cancel_idempotency_key,
-    confirm_idempotency_key,
     new_action_id,
     new_draft_id,
     new_idempotency_key,
@@ -20,35 +19,6 @@ def test_ids_are_sortable_by_creation():
     a = new_session_id()
     b = new_session_id()
     assert a < b  # ULIDs are time-monotonic at millisecond resolution
-
-
-# --- confirm_idempotency_key helpers (new signature: intent_hash, generation, nonce) ---
-
-
-def test_confirm_idempotency_key_is_deterministic() -> None:
-    key_a = confirm_idempotency_key("ih-abc", 0, None)
-    key_b = confirm_idempotency_key("ih-abc", 0, None)
-    assert key_a == key_b
-    assert isinstance(key_a, str)
-    assert len(key_a) == 64
-
-
-def test_confirm_idempotency_key_changes_with_intent_hash() -> None:
-    key_a = confirm_idempotency_key("ih-abc", 0, None)
-    key_b = confirm_idempotency_key("ih-xyz", 0, None)
-    assert key_a != key_b
-
-
-def test_confirm_idempotency_key_changes_with_generation() -> None:
-    key_a = confirm_idempotency_key("ih-abc", 0, None)
-    key_b = confirm_idempotency_key("ih-abc", 1, None)
-    assert key_a != key_b
-
-
-def test_confirm_idempotency_key_changes_with_nonce() -> None:
-    key_a = confirm_idempotency_key("ih-abc", 0, None)
-    key_b = confirm_idempotency_key("ih-abc", 0, "nonce-x")
-    assert key_a != key_b
 
 
 # --- cancel_idempotency_key helpers ---
