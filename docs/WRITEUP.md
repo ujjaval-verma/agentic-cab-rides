@@ -113,7 +113,12 @@ agent prose is not redacted today; only structured fields are.
    works after CLI + web; closes the abstraction.
 3. **Real `LyftAdapter`** — empirical proof the contract holds against a
    second real provider, not just a second mock.
-4. **Payment authorization flow** — pre-confirm scope grant.
+4. **VCR-style record/replay for Anthropic SDK calls** — cassettes under
+   `fixtures/llm/`, mirroring the existing `fixtures/geocode/` pattern, so
+   scenario tests run in CI without an API key. Cuts cost without cutting
+   the behavioural coverage that today only runs on the developer's
+   laptop. See [`docs/FOLLOWUPS.md`](FOLLOWUPS.md).
+5. **Payment authorization flow** — pre-confirm scope grant.
 
 ---
 
