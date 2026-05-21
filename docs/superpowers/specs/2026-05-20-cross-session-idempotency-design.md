@@ -332,13 +332,17 @@ Invariant assertions:
 7. `make verify`; re-render all transcripts. The four pre-existing
    transcripts that contain an `executed` row for `confirm_booking`
    (`01_happy_path`, `02_price_comparison`, `03_bad_address`,
-   `05_cancel_with_fee`) will diff on the literal `idempotency_key` hex
-   digest only — same length, same shape, different value because the
-   derivation inputs changed. `04_surge_on_confirm` short-circuits at
-   `price_changed` before key derivation and must re-render
-   byte-identical. Manually inspect each diff to confirm it is **only**
-   the `idempotency_key` field and nothing else; any other byte-level
-   change is a regression and blocks the slice.
+   `05_cancel_with_fee`) will re-render with structural content unchanged.
+   Expected diffs: `idempotency_key` hex values (new derivation),
+   `booking_id` values (derived as `"bk-" + idempotency_key[:8]` in the
+   sim adapter), ULID churn (session_id / turn_id / action_id / draft_id),
+   and minor LLM phrasing drift at `temperature=0`. `04_surge_on_confirm`
+   is in scope for the same drift but contains no `idempotency_key` field
+   (short-circuits at `price_changed` before key derivation). The
+   four-row pattern, tool names, args, fingerprints, statuses, reasons,
+   drift values, and prices must be structurally unchanged across the diff;
+   any change to those structural fields is a regression and blocks the
+   slice.
 
 ## 10. Acceptance
 
@@ -347,8 +351,14 @@ Invariant assertions:
 - The contract suite passes unchanged.
 - `make verify` is green.
 - The four pre-existing transcripts that emit an `executed` row for
-  `confirm_booking` (`01_happy_path`, `02_price_comparison`,
-  `03_bad_address`, `05_cancel_with_fee`) re-render with diffs limited
-  to the `idempotency_key` field; `04_surge_on_confirm` re-renders
-  byte-identical. Any other byte-level change is a regression.
+  `confirm_booking` (`01_happy_path`, `02_price_comparison`, `03_bad_address`,
+  `05_cancel_with_fee`) re-render with structural content unchanged. Expected
+  diffs: `idempotency_key` hex values (new derivation), `booking_id` values
+  (derived as `"bk-" + idempotency_key[:8]` in the sim adapter), ULID churn
+  (session_id / turn_id / action_id / draft_id), and minor LLM phrasing drift
+  at `temperature=0`. `04_surge_on_confirm` is in scope for the same drift but
+  contains no `idempotency_key` field (short-circuits at `price_changed` before
+  key derivation). The four-row pattern, tool names, args, fingerprints,
+  statuses, reasons, drift values, and prices are byte-identical across the
+  diff. Any change to those structural fields is a regression.
 - Spec, CLAUDE.md, WRITEUP, and FOLLOWUPS reflect the new state.
