@@ -1,4 +1,4 @@
-"""discover_options args must not leak raw pickup_address/dropoff_address (invariant 8)."""
+"""discover_options and geocode_address args must not leak raw address strings (invariant 8)."""
 
 from __future__ import annotations
 
@@ -12,10 +12,13 @@ from agentic_cab.adapters.action_log import JSONLActionLog, redact
 from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
+from agentic_cab.core.types import AddressRef
 from agentic_cab.tools.discover import DiscoverArgs, discover_options
+from agentic_cab.tools.geocode import GeocodeArgs, geocode_address
 
 SECRET_PICKUP = "742 Evergreen Terrace, Springfield"
 SECRET_DROPOFF = "31 Spooner Street, Quahog"
+SECRET_QUERY = "742 Evergreen Terrace, Springfield"
 
 
 def test_redact_strips_pickup_address_and_dropoff_address_strings() -> None:
@@ -68,3 +71,51 @@ async def test_discover_options_log_does_not_contain_raw_addresses(
     contents = log_file.read_text()
     assert SECRET_PICKUP not in contents, "pickup_address leaked into JSONL log"
     assert SECRET_DROPOFF not in contents, "dropoff_address leaked into JSONL log"
+
+
+# ---------------------------------------------------------------------------
+# geocode_address query redaction (invariant 8 — query is a raw address string)
+# ---------------------------------------------------------------------------
+
+
+class _StubGeocoder:
+    async def geocode(self, query: str) -> AddressRef:
+        return AddressRef(
+            raw=query,
+            formatted="742 Evergreen Trc, Springfield, IL 62701, USA",
+            lat=39.7817,
+            lng=-89.6501,
+            confidence=0.95,
+            provider_metadata={"alternates": []},
+        )
+
+
+def test_redact_strips_geocode_query_string() -> None:
+    raw = {"args": {"query": SECRET_QUERY}}
+    out = redact(raw)
+    serialized = json.dumps(out)
+    assert SECRET_QUERY not in serialized, "query leaked in redact() output"
+    assert out["args"]["query"] == "[redacted-address]"
+
+
+@pytest.mark.asyncio
+async def test_geocode_address_log_does_not_contain_raw_query(
+    tmp_path: Path,
+) -> None:
+    log = JSONLActionLog(log_dir=tmp_path / "logs")
+    clock = FrozenClock(start=datetime(2026, 5, 20, 12, 0, tzinfo=UTC))
+    geocoder = _StubGeocoder()
+    args = GeocodeArgs(query=SECRET_QUERY)
+
+    await geocode_address(
+        args,
+        geocoder=geocoder,
+        log=log,
+        clock=clock,
+        session_id="G",
+        turn_id="T",
+    )
+
+    log_file = tmp_path / "logs" / "G.jsonl"
+    contents = log_file.read_text()
+    assert SECRET_QUERY not in contents, "geocode query leaked into JSONL log"

@@ -12,6 +12,8 @@ _PHONE = re.compile(r"\+?\d[\d\-\(\)\s]{6,}\d")
 # (e.g. "Sarah Smith", "John van der Berg").  The regex stops at hyphens
 # used as separators (plate numbers like "ABC123" are not capitalised words).
 _NAME = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b")
+# Keys whose string values are raw address text and must be redacted (inv. 8).
+_ADDRESS_STRING_KEYS = frozenset({"pickup_address", "dropoff_address", "query"})
 
 
 def _redact_address(addr: dict[str, Any]) -> dict[str, Any]:
@@ -44,7 +46,7 @@ def redact(payload: Any) -> Any:
                 out[k] = _redact_address(cast(dict[str, Any], v))
             elif k == "summary_title" and isinstance(v, str):
                 out[k] = _redact_summary_title(v)
-            elif k in ("pickup_address", "dropoff_address") and isinstance(v, str):
+            elif k in _ADDRESS_STRING_KEYS and isinstance(v, str):
                 out[k] = "[redacted-address]"
             else:
                 out[k] = redact(v)
