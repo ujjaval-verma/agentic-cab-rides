@@ -44,6 +44,8 @@ def redact(payload: Any) -> Any:
                 out[k] = _redact_address(cast(dict[str, Any], v))
             elif k == "summary_title" and isinstance(v, str):
                 out[k] = _redact_summary_title(v)
+            elif k in ("pickup_address", "dropoff_address") and isinstance(v, str):
+                out[k] = "[redacted-address]"
             else:
                 out[k] = redact(v)
         return out
