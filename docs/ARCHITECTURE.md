@@ -82,9 +82,12 @@ that the architecture leans on:
   `fingerprint: str` (`sha256(canonical_json(option_snapshot))`). The
   fingerprint is the structural guard against mutation between prepare and
   confirm.
-- **`Booking`** carries `summary: Option`, `events: list[BookingEvent]`, an
-  optional `cancellation: CancellationInfo`, and `intent_hash` (used by the
-  cross-session dedup path — see below).
+- **`Booking`** carries `summary: Option`, `events: list[BookingEvent]`, and
+  an optional `cancellation: CancellationInfo`. The booking's `intent_hash`
+  is not a field on the `Booking` model — it is persisted in SQLite against
+  the booking row (written via `store.set_booking_intent_hash`) so the
+  cross-session dedup path can look up active bookings by intent without
+  touching the model surface.
 - **`Money(amount_cents: int, currency: str)`** — never floats (invariant 10).
 
 ## Core flow: `confirm_booking`
@@ -148,16 +151,20 @@ rows linked by `action_id`; read-only tools emit `requested` + `outcome` only.
 
 // outcome
 {"ts":"...","action_id":"...","tool":"confirm_booking","kind":"outcome",
- "status":"ok","result":{...},"error":null}
+ "status":"confirmed","result":{"booking_id":"..."},"error":null}
 ```
 
 `verified.result == "rejected"` short-circuits — no `executed` row follows
 (invariant 6). PII redaction (raw address text, phone, names) happens at the
 log boundary in `adapters/action_log.py::redact` (invariant 8).
 
-Outcome statuses today: `ok`, `rejected`, `price_changed`, `in_progress`
+Outcome statuses emitted today (`outcome.status` in `confirm_booking` /
+`cancel_booking`): `confirmed` (happy path), `rejected` (gate decline,
+fingerprint mismatch, draft expiry, etc.), `price_changed`, `in_progress`
 (claim exists but was never finalised — process crash or concurrent retry),
-`duplicate_intent`, `error`.
+`duplicate_intent`. `verified.result` uses a different vocabulary —
+`"ok"` / `"rejected"`; the two layers are intentionally distinct (verified
+records gate verdict, outcome records the tool's terminal state).
 
 ## Persistence split
 

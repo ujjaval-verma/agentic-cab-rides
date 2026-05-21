@@ -29,12 +29,18 @@ def iter_markdown_files() -> list[Path]:
     tracked dirs) cannot silently mask broken links that would surface only on
     a fresh clone in CI.
     """
-    result = subprocess.run(
-        ["git", "ls-files", "-z", "*.md"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-z", "*.md"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        # Not a git working tree (tarball/zip export, or git not on PATH).
+        # Fall back to filesystem walk so the script is still useful for
+        # ad-hoc doc audits outside CI.
+        return [p for p in REPO_ROOT.rglob("*.md") if ".git" not in p.parts]
     files: list[Path] = []
     for raw in result.stdout.split(b"\0"):
         if not raw:
