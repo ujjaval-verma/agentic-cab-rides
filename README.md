@@ -1,8 +1,22 @@
+<div align="center">
+  <img src="docs/assets/logo.svg" alt="agentic-cab-rides" width="600"/>
+</div>
+
 # Agentic Cab Rides
 
-> An AI agent that books rides end-to-end — built on a **marketplace-agnostic adapter port** designed so that swapping Uber for Lyft is trivial, and swapping for **Zocdoc** (which is not a cab service) requires only a new `Intent` variant and a new adapter. The tool layer, confirmation gate, fingerprint logic, and action log do not change.
+> *A take-home prototype that books rides end-to-end — structural confirmation gates, fingerprint-verified drafts, and a replayable four-phase action log.*
 
-The repo's name is `agentic-cab-rides` because the visible deliverable today is booking Uber rides. The architecture is intentionally not: see [`docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`](docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md) for the design, and [`docs/PHASES.md`](docs/PHASES.md) for what is shipped vs. planned.
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.12-blue?style=flat-square" alt="Python 3.12"/>
+  <img src="https://img.shields.io/badge/uv-managed-purple?style=flat-square" alt="uv"/>
+  <img src="https://img.shields.io/badge/pre--push-green-success?style=flat-square" alt="pre-push green"/>
+</p>
+
+<div align="center">
+  <img src="docs/assets/demo.gif" alt="Demo: booking a ride end-to-end" width="900"/>
+</div>
+
+The repo's name is `agentic-cab-rides` because the visible deliverable today is booking Uber rides — the architecture is intentionally not. The marketplace-agnostic adapter port means swapping Uber for Lyft is trivial; swapping for [Zocdoc](https://zocdoc.com) (not a cab service) requires only a new `Intent` variant and a new adapter. See [`docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`](docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md) for the design and [`docs/PHASES.md`](docs/PHASES.md) for what is shipped.
 
 ## What this is
 
@@ -14,7 +28,7 @@ A prototype that demonstrates three properties:
 
 ## Status
 
-Working today: REPL agent (`make repl`), web UI (`make web`), 5 end-to-end
+Working today: REPL agent (`make repl`), web UI (`make web`), 6 end-to-end
 scenarios with replayable action logs, a contract suite that proves the
 `BookingProvider` port survives a non-ride second adapter, and a green
 `make verify` gate on every push.
@@ -62,6 +76,33 @@ make transcripts                             # regenerate all 6 scenario transcr
 - JSONL for action log, chat history, geocode cache
 - `ruff` for lint/format, `pyright` for typecheck (strict on `core/` and `tools/`)
 - `pre-commit` framework for git hooks; `--no-verify` is blocked by `.claude/settings.json`
+
+## Architecture
+
+<details>
+<summary>Layer diagram (click to expand)</summary>
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ CLI (make repl)     │     Web (make web, FastAPI)        │
+├──────────────────────────────────────────────────────────┤
+│                       Agent (Anthropic SDK, native tools)│
+├──────────────────────────────────────────────────────────┤
+│  Tools: discover · prepare · confirm · cancel · track    │
+│         geocode · list_active   (confirmation gate here) │
+├──────────────────────────────────────────────────────────┤
+│  Ports: BookingProvider · GeocoderPort · StateStore      │
+│         ActionLog · Clock · ConfirmationChannel          │
+├──────────────────────────────────────────────────────────┤
+│  Adapters: UberSim · MockAppointment · Nominatim         │
+│            SqliteStateStore · JsonlActionLog · …         │
+└──────────────────────────────────────────────────────────┘
+```
+
+Dependency direction is strictly downward. The agent never sees an adapter.
+Full diagram: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+</details>
 
 ## Where things live
 
