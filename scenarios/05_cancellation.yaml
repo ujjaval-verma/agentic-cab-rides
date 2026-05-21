@@ -1,9 +1,11 @@
-name: 05_cancel_with_fee
+name: 05_cancellation
 description: >
-  User books an UberX, then asks to cancel.  Agent quotes the fee
-  ($0 for a booking that hasn't started yet), user approves, booking
-  is cancelled.  Exercises the second gated tool (cancel_booking)
-  and confirms the four-row log pattern is emitted for it as well.
+  User books an UberX, then asks to cancel before the ride starts.
+  Agent quotes the fee ($0 for a booking still in `requested` status),
+  user approves, booking is cancelled.  Exercises the second gated tool
+  (cancel_booking) and confirms the four-row log pattern is emitted for
+  it as well.  A real surge/late-cancel non-zero fee path is not
+  exercised here — see docs/FOLLOWUPS.md.
 seed: 5
 clock:
   start: "2026-05-19T12:00:00+00:00"
