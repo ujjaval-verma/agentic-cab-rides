@@ -57,3 +57,26 @@ def test_replayed_executed_does_not_count_as_double_booking() -> None:
         {"action_id": "B", "kind": "executed", "idempotency_key": "K", "replayed": True},
     ]
     assert check_no_double_booking(rows) is True
+
+
+def test_provider_confirm_call_count_counts_only_non_replayed() -> None:
+    from agentic_cab.scenarios.invariants import check_provider_confirm_call_count
+
+    rows = [
+        {"kind": "executed", "tool": "confirm_booking", "replayed": False},
+        {"kind": "executed", "tool": "confirm_booking", "replayed": True},
+        {"kind": "executed", "tool": "confirm_booking", "replayed": False},
+    ]
+    assert check_provider_confirm_call_count(rows, "confirm_booking", 2)
+    assert not check_provider_confirm_call_count(rows, "confirm_booking", 3)
+
+
+def test_outcome_present_matches_tool_and_status() -> None:
+    from agentic_cab.scenarios.invariants import check_outcome_present
+
+    rows = [
+        {"kind": "outcome", "tool": "confirm_booking", "status": "duplicate_intent"},
+        {"kind": "outcome", "tool": "confirm_booking", "status": "confirmed"},
+    ]
+    assert check_outcome_present(rows, "confirm_booking", "duplicate_intent")
+    assert not check_outcome_present(rows, "confirm_booking", "rejected")
