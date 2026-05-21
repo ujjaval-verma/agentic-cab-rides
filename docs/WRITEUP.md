@@ -54,6 +54,19 @@ polling loop refreshing `bookings.status` and surfacing transitions to
 the agent's context. Today the agent only learns about state changes
 when it asks.
 
+**Provider option durability — REPL/web parity assumed.** Not yet
+mitigated. The take-home assumes production needs both surfaces (REPL +
+web) to be first-class. The REPL is a single long-lived process so the
+provider's in-memory `_option_cache`/`_intent_cache` survive naturally
+across turns; the web app instantiates a fresh adapter per `POST /chat`
+and previously lost the cache between `discover_options` and
+`prepare_booking` — surfacing as `unknown option_id` on the second turn.
+PR #8 memoizes the `UberSimAdapter` per `session_id`, which closes the
+within-process gap, but the caches still vanish on restart. Production
+fix: persist options to SQLite (mirroring how drafts and bookings
+already persist) so `prepare()` re-hydrates from disk on a cache miss
+(`docs/FOLLOWUPS.md`).
+
 Other landmines, one-line: payment auth scope is assumed (Uber-style
 pre-auth) — production needs SCA. Per-provider rate limits aren't
 implemented — without a token bucket and backoff, agent retries

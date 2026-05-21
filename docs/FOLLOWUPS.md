@@ -32,6 +32,8 @@ Group by category. Keep entries actionable; delete when done (don't archive — 
 
 - [ ] **`SqliteStateStore` writes its own `created_at`/`updated_at` via `datetime.now(UTC)` instead of the injected `Clock`.** Three call sites: `claim_or_recall` (state_store.py:218 — hot path on every booking), `put_booking` (~line 137), `put_pending_confirmation` (~line 299). The adapter sits below the tool layer correctly, but invariant 9 says reads of `datetime.now()` should go through the `Clock` port. Under `FrozenClock` scenarios the stored timestamps drift from scenario time. Fix: inject `Clock` into `SqliteStateStore.__init__` (mirror the tool-layer pattern; do **not** add `_override` knobs). — PR #2 review.
 
+- [ ] **Persist `UberSimAdapter._option_cache` (and `_intent_cache`) to SQLite.** Today these caches live on the adapter instance. PR #8 memoizes the adapter per `session_id` in the web app so options survive across turns within a process, but the caches still vanish on restart — a user mid-flow who refreshes between `discover_options` and `prepare_booking` will hit `unknown option_id`. Add an `options` table (or similar) so `prepare()` can re-hydrate from SQLite when the in-memory cache misses, mirroring how drafts/bookings already persist. The provider contract suite should grow a "restart between discover and prepare" test. — PR #8 follow-up.
+
 ## Tests / coverage gaps
 
 - [ ] **Fingerprint property test: permutations.** Current test only reverses dict insertion order; replace with st.permutations or hypothesis shuffling to cover arbitrary key orderings. — T3 Ralph N1.
