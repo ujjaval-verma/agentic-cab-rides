@@ -7,7 +7,18 @@ import re
 from pathlib import Path
 from typing import Any, Self, cast
 
-_PHONE = re.compile(r"\+?\d[\d\-\(\)\s]{6,}\d")
+# Tightened phone matcher: must look like an actual phone number, not an ISO
+# date (`2026-05-19`) or a digit run inside a ULID / hex idempotency key.
+# Accepts three shapes:
+#   1. E.164-ish with explicit "+" country code: `+1 555-123-4567`
+#   2. North-American parenthesised area code: `(555) 123-4567`
+#   3. Plain 3-3-4 with separators: `555-123-4567`, `555.123.4567`, `555 123 4567`
+# A date like `2026-05-19` has groups of 4-2-2 (not 3-3-4) and so cannot match.
+_PHONE = re.compile(
+    r"\+\d[\d\-\.\s\(\)]{7,}\d"
+    r"|\(\d{3}\)[\s\-\.]?\d{3}[\s\-\.]?\d{4}"
+    r"|\b\d{3}[\s\-\.]\d{3}[\s\-\.]\d{4}\b"
+)
 # Match sequences of 2+ capitalised words that look like proper names
 # (e.g. "Sarah Smith", "John van der Berg").  The regex stops at hyphens
 # used as separators (plate numbers like "ABC123" are not capitalised words).
