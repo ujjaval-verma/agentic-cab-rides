@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any, Final
 
 from pydantic import BaseModel
 
 from agentic_cab.core.ids import new_action_id
-from agentic_cab.core.ports import ActionLog, StateStore
+from agentic_cab.core.ports import ActionLog, Clock, StateStore
 
 DESCRIPTION: Final[str] = (
     "Read-only: list bookings not yet completed/cancelled/failed."
@@ -25,6 +24,7 @@ async def list_active_bookings(
     *,
     store: StateStore,
     log: ActionLog,
+    clock: Clock,
     session_id: str,
     turn_id: str,
 ) -> dict[str, Any]:
@@ -32,7 +32,7 @@ async def list_active_bookings(
 
     log.emit(
         {
-            "ts": datetime.now(UTC).isoformat(),
+            "ts": clock.now().isoformat(),
             "session_id": session_id,
             "turn_id": turn_id,
             "action_id": action_id,
@@ -57,7 +57,7 @@ async def list_active_bookings(
 
     log.emit(
         {
-            "ts": datetime.now(UTC).isoformat(),
+            "ts": clock.now().isoformat(),
             "session_id": session_id,
             "action_id": action_id,
             "kind": "outcome",

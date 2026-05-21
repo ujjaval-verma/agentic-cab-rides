@@ -140,6 +140,7 @@ async def run_scenario(
             GeocodeArgs(**a),
             geocoder=geocoder,
             log=log,
+            clock=clock,
             session_id=session_id,
             turn_id=turn_id,
         )
@@ -171,6 +172,7 @@ async def run_scenario(
             TrackArgs(**a),
             provider=sim,
             log=log,
+            clock=clock,
             session_id=session_id,
             turn_id=turn_id,
         )
@@ -180,6 +182,7 @@ async def run_scenario(
             ListActiveArgs(**a),
             store=store,
             log=log,
+            clock=clock,
             session_id=session_id,
             turn_id=turn_id,
         )

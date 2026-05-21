@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from agentic_cab.adapters.action_log import JSONLActionLog
+from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.core.types import AddressRef
 from agentic_cab.tools.geocode import GeocodeArgs, geocode_address
+
+_FROZEN_CLOCK = FrozenClock(start=datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC))
 
 # ---------------------------------------------------------------------------
 # Stub GeocoderPort — DI only, no Nominatim in unit tests
@@ -55,6 +59,7 @@ async def test_happy_path_emits_requested_then_outcome(tmp_path: Path) -> None:
         args,
         geocoder=geocoder,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S1",
         turn_id="T1",
     )
@@ -95,6 +100,7 @@ async def test_outcome_includes_alternates_count_for_ambiguous_result(tmp_path: 
         args,
         geocoder=geocoder,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S2",
         turn_id="T2",
     )
@@ -119,6 +125,7 @@ async def test_outcome_alternates_count_zero_for_high_confidence(tmp_path: Path)
         args,
         geocoder=geocoder,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S3",
         turn_id="T3",
     )
@@ -138,6 +145,7 @@ async def test_geocoder_error_emits_outcome_error(tmp_path: Path) -> None:
         args,
         geocoder=geocoder,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S4",
         turn_id="T4",
     )
