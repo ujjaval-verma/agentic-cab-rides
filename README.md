@@ -14,7 +14,7 @@ A prototype that demonstrates three properties:
 
 ## Status
 
-Working today: REPL agent (`make repl`), web UI (`make web`), 5 end-to-end
+Working today: REPL agent (`make repl`), web UI (`make web`), 6 end-to-end
 scenarios with replayable action logs, a contract suite that proves the
 `BookingProvider` port survives a non-ride second adapter, and a green
 `make verify` gate on every push.
