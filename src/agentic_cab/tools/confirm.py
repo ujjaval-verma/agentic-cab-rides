@@ -206,7 +206,7 @@ def _handle_claim_shortcircuit(
             {
                 "draft_found": True,
                 "fingerprint_match": True,
-                "requote_price_drift_cents": 0,
+                "requote_price_drift_cents": requote_drift_cents,
                 "idempotency": "recalled",
             },
             "ok",
@@ -396,6 +396,11 @@ async def confirm_booking(
         "confirmation": confirmation.model_dump(mode="json"),
     }
     if not confirmation.approved:
+        # Release the in_progress claim so a subsequent retry with the same intent
+        # (same key) is not permanently blocked. Without this, intent-bound keys
+        # turn user-decline into a poison pill — the second attempt would hit
+        # claim_or_recall and short-circuit on "in_progress" forever.
+        store.release_claim(key, scope="confirm")
         _emit_verified(base_checks, "rejected", "user declined")
         return _emit_outcome("rejected", {"reason": "user declined"})
 

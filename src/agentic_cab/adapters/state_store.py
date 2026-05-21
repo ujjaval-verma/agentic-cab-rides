@@ -236,6 +236,17 @@ class SqliteStateStore:
                 (booking.booking_id, booking.model_dump_json(), key),
             )
 
+    def release_claim(self: Self, key: str, scope: Literal["confirm", "cancel"]) -> None:
+        # Delete only unfinalized claims. The `booking_id IS NULL` guard ensures we
+        # never remove a finalized record — release is idempotent and safe to call
+        # on already-finalized keys (no-op) or never-claimed keys (no-op).
+        with self._write() as conn:
+            conn.execute(
+                "DELETE FROM idempotency_keys"
+                " WHERE key = ? AND scope = ? AND booking_id IS NULL",
+                (key, scope),
+            )
+
     # --- Intent-bound idempotency (cross-session) ---
 
     def find_active_booking_by_intent_hash(self: Self, intent_hash_hex: str) -> Booking | None:

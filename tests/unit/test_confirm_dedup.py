@@ -333,3 +333,81 @@ async def test_recall_path_heals_null_intent_hash(harness) -> None:
     healed = store.find_active_booking_by_intent_hash(ih)
     assert healed is not None, "intent_hash must be healed on the recall path"
     assert healed.booking_id == booking_id
+
+
+@pytest.mark.asyncio
+async def test_decline_then_retry_proceeds(harness) -> None:
+    """User declines at gate, then retries the same intent. The intent-bound key
+    is the same, but release_claim removes the in_progress row so the retry is
+    not blocked by a phantom claim. Regression guard for the user-decline poison
+    pill noted in ralph review.
+    """
+    store, log, clock, sim = harness
+    intent = RideIntent(
+        pickup=_addr("A", 37.0, -122.0),
+        dropoff=_addr("B", 37.1, -122.1),
+        when="now",
+    )
+    # ScriptedConfirmationChannel matches by string and does not consume entries —
+    # need separate channels per attempt.
+    decline_channel = ScriptedConfirmationChannel(
+        script=[{"match": "UberX", "action": "decline"}], clock=clock
+    )
+    approve_channel = ScriptedConfirmationChannel(
+        script=[{"match": "UberX", "action": "approve"}], clock=clock
+    )
+    session_id = new_session_id()
+
+    d1 = await _prepare_draft(sim, store, clock, intent)
+    r1 = await confirm_booking(
+        ConfirmArgs(draft_id=d1.draft_id),
+        provider=sim,
+        store=store,
+        log=log,
+        channel=decline_channel,
+        clock=clock,
+        session_id=session_id,
+        turn_id=new_turn_id(),
+    )
+    assert r1["status"] == "rejected"
+
+    # Retry: fresh draft, same intent, no nonce. Same intent-bound key would
+    # otherwise short-circuit on "in_progress" — release_claim prevents that.
+    d2 = await _prepare_draft(sim, store, clock, intent)
+    r2 = await confirm_booking(
+        ConfirmArgs(draft_id=d2.draft_id),
+        provider=sim,
+        store=store,
+        log=log,
+        channel=approve_channel,
+        clock=clock,
+        session_id=session_id,
+        turn_id=new_turn_id(),
+    )
+    assert r2["status"] == "confirmed", f"retry after decline must proceed; got {r2}"
+
+
+def test_release_claim_is_idempotent_and_safe(tmp_path: Path) -> None:
+    """release_claim deletes only unfinalized rows. Calling it on never-claimed,
+    already-released, or finalized keys is a no-op (no exception, no state loss).
+    """
+    from agentic_cab.core.ids import confirm_idempotency_key
+
+    store = SqliteStateStore(tmp_path / "state.db")
+    store.apply_schema()
+
+    fake_ih = "0" * 64
+    key = confirm_idempotency_key(fake_ih, 0, None)
+
+    # No-op on never-claimed key (no row exists)
+    store.release_claim(key, scope="confirm")
+
+    # Claim, then release — second release is a no-op
+    claim = store.claim_or_recall(key, scope="confirm")
+    assert claim.status == "new"
+    store.release_claim(key, scope="confirm")
+    store.release_claim(key, scope="confirm")
+
+    # After release, re-claiming the same key returns "new" again
+    re_claim = store.claim_or_recall(key, scope="confirm")
+    assert re_claim.status == "new"

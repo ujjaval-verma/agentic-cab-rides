@@ -113,6 +113,8 @@ class _InProgressStore:
 
     def finalize_idempotency(self, key: str, booking: Booking) -> None: ...
 
+    def release_claim(self, key: str, scope: Literal["confirm", "cancel"]) -> None: ...
+
     def find_active_booking_by_intent_hash(self, intent_hash_hex: str) -> None:
         return None
 
