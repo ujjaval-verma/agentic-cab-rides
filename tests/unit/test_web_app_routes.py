@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from agentic_cab.web.app import _channels, _get_channel, create_app
+from agentic_cab.web.app import _channels, _get_channel, _get_sim, _sim_adapters, create_app
 
 
 @pytest.fixture
@@ -278,6 +278,29 @@ def test_startup_hook_publishes_to_session_id_not_subject_id(tmp_path: Path) -> 
     # session_id must be used as the bus key, not subject_id
     assert session_id in keys_used
     assert subject_id not in keys_used
+
+
+def test_get_sim_memoizes_per_session(tmp_path: Path) -> None:
+    """Two calls with the same session_id return the same UberSimAdapter.
+
+    Regression: a fresh adapter per turn loses `_option_cache`, so the second
+    turn's `prepare_booking(option_id=…)` raises `unknown option_id` for an
+    option discovered in the first turn.
+    """
+    from agentic_cab.adapters.clock import SystemClock
+    from agentic_cab.adapters.state_store import SqliteStateStore
+
+    _sim_adapters.clear()
+    store = SqliteStateStore(db_path=tmp_path / "state.db", check_same_thread=False)
+    store.apply_schema()
+    clock = SystemClock()
+
+    sim_a1 = _get_sim("sess-a", store=store, clock=clock)
+    sim_a2 = _get_sim("sess-a", store=store, clock=clock)
+    sim_b = _get_sim("sess-b", store=store, clock=clock)
+
+    assert sim_a1 is sim_a2, "same session must reuse the cached adapter"
+    assert sim_a1 is not sim_b, "different sessions must get distinct adapters"
 
 
 def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:

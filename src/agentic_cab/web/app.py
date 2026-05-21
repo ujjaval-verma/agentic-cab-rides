@@ -65,10 +65,16 @@ class ConfirmationRequest(BaseModel):
 
 _bus = SessionEventBus()
 
-# Per-session state: channels and turn-id refs.
+# Per-session state: channels, turn-id refs, chat histories, sim adapters.
+#
+# The sim adapter carries in-memory state (option cache, intent cache, the
+# surge re-quote flag) that must survive across web turns within a process —
+# otherwise a fresh adapter on every POST /chat sees an empty option cache
+# and `prepare_booking(option_id=…)` raises `unknown option_id`.
 _channels: dict[str, WebConfirmationChannel] = {}
 _turn_id_refs: dict[str, list[str]] = {}
 _chat_histories: dict[str, list[dict[str, Any]]] = {}
+_sim_adapters: dict[str, UberSimAdapter] = {}
 
 
 def _get_channel(
@@ -81,6 +87,24 @@ def _get_channel(
             bus=_bus, session_id=session_id, store=store, clock=clock
         )
     return _channels[session_id]
+
+
+def _get_sim(
+    session_id: str,
+    *,
+    store: SqliteStateStore,
+    clock: SystemClock,
+) -> UberSimAdapter:
+    """Memoize one `UberSimAdapter` per session.
+
+    The adapter's option/intent caches must persist across turns inside one
+    process. They are not durable across a restart — option durability would
+    require persisting options to SQLite (see docs/FOLLOWUPS.md).
+    """
+    if session_id not in _sim_adapters:
+        rng_seed = int.from_bytes(os.urandom(4), "big")
+        _sim_adapters[session_id] = UberSimAdapter(store=store, clock=clock, rng_seed=rng_seed)
+    return _sim_adapters[session_id]
 
 
 # ---------- App factory ----------
@@ -177,8 +201,7 @@ def create_app(
 
         action_log = JSONLActionLog(log_dir=_log_dir)
         clock = SystemClock()
-        rng_seed = int.from_bytes(os.urandom(4), "big")
-        sim = UberSimAdapter(store=store, clock=clock, rng_seed=rng_seed)
+        sim = _get_sim(session_id, store=store, clock=clock)
         channel = _get_channel(session_id, store=store, clock=clock)
 
         geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
