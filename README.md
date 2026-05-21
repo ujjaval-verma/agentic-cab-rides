@@ -73,6 +73,33 @@ make transcripts                             # regenerate all 6 scenario transcr
 - `ruff` for lint/format, `pyright` for typecheck (strict on `core/` and `tools/`)
 - `pre-commit` framework for git hooks; `--no-verify` is blocked by `.claude/settings.json`
 
+## Architecture
+
+<details>
+<summary>Layer diagram (click to expand)</summary>
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ CLI (make repl)     │     Web (make web, FastAPI)        │
+├──────────────────────────────────────────────────────────┤
+│                       Agent (Anthropic SDK, native tools)│
+├──────────────────────────────────────────────────────────┤
+│  Tools: discover · prepare · confirm · cancel · track    │
+│         geocode · list_active   (confirmation gate here) │
+├──────────────────────────────────────────────────────────┤
+│  Ports: BookingProvider · GeocoderPort · StateStore      │
+│         ActionLog · Clock · ConfirmationChannel          │
+├──────────────────────────────────────────────────────────┤
+│  Adapters: UberSim · MockAppointment · Nominatim         │
+│            SqliteStateStore · JsonlActionLog · …         │
+└──────────────────────────────────────────────────────────┘
+```
+
+Dependency direction is strictly downward. The agent never sees an adapter.
+Full diagram: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+</details>
+
 ## Where things live
 
 - [`CLAUDE.md`](CLAUDE.md) — invariants every session must respect
