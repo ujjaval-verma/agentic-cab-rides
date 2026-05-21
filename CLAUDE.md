@@ -33,6 +33,7 @@ Do not use LangChain, LlamaIndex, instructor, dspy, or any ORM. The Anthropic SD
 12. **No `--no-verify`. Ever.** Settings deny list enforces. If a hook is wrong, change it in a separate commit with a one-line rationale.
 13. **No `TODO`/`FIXME`/`XXX` in code.** Promote to `docs/FOLLOWUPS.md` or fix now. Ruff `FIX` rule enforces.
 14. **No `print()` outside the CLI/web rendering layer or scripts.** Use `structlog`. Ruff `T20` enforces.
+15. **Repo visibility is private — keep it that way.** Never run `gh repo edit --visibility public` (or any equivalent API/UI flip) on this repo. If a workflow appears to require it (e.g., a public-only GitHub feature), stop and ask. Verify with `gh repo view --json visibility` before any repo-settings change.
 
 ## Golden commands
 
