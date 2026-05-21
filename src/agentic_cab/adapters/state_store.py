@@ -236,6 +236,17 @@ class SqliteStateStore:
                 (booking.booking_id, booking.model_dump_json(), key),
             )
 
+    # --- Intent-bound idempotency (cross-session) — implemented in Task 4 ---
+
+    def find_active_booking_by_intent_hash(self: Self, intent_hash_hex: str) -> Booking | None:
+        raise NotImplementedError
+
+    def count_terminal_bookings_by_intent_hash(self: Self, intent_hash_hex: str) -> int:
+        raise NotImplementedError
+
+    def set_booking_intent_hash(self: Self, booking_id: str, intent_hash_hex: str) -> None:
+        raise NotImplementedError
+
     # --- Pending confirmations (restart-survival) ---
 
     def put_pending_confirmation(

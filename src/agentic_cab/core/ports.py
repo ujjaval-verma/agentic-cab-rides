@@ -122,6 +122,13 @@ class StateStore(Protocol):
 
     def finalize_idempotency(self: Self, key: str, booking: Booking) -> None: ...
 
+    # Intent-bound idempotency (cross-session)
+    def find_active_booking_by_intent_hash(self: Self, intent_hash_hex: str) -> Booking | None: ...
+
+    def count_terminal_bookings_by_intent_hash(self: Self, intent_hash_hex: str) -> int: ...
+
+    def set_booking_intent_hash(self: Self, booking_id: str, intent_hash_hex: str) -> None: ...
+
     # Pending confirmations (restart-survival)
     def put_pending_confirmation(
         self: Self,
