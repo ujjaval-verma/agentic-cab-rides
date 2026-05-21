@@ -329,9 +329,16 @@ Invariant assertions:
 4. Agent prompt + duplicate-intent handling path.
 5. New scenario + invariant checker entries.
 6. Docs sweep (spec → CLAUDE.md → WRITEUP → FOLLOWUPS).
-7. `make verify`; re-render only the new scenario's transcript; confirm
-   the other four are byte-identical (this is the deterministic-build
-   regression check).
+7. `make verify`; re-render all transcripts. The four pre-existing
+   transcripts that contain an `executed` row for `confirm_booking`
+   (`01_happy_path`, `02_price_comparison`, `03_bad_address`,
+   `05_cancel_with_fee`) will diff on the literal `idempotency_key` hex
+   digest only — same length, same shape, different value because the
+   derivation inputs changed. `04_surge_on_confirm` short-circuits at
+   `price_changed` before key derivation and must re-render
+   byte-identical. Manually inspect each diff to confirm it is **only**
+   the `idempotency_key` field and nothing else; any other byte-level
+   change is a regression and blocks the slice.
 
 ## 10. Acceptance
 
@@ -339,5 +346,9 @@ Invariant assertions:
   one `provider.confirm` call. Proven by `scenarios/NN_cross_session_dedup`.
 - The contract suite passes unchanged.
 - `make verify` is green.
-- All five pre-existing transcripts re-render byte-identical.
+- The four pre-existing transcripts that emit an `executed` row for
+  `confirm_booking` (`01_happy_path`, `02_price_comparison`,
+  `03_bad_address`, `05_cancel_with_fee`) re-render with diffs limited
+  to the `idempotency_key` field; `04_surge_on_confirm` re-renders
+  byte-identical. Any other byte-level change is a regression.
 - Spec, CLAUDE.md, WRITEUP, and FOLLOWUPS reflect the new state.
