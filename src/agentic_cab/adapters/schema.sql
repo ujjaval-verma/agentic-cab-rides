@@ -17,9 +17,11 @@ CREATE TABLE IF NOT EXISTS bookings (
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL,
     cancelled_at TEXT,
-    cancellation TEXT
+    cancellation TEXT,
+    intent_hash  TEXT             -- nullable; populated by tools/confirm after a successful confirm
 );
 CREATE INDEX IF NOT EXISTS bookings_status_idx ON bookings(status);
+CREATE INDEX IF NOT EXISTS bookings_intent_hash_idx ON bookings(intent_hash);
 
 CREATE TABLE IF NOT EXISTS booking_events (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
