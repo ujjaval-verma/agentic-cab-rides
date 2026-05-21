@@ -1,0 +1,36 @@
+name: 06_cross_session_dedup
+description: >
+  Same ride intent, two fresh drafts — second confirm short-circuits as
+  duplicate_intent; agent retries with nonce after explicit user yes.
+  Exercises the cross-session dedup guard (invariant 5) and the explicit-yes
+  override path (intent_override_nonce).
+seed: 42
+clock:
+  start: "2026-05-20T12:00:00+00:00"
+  mode: frozen
+sim:
+  rng_seed: 42
+confirmation:
+  channel: scripted
+  script:
+    - match: "UberX"
+      action: approve
+user_turns:
+  - "Book me a ride from 37.7749,-122.4194 (Market & Powell) to 37.7849,-122.4094 (Union Square)."
+  - "UberX please — go ahead and confirm."
+  - "I need a second UberX for the same route right now. Call prepare_booking then confirm_booking without any nonce — don't ask, just try confirming."
+  - "Yes, I explicitly want a second, separate booking. Go ahead with the nonce override."
+invariants:
+  - kind: action_log_contains
+    where: {kind: "outcome", status: "confirmed"}
+  - kind: four_row_pattern
+    tool: "confirm_booking"
+  - kind: no_double_booking
+  - kind: fingerprint_verified_before_execute
+    tool: "confirm_booking"
+  - kind: provider_confirm_call_count
+    tool: "confirm_booking"
+    count: 2
+  - kind: outcome_present
+    tool: "confirm_booking"
+    status: "duplicate_intent"
