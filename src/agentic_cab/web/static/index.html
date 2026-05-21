@@ -42,7 +42,11 @@
     <div class="modal">
       <h3>Confirm Action</h3>
       <div class="summary" id="modal-summary"></div>
-      <div class="fingerprint" id="modal-fingerprint"></div>
+      <div class="fingerprint" id="modal-fingerprint" title="Fingerprint of the option snapshot — re-checked at confirm time to detect tampering">
+        <span class="fp-label">fp</span>
+        <code id="modal-fingerprint-short"></code>
+        <button class="copy-btn" id="btn-copy-fingerprint" type="button">copy</button>
+      </div>
       <div class="modal-actions">
         <button class="btn-decline" id="btn-decline">Decline</button>
         <button class="btn-approve" id="btn-approve">Approve</button>
