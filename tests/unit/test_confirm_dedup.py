@@ -98,6 +98,7 @@ async def test_active_prior_booking_without_nonce_returns_duplicate_intent(harne
     )
     assert r2["status"] == "duplicate_intent"
     assert r2["existing_booking_id"] == r1["booking_id"]
+    assert r2["existing_status"] not in {"completed", "cancelled", "failed"}
 
 
 @pytest.mark.asyncio
@@ -245,6 +246,15 @@ async def test_duplicate_intent_log_shape_no_executed_row(harness) -> None:
     verified = next(r for r in rows if r["kind"] == "verified")
     assert verified["result"] == "rejected"
     assert verified.get("reason") == "duplicate_intent"
+    assert isinstance(
+        verified.get("checks"), dict
+    ), "verified row must carry a 'checks' dict (spec §5)"
+    assert (
+        "intent_hash" in verified["checks"]
+    ), "verified.checks must include 'intent_hash' (spec §5)"
+    assert (
+        "existing_booking_id" in verified["checks"]
+    ), "verified.checks must include 'existing_booking_id' (spec §5)"
     outcome = next(r for r in rows if r["kind"] == "outcome")
     assert outcome["status"] == "duplicate_intent"
     assert outcome["result"]["existing_booking_id"] == r1["booking_id"]
