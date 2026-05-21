@@ -222,6 +222,10 @@ async def cancel_booking(
         "confirmation": confirmation.model_dump(mode="json"),
     }
     if not confirmation.approved:
+        # Release the in_progress claim so a subsequent retry with the same
+        # (booking_id, fee_cents, status_at_quote) is not permanently blocked.
+        # Symmetric to confirm_booking's release on decline (invariant 5).
+        store.release_claim(key, scope="cancel")
         _emit_verified(base_checks, "rejected", "user declined")
         return _emit_outcome("rejected", {"reason": "user declined"})
 
