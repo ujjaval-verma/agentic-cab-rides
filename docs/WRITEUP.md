@@ -67,7 +67,9 @@ when it asks.
 
 **Provider option durability — REPL/web parity assumed.** Not yet
 mitigated. The take-home assumes production needs both surfaces (REPL +
-web) to be first-class. The REPL is a single long-lived process so the
+web) to be first-class — see
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#runtime-topology) for the
+current process model on each. The REPL is a single long-lived process so the
 provider's in-memory `_option_cache`/`_intent_cache` survive naturally
 across turns; the web app instantiates a fresh adapter per `POST /chat`
 and previously lost the cache between `discover_options` and

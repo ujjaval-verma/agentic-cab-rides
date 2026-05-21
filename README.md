@@ -20,9 +20,20 @@
 
 <table>
   <tr>
-    <td align="center" width="33%"><a href="docs/assets/E2E%20Prompt%20Demo.png"><img src="docs/assets/E2E%20Prompt%20Demo.png" alt="End-to-end prompt + agent reasoning panel" width="320"/></a><br/><sub>End-to-end prompt</sub></td>
-    <td align="center" width="33%"><a href="docs/assets/Booking%20Confirmation.png"><img src="docs/assets/Booking%20Confirmation.png" alt="Booking confirmation gate" width="320"/></a><br/><sub>Confirmation gate</sub></td>
-    <td align="center" width="33%"><a href="docs/assets/Cancellation%20Confirmation.png"><img src="docs/assets/Cancellation%20Confirmation.png" alt="Cancellation confirmation gate" width="320"/></a><br/><sub>Cancellation gate</sub></td>
+    <td rowspan="2" align="center" width="35%">
+      <a href="docs/assets/E2E%20Prompt%20Demo.png"><img src="docs/assets/E2E%20Prompt%20Demo.png" alt="End-to-end prompt + agent reasoning panel" width="240"/></a>
+      <br/><sub>End-to-end prompt</sub>
+    </td>
+    <td align="center" width="65%">
+      <a href="docs/assets/Booking%20Confirmation.png"><img src="docs/assets/Booking%20Confirmation.png" alt="Booking confirmation gate" width="480"/></a>
+      <br/><sub>Confirmation gate</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="docs/assets/Cancellation%20Confirmation.png"><img src="docs/assets/Cancellation%20Confirmation.png" alt="Cancellation confirmation gate" width="480"/></a>
+      <br/><sub>Cancellation gate</sub>
+    </td>
   </tr>
 </table>
 

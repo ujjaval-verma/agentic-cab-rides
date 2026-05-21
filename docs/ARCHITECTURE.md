@@ -34,6 +34,29 @@ graph TD
 Arrows point only down. The agent never imports an adapter directly; it only
 calls tools, and tools take ports (not concrete classes) as parameters.
 
+## Runtime topology
+
+The layer diagram above describes code dependencies. This section describes
+how the same layers are assembled into running processes today. The take-home
+ships two first-class surfaces (REPL and web) and one batch surface
+(scenarios); production deployment is out of scope and discussed in
+[`docs/WRITEUP.md`](WRITEUP.md).
+
+| Surface | Entry point | Process model | Confirmation channel | Per-session state |
+|---------|-------------|---------------|----------------------|-------------------|
+| **REPL** | `make repl` → `python -m agentic_cab repl` | One long-lived Python process. Stdin loop reads chat input; agent calls tools in-process. | `CLIConfirmationChannel` reads bare y/n from `/dev/tty` — a separate file handle from stdin, so chat text cannot inject approvals. | Adapter instance lives for the whole process; provider in-memory caches (`_option_cache`, `_intent_cache`) survive across turns naturally. |
+| **Web** | `make web` → `uvicorn agentic_cab.web.app:create_app --factory` | Single uvicorn worker, FastAPI app. One browser tab = one `session_id` cookie. SSE stream pushes assistant tokens and gate prompts; `POST /confirmations/{subject_id}` delivers the y/n. | `WebConfirmationChannel` blocks the tool call on an `asyncio.Future` resolved by the POST handler. | `UberSimAdapter` is memoized per `session_id` (PR #8) so option/intent caches survive within a session. They do not survive worker restart — see WRITEUP §2 "Provider option durability". |
+| **Scenarios** | `make transcripts` (or `pytest -m scenario`) | Per-scenario in-process run with a `FrozenClock` and a `ScriptedConfirmationChannel`. Each scenario is a fresh state DB and adapter under a `tmp_path`. | `ScriptedConfirmationChannel` reads decisions from the scenario YAML. | Isolated per run; not shared with REPL/web. |
+
+Shared by all three surfaces:
+
+- **State** — SQLite (`data/state.db` for interactive surfaces, tmp DB per scenario). WAL journaling; same schema (`adapters/schema.sql`) regardless of surface.
+- **Action log + chat history** — per-session JSONL under `logs/` (`<session_id>.jsonl`, `<session_id>.chat.jsonl`). REPL and web write to the same directory.
+- **Geocode cache** — file-system fixtures under `fixtures/geocode/` (one JSON per `sha1(query.strip().lower())`). Shared across surfaces and worktrees.
+- **Secrets** — `.env` symlinked from `~/.config/agentic-cab-rides/.env`; loaded at process start.
+
+Not deployed today: no container, no orchestrator, no horizontal scale. The web surface assumes a single worker (in-memory adapter memoization is per-process; SSE expects sticky sessions). Production direction — a worker pool with shared-store option durability, secrets-manager-backed credentials, and a polling `track_booking` loop — is sketched in [`docs/WRITEUP.md`](WRITEUP.md) §2 and the priority list in §3.
+
 ## Ports
 
 | Port | File | Responsibility | Implementations today |
