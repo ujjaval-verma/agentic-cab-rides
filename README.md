@@ -1,8 +1,8 @@
 # Agentic Cab Rides
 
-> An AI agent that books rides end-to-end — built on a **marketplace-agnostic adapter port** designed so that swapping Uber for Lyft is trivial, and swapping for **Zocdoc** (which is not a cab service) requires only a new `Intent` variant and a new adapter. The tool layer, confirmation gate, fingerprint logic, and action log do not change.
+> *A take-home prototype that books rides end-to-end — structural confirmation gates, fingerprint-verified drafts, and a replayable four-phase action log.*
 
-The repo's name is `agentic-cab-rides` because the visible deliverable today is booking Uber rides. The architecture is intentionally not: see [`docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`](docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md) for the design, and [`docs/PHASES.md`](docs/PHASES.md) for what is shipped vs. planned.
+The repo's name is `agentic-cab-rides` because the visible deliverable today is booking Uber rides — the architecture is intentionally not. The marketplace-agnostic adapter port means swapping Uber for Lyft is trivial; swapping for [Zocdoc](https://zocdoc.com) (not a cab service) requires only a new `Intent` variant and a new adapter. See [`docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`](docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md) for the design and [`docs/PHASES.md`](docs/PHASES.md) for what is shipped.
 
 ## What this is
 
