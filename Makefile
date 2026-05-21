@@ -20,6 +20,10 @@ install: ## uv sync (incl. dev deps) + install pre-commit hooks
 	$(UV) sync
 	$(UV) run pre-commit install --install-hooks
 	$(UV) run pre-commit install --hook-type pre-push
+	# Auto-prune stale `origin/...` refs on `git fetch` so deleted upstream
+	# branches don't linger locally. Paired with GitHub's
+	# "Automatically delete head branches on merge" setting on the repo.
+	git config --local fetch.prune true
 	@if [ ! -e .env ] && [ -f "$(ENV_SRC)" ]; then \
 		echo ""; \
 		echo "tip: $(ENV_SRC) exists but this worktree has no .env."; \
