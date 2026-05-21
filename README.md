@@ -43,7 +43,7 @@ make repl                                    # CLI agent
 # or
 make web                                     # browser UI at http://localhost:8000
 # or
-make transcripts                             # regenerate all 5 scenario transcripts
+make transcripts                             # regenerate all 6 scenario transcripts
 ```
 
 `make help` lists every target. The Makefile is the discovery surface; pre-commit and CI both call into it so there is one path.
@@ -51,7 +51,7 @@ make transcripts                             # regenerate all 5 scenario transcr
 ## Deliverables (per the brief)
 
 - Working repo, clone-to-run in 3 minutes
-- 5 transcripts under [`transcripts/`](transcripts/): happy path, price comparison, bad address, surge/edge case, cancellation
+- 6 transcripts under [`transcripts/`](transcripts/): happy path, price comparison, bad address, surge/edge case, cancellation, cross-session dedup
 - 1-page writeup at [`docs/WRITEUP.md`](docs/WRITEUP.md) on swapping for a different marketplace and what breaks first in production
 
 ## Stack & non-negotiables

@@ -1,6 +1,6 @@
 # Scenario Transcripts
 
-The 5 scenario transcripts that the brief asks for will land here, rendered from `scenarios/*.yaml` by `scripts/render_transcript.py`. Until P4–P6 ship, this directory is an index of what's coming.
+The 6 scenario transcripts in this directory — 5 from the brief, plus `06_cross_session_dedup` covering intent-bound idempotency — are rendered from `scenarios/*.yaml` by `scripts/render_transcript.py`.
 
 | File | Scenario | Demonstrates |
 |---|---|---|
@@ -9,11 +9,12 @@ The 5 scenario transcripts that the brief asks for will land here, rendered from
 | `03_bad_address.md` | Nominatim returns low confidence | Graceful clarification loop; geocode failure is structurally distinguishable |
 | `04_surge_on_confirm.md` | Sim surges between prepare and confirm | Re-quote pivot; `PriceChanged` returned; user gets a second confirmation chance — no silent overcharge |
 | `05_cancel_with_fee.md` | Mid-ride cancellation with fee | Gated cancellation; fee surfaced through `ConfirmationChannel`; state machine handles the exit |
+| `06_cross_session_dedup.md` | Same intent across two sessions | Intent-bound `idempotency_key` survives `draft_id` regen + process restart; second confirm short-circuits to the original booking; explicit-yes nonce path for a deliberate second booking |
 
 ## Regenerate
 
 ```bash
-make transcripts                       # all 5
+make transcripts                       # all 6
 python -m agentic_cab run-scenario 03  # one
 ```
 

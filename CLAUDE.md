@@ -23,7 +23,7 @@ Do not use LangChain, LlamaIndex, instructor, dspy, or any ORM. The Anthropic SD
 2. **The confirmation gate is structurally enforced.** Every state-mutating action (`confirm_booking`, `cancel_booking`) goes through a `ConfirmationChannel`. The agent never sees a `confirmed=True` parameter; the channel owns the y/n decision. Idempotency-key replays do not re-invoke the channel (the original approval is canonical; see spec §10a "Idempotency replay vs. structural gate"). CLI reads from `/dev/tty`, not stdin.
 3. **Fingerprint check before every gated provider call.** Tool layer computes `sha256(canonical_json(option_snapshot))` at `prepare`, re-verifies at `confirm`, and aborts on mismatch. A draft whose params were mutated between prepare and confirm must never reach the provider.
 4. **Re-quote before confirm.** Inside `confirm_booking`, after fingerprint check, re-call `provider.discover()`. If price drift exceeds the threshold, return `PriceChanged` with a new draft — do not invoke the gate with stale price.
-5. **Idempotency keys are required.** `BookingProvider.confirm` and `cancel` take an `idempotency_key`. SQLite enforces `UNIQUE`. `claim_or_recall` short-circuits the second provider call. The confirm key is derived from a hash of the user's stable intent (pickup, dropoff, 10-minute-bucketed `when`, party size, vehicle class), a generation counter advanced when a prior booking with this intent reaches terminal status, and an optional nonce supplied by the agent when the user explicitly asks for a second identical booking. This keeps the key invariant across `draft_id` regenerations and across process restarts. Cancel keys remain bound to `(booking_id, fee_cents, status_at_quote)`.
+5. **Idempotency keys are required.** `BookingProvider.confirm` and `cancel` take an `idempotency_key`. SQLite enforces `UNIQUE`. `claim_or_recall` short-circuits the second provider call. The confirm key is derived from a hash of the user's stable intent (pickup, dropoff, 10-minute-bucketed `when`, party size, vehicle class), a generation counter advanced when a prior booking with this intent reaches terminal status, and an optional nonce supplied by the agent when the user explicitly asks for a second identical booking. This keeps the key invariant across `draft_id` regenerations and across process restarts. Cancel keys remain bound to `(booking_id, fee_cents, status_at_quote)`. A user-decline at the gate calls `release_claim` (both `confirm` and `cancel`), so a retry with identical intent re-derives the same key but finds it fresh — declines do not become poison pills.
 6. **The action log emits four row kinds per gated action.** `requested` → `verified` → `executed` → `outcome`, linked by `action_id`. Append-only JSONL at `logs/<session_id>.jsonl`. `verified.result == "rejected"` short-circuits — no `executed` row follows. Read-only tools emit `requested` + `outcome` only.
 7. **Persistence split is fixed.** SQLite (`data/state.db`) for drafts, bookings, booking_events, idempotency_keys. JSONL for action log, chat history, geocode cache. Do not move append-only artifacts into SQLite — the audit story depends on flat files.
 8. **PII redaction at the log boundary.** Raw address text never enters logs; only `{formatted, lat, lng}`. Phone numbers and names through `redact()`.
@@ -40,7 +40,7 @@ Do not use LangChain, LlamaIndex, instructor, dspy, or any ORM. The Anthropic SD
 make install         # uv sync + install pre-commit + pre-push hooks
 make repl            # CLI agent (CLIConfirmationChannel)
 make web             # FastAPI + browser at :8000 (WebConfirmationChannel)
-make transcripts     # Regenerate all 5 transcripts from scenarios/
+make transcripts     # Regenerate all 6 transcripts from scenarios/
 make test            # Full pytest suite
 make test-fast       # Unit + contract only
 make verify          # Pre-push gate: fmt-check + lint + typecheck + test-fast
@@ -64,7 +64,7 @@ make help            # Discover targets
 
 ## Determinism / model pin
 
-- Model: `claude-opus-4-7` (or whatever is pinned in `src/agentic_cab/core/constants.py:MODEL_ID`). Do not change without re-rendering all 5 transcripts.
+- Model: `claude-opus-4-7` (or whatever is pinned in `src/agentic_cab/core/constants.py:MODEL_ID`). Do not change without re-rendering all 6 transcripts.
 - `temperature=0` for the agent and any subagent reviewer.
 - Scenarios use `FrozenClock` and seeded RNG; interactive mode uses `SystemClock` and `random.Random(os.urandom(8))`.
 
