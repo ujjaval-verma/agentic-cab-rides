@@ -236,16 +236,36 @@ class SqliteStateStore:
                 (booking.booking_id, booking.model_dump_json(), key),
             )
 
-    # --- Intent-bound idempotency (cross-session) — implemented in Task 4 ---
+    # --- Intent-bound idempotency (cross-session) ---
 
     def find_active_booking_by_intent_hash(self: Self, intent_hash_hex: str) -> Booking | None:
-        raise NotImplementedError
+        row = self._conn.execute(
+            "SELECT booking_id FROM bookings"
+            " WHERE intent_hash = ?"
+            "   AND status NOT IN ('completed','cancelled','failed')"
+            " ORDER BY created_at ASC"
+            " LIMIT 1",
+            (intent_hash_hex,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self.get_booking(row[0])
 
     def count_terminal_bookings_by_intent_hash(self: Self, intent_hash_hex: str) -> int:
-        raise NotImplementedError
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM bookings"
+            " WHERE intent_hash = ?"
+            "   AND status IN ('completed','cancelled','failed')",
+            (intent_hash_hex,),
+        ).fetchone()
+        return int(row[0]) if row else 0
 
     def set_booking_intent_hash(self: Self, booking_id: str, intent_hash_hex: str) -> None:
-        raise NotImplementedError
+        with self._write() as conn:
+            conn.execute(
+                "UPDATE bookings SET intent_hash = ? WHERE booking_id = ?",
+                (intent_hash_hex, booking_id),
+            )
 
     # --- Pending confirmations (restart-survival) ---
 
