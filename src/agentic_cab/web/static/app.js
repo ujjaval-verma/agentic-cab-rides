@@ -19,8 +19,12 @@ const sessionInfo    = document.getElementById("session-info");
 const modalOverlay   = document.getElementById("modal-overlay");
 const modalSummary   = document.getElementById("modal-summary");
 const modalFpEl      = document.getElementById("modal-fingerprint");
+const modalFpShortEl = document.getElementById("modal-fingerprint-short");
+const btnCopyFp      = document.getElementById("btn-copy-fingerprint");
 const btnApprove     = document.getElementById("btn-approve");
 const btnDecline     = document.getElementById("btn-decline");
+
+let pendingFingerprint = "";
 
 // ---- State ----
 let pendingSubjectId = null;
@@ -54,17 +58,30 @@ function showModal(event) {
   pendingSubjectId = event.subject_id;
   // Use textContent for all user-visible fields to prevent XSS.
   modalSummary.textContent = event.summary || "(no summary)";
-  const fp = typeof event.fingerprint === "string"
-    ? event.fingerprint.slice(0, 16) + "…"
-    : "";
-  modalFpEl.textContent = "Fingerprint: " + fp;
+  pendingFingerprint = typeof event.fingerprint === "string" ? event.fingerprint : "";
+  modalFpShortEl.textContent = pendingFingerprint
+    ? pendingFingerprint.slice(0, 12) + "…"
+    : "—";
+  btnCopyFp.textContent = "copy";
   modalOverlay.classList.add("visible");
   btnApprove.focus();
 }
 
+btnCopyFp.addEventListener("click", async () => {
+  if (!pendingFingerprint) return;
+  try {
+    await navigator.clipboard.writeText(pendingFingerprint);
+    btnCopyFp.textContent = "copied";
+    setTimeout(() => { btnCopyFp.textContent = "copy"; }, 1200);
+  } catch {
+    btnCopyFp.textContent = "copy failed";
+  }
+});
+
 function hideModal() {
   modalOverlay.classList.remove("visible");
   pendingSubjectId = null;
+  pendingFingerprint = "";
 }
 
 async function resolveConfirmation(approved) {
