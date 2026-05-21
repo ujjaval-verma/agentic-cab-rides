@@ -35,6 +35,38 @@ header span.badge {
   border-radius: 4px;
 }
 
+/* ---- Connection-status pill (right-aligned in header) ---- */
+.conn-status {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  transition: opacity 200ms ease, background 200ms ease;
+}
+.conn-status--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.conn-status--connected {
+  background: #1e3a2a;
+  color: #6ee7b7;
+}
+.conn-status--reconnecting {
+  background: #3a2e1e;
+  color: #fcd34d;
+  animation: conn-pulse 1.4s ease-in-out infinite;
+}
+.conn-status--disconnected {
+  background: #3a1e1e;
+  color: #fca5a5;
+}
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
 .layout {
   display: flex;
   flex: 1;

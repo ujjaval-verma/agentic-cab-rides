@@ -156,7 +156,10 @@ def create_app(
             async for row in _bus.subscribe(session_id):
                 yield {"data": json.dumps(row, default=str)}
 
-        return EventSourceResponse(_generator(), ping=0)
+        # ping=15 sends a `: ping` comment every 15s so browsers / proxies / OS
+        # idle timers don't kill the stream when the agent is quiet. ping=0
+        # disabled this and surfaced as spurious "connection lost" banners.
+        return EventSourceResponse(_generator(), ping=15)
 
     @app.post("/chat")
     async def chat(body: ChatRequest) -> JSONResponse:
