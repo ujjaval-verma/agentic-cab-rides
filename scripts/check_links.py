@@ -12,37 +12,42 @@ Runs in <50ms across the full doc set. No network, no third-party deps.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Markdown files anywhere in the repo, except generated/cached/scratch.
-EXCLUDE_DIRS = {
-    ".git",
-    ".venv",
-    "node_modules",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".pyright",
-    "dist",
-    "build",
-    "data",
-    "logs",
-    "chat",
-}
-# Scratch READMEs are checked; everything else under docs/scratch/ is gitignored
-# and not committed, so it won't be walked anyway.
-
 LINK_RE = re.compile(r"\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 
 
 def iter_markdown_files() -> list[Path]:
+    """Enumerate git-tracked markdown files.
+
+    Using `git ls-files` (not `rglob`) keeps local pre-commit and CI in
+    lockstep: gitignored-but-locally-present files (drafts, scratch, formerly-
+    tracked dirs) cannot silently mask broken links that would surface only on
+    a fresh clone in CI.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-z", "*.md"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        # Not a git working tree (tarball/zip export, or git not on PATH).
+        # Fall back to filesystem walk so the script is still useful for
+        # ad-hoc doc audits outside CI.
+        return [p for p in REPO_ROOT.rglob("*.md") if ".git" not in p.parts]
     files: list[Path] = []
-    for path in REPO_ROOT.rglob("*.md"):
-        if any(part in EXCLUDE_DIRS for part in path.relative_to(REPO_ROOT).parts):
+    for raw in result.stdout.split(b"\0"):
+        if not raw:
             continue
-        files.append(path)
+        path = REPO_ROOT / raw.decode("utf-8")
+        if path.is_file():
+            files.append(path)
     return files
 
 

@@ -5,11 +5,11 @@ description: Disciplined vertical-slice delivery for this repo. Use when plannin
 
 # slice-delivery
 
-The execution wrapper for this repo. Read `CLAUDE.md` and `docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md` before invoking; they own the contracts. This skill owns the *process*.
+The execution wrapper for this repo. Read `CLAUDE.md` and `docs/ARCHITECTURE.md` before invoking; they own the contracts. This skill owns the *process*.
 
 ## Source-of-truth order
 
-1. `docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md` — design contract. The shape of types, ports, tools, log, gate, scenarios.
+1. `docs/ARCHITECTURE.md` — design contract. Layer diagram, ports, type contracts, the `confirm_booking` core flow, action-log row shapes, and the invariant audit map.
 2. `CLAUDE.md` — invariants every session must respect.
 3. `docs/PHASES.md` — **static** contract: Definition of Done + phase acceptance bullets. Does not track status; status lives in `git log` and `make verify`.
 4. `docs/FOLLOWUPS.md` — durable follow-ups; the only place "TODO"-class items are allowed to live.
@@ -109,7 +109,7 @@ Agent({
   subagent_type: "feature-dev:code-reviewer",
   prompt: """
     Review commit <sha> on branch <name> against:
-      - spec §<X> (path: docs/superpowers/specs/...)
+      - docs/ARCHITECTURE.md §<X> (or the relevant durable doc)
       - CLAUDE.md invariants
       - slice-delivery rigor pillar
 

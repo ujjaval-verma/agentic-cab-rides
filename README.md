@@ -16,7 +16,7 @@
   <img src="docs/assets/demo.gif" alt="Demo: booking a ride end-to-end" width="900"/>
 </div>
 
-The repo's name is `agentic-cab-rides` because the visible deliverable today is booking Uber rides — the architecture is intentionally not. The marketplace-agnostic adapter port means swapping Uber for Lyft is trivial; swapping for [Zocdoc](https://zocdoc.com) (not a cab service) requires only a new `Intent` variant and a new adapter. See [`docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`](docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md) for the design and [`docs/PHASES.md`](docs/PHASES.md) for what is shipped.
+The repo's name is `agentic-cab-rides` because the visible deliverable today is booking Uber rides — the architecture is intentionally not. The marketplace-agnostic adapter port means swapping Uber for Lyft is trivial; swapping for [Zocdoc](https://zocdoc.com) (not a cab service) requires only a new `Intent` variant and a new adapter. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design and [`docs/PHASES.md`](docs/PHASES.md) for what is shipped.
 
 ## What this is
 
@@ -107,7 +107,7 @@ Full diagram: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 ## Where things live
 
 - [`CLAUDE.md`](CLAUDE.md) — invariants every session must respect
-- [`docs/superpowers/specs/`](docs/superpowers/specs/) — design spec(s)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layer diagram, ports, core flow, type contracts
 - [`docs/PHASES.md`](docs/PHASES.md) — Definition of Done + phases
 - [`docs/FOLLOWUPS.md`](docs/FOLLOWUPS.md) — durable follow-ups (only legal home for TODO-class items)
 - [`.claude/skills/slice-delivery/`](.claude/skills/slice-delivery/) — execution wrapper for the repo

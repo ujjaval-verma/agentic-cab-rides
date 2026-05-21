@@ -4,7 +4,7 @@ This is a **static contract**, not a status tracker. It defines what "done" mean
 
 Read this once to understand the shape of the work. Refer back when claiming a slice or phase is done.
 
-**Source spec:** `docs/superpowers/specs/2026-05-19-agentic-cab-rides-design.md`
+**Source architecture:** [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 **Invariants:** `CLAUDE.md` §"Invariants — never violate without an explicit spec update"
 
 ---
@@ -115,7 +115,7 @@ P5 (web UI) branches from P1 — the agent loop, tool surface, and one working s
 
 ## P2 — Tool Surface Completion
 
-**Goal:** every tool from spec §7 implemented; CLI works interactively.
+**Goal:** every tool from `docs/ARCHITECTURE.md` (the tool surface) implemented; CLI works interactively.
 
 **Acceptance:**
 - [ ] `track_booking`, `cancel_booking` (gated, with fee), `list_active_bookings`, `geocode_address` tools shipped

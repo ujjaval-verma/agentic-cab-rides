@@ -6,7 +6,8 @@ Intent-bound idempotency keys: derived deterministically from intent state via s
 so that an agent retry — including across process restarts — produces the same key
 and collides on the existing claim_or_recall entry (no double-booking / double-cancel).
 
-See `docs/superpowers/specs/2026-05-20-cross-session-idempotency-design.md`.
+See `docs/ARCHITECTURE.md` section "Core flow: `confirm_booking`" (steps 4-5)
+and `docs/WRITEUP.md` section "Cross-session idempotency".
 """
 
 from __future__ import annotations

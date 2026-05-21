@@ -21,6 +21,10 @@ chat/
 # Transient documentation (see CLAUDE.md "Documentation: durable vs transient")
 docs/scratch/*
 !docs/scratch/README.md
+# docs/superpowers/ retired in docs/retire-superpowers — durable content moved
+# into docs/ARCHITECTURE.md and docs/WRITEUP.md; retain local drafts here but
+# never re-commit.
+docs/superpowers/
 notes/*
 !notes/README.md
 *.draft.md
