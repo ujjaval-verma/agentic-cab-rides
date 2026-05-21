@@ -97,6 +97,18 @@ class _StubStore:
     def finalize_idempotency(self, key: str, booking: Booking) -> None:
         raise NotImplementedError
 
+    def release_claim(self, key: str, scope: Any) -> None:
+        raise NotImplementedError
+
+    def find_active_booking_by_intent_hash(self, intent_hash_hex: str) -> Booking | None:
+        raise NotImplementedError
+
+    def count_terminal_bookings_by_intent_hash(self, intent_hash_hex: str) -> int:
+        raise NotImplementedError
+
+    def set_booking_intent_hash(self, booking_id: str, intent_hash_hex: str) -> None:
+        raise NotImplementedError
+
     def put_pending_confirmation(
         self, subject_id: str, session_id: str, request_json: str, expires_at: Any
     ) -> None:

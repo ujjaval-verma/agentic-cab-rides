@@ -1,6 +1,5 @@
 from agentic_cab.core.ids import (
     cancel_idempotency_key,
-    confirm_idempotency_key,
     new_action_id,
     new_draft_id,
     new_idempotency_key,
@@ -20,29 +19,6 @@ def test_ids_are_sortable_by_creation():
     a = new_session_id()
     b = new_session_id()
     assert a < b  # ULIDs are time-monotonic at millisecond resolution
-
-
-# --- confirm_idempotency_key helpers ---
-
-
-def test_confirm_idempotency_key_is_deterministic() -> None:
-    key_a = confirm_idempotency_key("draft-123", "fp-abc")
-    key_b = confirm_idempotency_key("draft-123", "fp-abc")
-    assert key_a == key_b
-    assert isinstance(key_a, str)
-    assert len(key_a) == 64  # sha256 hex digest
-
-
-def test_confirm_idempotency_key_changes_with_fingerprint() -> None:
-    key_a = confirm_idempotency_key("draft-123", "fp-abc")
-    key_b = confirm_idempotency_key("draft-123", "fp-xyz")
-    assert key_a != key_b
-
-
-def test_confirm_idempotency_key_changes_with_draft_id() -> None:
-    key_a = confirm_idempotency_key("draft-aaa", "fp-abc")
-    key_b = confirm_idempotency_key("draft-bbb", "fp-abc")
-    assert key_a != key_b
 
 
 # --- cancel_idempotency_key helpers ---

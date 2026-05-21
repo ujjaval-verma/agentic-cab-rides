@@ -99,7 +99,7 @@ def test_finalised_key_recalled_across_store_instances(tmp_path: Path) -> None:
     store_a.put_draft(draft)
     store_a.put_booking(booking)
 
-    key = confirm_idempotency_key(booking.draft_id, "f" * 64)
+    key = confirm_idempotency_key("f" * 64, 0, None)
 
     first = store_a.claim_or_recall(key, scope="confirm")
     assert first.status == "new"
@@ -154,17 +154,19 @@ def test_in_progress_key_visible_across_store_instances(tmp_path: Path) -> None:
 @pytest.mark.contract
 @pytest.mark.asyncio
 async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path) -> None:
-    """Two confirm_booking calls with the same idempotency key on different
+    """Two confirm_booking calls with the same intent-bound key on different
     (unconsumed) drafts → both return the same booking_id.
 
-    Uses a fixed key factory to force collision. The second draft is a fresh
-    prepare so it has not been consumed. The second call sees 'recalled'
-    from claim_or_recall and returns the original booking without calling
-    provider.confirm again.
+    The intent-bound key is identical for both calls since the intent, vehicle class,
+    clock time, and generation are the same. The first call's process "crashes" before
+    consume_draft and set_booking_intent_hash can persist, so the second call:
+    - finds the draft still unconsumed → passes _validate_draft
+    - finds no active booking by intent_hash → skips duplicate_intent path
+    - derives the same key → claim_or_recall returns 'recalled'
+    - returns the original booking without calling provider.confirm again.
 
-    This mirrors the pattern in test_tool_confirm.py::
-    test_idempotency_replay_short_circuits_second_provider_call and verifies
-    the cross-instance contract via two SqliteStateStore instances.
+    This verifies the cross-instance restart-survival contract via two
+    SqliteStateStore instances backed by the same SQLite file.
     """
     db_path = tmp_path / "state.db"
 
@@ -182,8 +184,29 @@ async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path) -> 
         dropoff_lng=-122.4094,
     )
 
-    def _fixed_key(_draft_id: str, _fp: str) -> str:
-        return "FIXED-RESTART-KEY"
+    # Patch store_a so consume_draft and set_booking_intent_hash are no-ops on the
+    # first call — simulating a crash between finalize_idempotency and those writes.
+    _real_consume_a = store_a.consume_draft
+    _real_set_hash_a = store_a.set_booking_intent_hash
+    consume_a_count = 0
+    set_hash_a_count = 0
+
+    def _noop_consume_a(d_id: str, at) -> bool:  # type: ignore[override]
+        nonlocal consume_a_count
+        consume_a_count += 1
+        if consume_a_count == 1:
+            return True
+        return _real_consume_a(d_id, at=at)
+
+    def _noop_set_hash_a(booking_id: str, intent_hash_hex: str) -> None:
+        nonlocal set_hash_a_count
+        set_hash_a_count += 1
+        if set_hash_a_count == 1:
+            return  # silently skip so intent_hash is not stored
+        _real_set_hash_a(booking_id, intent_hash_hex)
+
+    store_a.consume_draft = _noop_consume_a  # type: ignore[method-assign]
+    store_a.set_booking_intent_hash = _noop_set_hash_a  # type: ignore[method-assign]
 
     # --- First confirm via Instance A ---
     d1 = await discover_options(
@@ -207,27 +230,15 @@ async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path) -> 
         clock=clock,
         session_id="S",
         turn_id="T1",
-        key_factory=_fixed_key,
     )
     assert r1["status"] == "confirmed"
     booking_id_1 = r1["booking_id"]
 
     # --- Simulate restart: Instance B with fresh store + sim ---
+    # Instance B reads the same SQLite file; p1["draft_id"] draft is still unconsumed
+    # and no intent_hash was stored on the booking, so the recall path fires.
     store_b = _make_store(db_path)
     sim_b = UberSimAdapter(store=store_b, clock=clock, rng_seed=42)
-
-    # Prepare a NEW unconsumed draft for Instance B.
-    d2 = await discover_options(
-        d_args, provider=sim_b, log=log, clock=clock, session_id="S", turn_id="T2"
-    )
-    p2 = await prepare_booking(
-        PrepareArgs(option_id=d2["options"][0]["option_id"]),
-        provider=sim_b,
-        log=log,
-        clock=clock,
-        session_id="S",
-        turn_id="T2",
-    )
 
     provider_confirm_called = False
     original_confirm = sim_b.confirm
@@ -241,7 +252,7 @@ async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path) -> 
 
     ch2 = ScriptedConfirmationChannel(script=[{"match": "UberX", "action": "approve"}], clock=clock)
     r2 = await confirm_booking(
-        ConfirmArgs(draft_id=p2["draft_id"]),
+        ConfirmArgs(draft_id=p1["draft_id"]),  # same unconsumed draft
         provider=sim_b,
         store=store_b,
         log=log,
@@ -249,7 +260,6 @@ async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path) -> 
         clock=clock,
         session_id="S",
         turn_id="T2",
-        key_factory=_fixed_key,
     )
 
     # Same booking returned — no double-book.

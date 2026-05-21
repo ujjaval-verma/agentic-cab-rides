@@ -117,6 +117,23 @@ class BookingProvider(Protocol):
 
 **`idempotency_key` is required by the contract.** Dedupe is enforced at the `StateStore` boundary via a `UNIQUE` constraint on the `idempotency_keys` table (see §11a). The provider checks the store before issuing a new booking; a duplicate key returns the previously-recorded booking. This survives process restart — the prod-realism story that the writeup leans on.
 
+The confirm idempotency key is derived from a hash of the user's stable
+intent (pickup, dropoff, 10-minute-bucketed `when`, party size, vehicle
+class), a generation counter (number of prior bookings with this intent
+that reached a terminal status), and an optional nonce supplied by the
+agent on the user's explicit "yes, book another" path. Formally:
+
+  intent_hash = sha256(canonical_json({pickup, dropoff, when, party_size, vehicle_class}))
+  key         = sha256(canonical_json({intent_hash, generation, nonce, op:"confirm"}))
+
+This makes the key invariant across `draft_id` regenerations — including
+across process restarts — so an agent re-issuing the same user intent
+after a crash collides on the existing `claim_or_recall` entry instead of
+double-booking. Cancel keys remain bound to (booking_id, fee_cents,
+status_at_quote).
+
+See docs/superpowers/specs/2026-05-20-cross-session-idempotency-design.md.
+
 **Lyft swap:** new `LyftAdapter` implementing the same contract. Agent/tools/gate/log unchanged.
 **Zocdoc swap:** add `AppointmentIntent` to the union, add `AppointmentOptionDetails`, write `ZocdocAdapter`, add an intent router. Tool layer, confirmation gate, action log unchanged.
 
@@ -218,6 +235,15 @@ finalised — process crash or concurrent retry). The `verified` row carries
 `checks.idempotency = "in_progress"` and `result = "rejected"`. No `executed` row follows
 (invariant 6: `verified.result == "rejected"` short-circuits). The agent should surface this
 to the user and may retry after confirming the prior call's outcome is resolved.
+
+<!-- spec-amendment: 2026-05-20 -->
+**`outcome.status = "duplicate_intent"`** — added cross-session-idempotency slice. Emitted by
+`confirm_booking` when `store.find_active_booking_by_intent_hash(ih)` returns a non-null booking
+and `args.intent_override_nonce` is `None`. Payload: `{existing_booking_id: str, existing_status: str}`.
+The `verified` row carries `checks.intent_hash = <hex>`, `checks.existing_booking_id = <id>`,
+and `result = "rejected"`, `reason = "duplicate_intent"`. No `executed` row follows (invariant 6).
+The agent should present the existing booking to the user and ask whether to book a second ride;
+if the user explicitly confirms, retry with `intent_override_nonce` set to a fresh identifier.
 
 ## 9. UberSimAdapter
 

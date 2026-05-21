@@ -104,6 +104,29 @@ def check_no_executed_after_price_changed(rows: list[dict[str, Any]], tool: str)
     return True
 
 
+def check_provider_confirm_call_count(rows: list[dict[str, Any]], tool: str, count: int) -> bool:
+    """Assert the number of provider.confirm calls (executed rows for `tool`) equals `count`.
+
+    Replayed executed rows (replayed=True) are NOT counted — they reflect a recall, not
+    a provider call. This is the load-bearing invariant for cross-session dedup:
+    two confirm attempts with the same intent should produce exactly one provider call.
+    """
+    n = sum(
+        1
+        for r in rows
+        if r.get("kind") == "executed" and r.get("tool") == tool and not r.get("replayed", False)
+    )
+    return n == count
+
+
+def check_outcome_present(rows: list[dict[str, Any]], tool: str, status: str) -> bool:
+    """Assert there is at least one outcome row for `tool` with the given status."""
+    return any(
+        r.get("kind") == "outcome" and r.get("tool") == tool and r.get("status") == status
+        for r in rows
+    )
+
+
 CHECKERS: dict[str, Any] = {
     "action_log_contains": check_action_log_contains,
     "four_row_pattern": check_four_row_pattern,
@@ -112,6 +135,8 @@ CHECKERS: dict[str, Any] = {
     "gate_invoked_for_tool": check_gate_invoked_for_tool,
     "price_changed_rejected": check_price_changed_rejected,
     "no_executed_after_price_changed": check_no_executed_after_price_changed,
+    "provider_confirm_call_count": check_provider_confirm_call_count,
+    "outcome_present": check_outcome_present,
 }
 
 

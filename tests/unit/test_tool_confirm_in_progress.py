@@ -19,7 +19,16 @@ import pytest
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.core.ports import ClaimResult, ConfirmationResult
-from agentic_cab.core.types import Booking, BookingEvent, Draft, Money, Option, RideOptionDetails
+from agentic_cab.core.types import (
+    AddressRef,
+    Booking,
+    BookingEvent,
+    Draft,
+    Money,
+    Option,
+    RideIntent,
+    RideOptionDetails,
+)
 from agentic_cab.tools.confirm import ConfirmArgs, confirm_booking
 
 # ---------------------------------------------------------------------------
@@ -40,6 +49,24 @@ def _opt() -> Option:
     )
 
 
+def _intent() -> RideIntent:
+    def _addr(name: str, lat: float, lng: float) -> AddressRef:
+        return AddressRef(
+            raw=name,
+            formatted=name,
+            lat=lat,
+            lng=lng,
+            confidence=0.99,
+            provider_metadata={"alternates": []},
+        )
+
+    return RideIntent(
+        pickup=_addr("A", 37.0, -122.0),
+        dropoff=_addr("B", 37.1, -122.1),
+        when="now",
+    )
+
+
 def _draft(draft_id: str = "D-ip") -> Draft:
     from agentic_cab.core.fingerprint import fingerprint
 
@@ -50,6 +77,7 @@ def _draft(draft_id: str = "D-ip") -> Draft:
         fingerprint=fingerprint(opt),
         created_at=datetime(2026, 5, 20, 12, 0, tzinfo=UTC),
         expires_at=datetime(2026, 5, 20, 12, 0, tzinfo=UTC) + timedelta(minutes=5),
+        intent_snapshot=_intent(),
     )
 
 
@@ -85,6 +113,16 @@ class _InProgressStore:
 
     def finalize_idempotency(self, key: str, booking: Booking) -> None: ...
 
+    def release_claim(self, key: str, scope: Literal["confirm", "cancel"]) -> None: ...
+
+    def find_active_booking_by_intent_hash(self, intent_hash_hex: str) -> None:
+        return None
+
+    def count_terminal_bookings_by_intent_hash(self, intent_hash_hex: str) -> int:
+        return 0
+
+    def set_booking_intent_hash(self, booking_id: str, intent_hash_hex: str) -> None: ...
+
     def put_pending_confirmation(
         self, subject_id: str, session_id: str, request_json: str, expires_at: Any
     ) -> None: ...
@@ -117,14 +155,27 @@ async def test_in_progress_claim_returns_in_progress_outcome(tmp_path: Path) -> 
     log = JSONLActionLog(log_dir=tmp_path / "logs")
     clock = FrozenClock(start=datetime(2026, 5, 20, 12, 0, tzinfo=UTC))
 
+    from agentic_cab.core.types import Money as MoneyStub
+    from agentic_cab.core.types import Option as OptionStub
+    from agentic_cab.core.types import RideOptionDetails as RideOptStub
+
     # Provider mock: confirm must never be called.
     provider = MagicMock()
     provider.name = "uber-sim-mock"
     provider.confirm = AsyncMock(side_effect=AssertionError("provider.confirm must not be called"))
-    # discover is not called because draft has no intent_snapshot.
-    provider.discover = AsyncMock(
-        side_effect=AssertionError("provider.discover must not be called")
+    # discover IS called because the draft has an intent_snapshot (re-quote step).
+    # Return a fresh option at the same price so drift = 0 and no price_changed short-circuit.
+    fresh_opt = OptionStub(
+        option_id="opt-fresh",
+        provider="uber-sim-mock",
+        title="UberX",
+        price=MoneyStub(amount_cents=1500, currency="USD"),
+        eta_seconds=180,
+        when=None,
+        details=RideOptStub(vehicle_class="uberx", capacity=4),
+        expires_at=datetime(2026, 5, 20, 13, 0, tzinfo=UTC),
     )
+    provider.discover = AsyncMock(return_value=[fresh_opt])
 
     channel = _NeverCalledChannel()
 

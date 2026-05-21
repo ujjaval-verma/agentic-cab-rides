@@ -173,8 +173,14 @@ async def test_re_quote_drift_recorded_in_verified_checks_within_threshold(
 
 
 @pytest.mark.asyncio
-async def test_re_quote_no_intent_snapshot_falls_back_to_zero_drift(tmp_path: Path) -> None:
-    """If draft has no intent_snapshot (legacy / P1 drafts), re-quote returns 0 drift."""
+async def test_re_quote_no_intent_snapshot_rejected(tmp_path: Path) -> None:
+    """Drafts without intent_snapshot are rejected by the 3a intent guard.
+
+    After the cross-session idempotency rework, confirm_booking requires a
+    RideIntent in intent_snapshot to derive the intent hash. Legacy / P1 drafts
+    without intent_snapshot are rejected with reason
+    'intent_snapshot_missing_or_unsupported' — no executed row (invariant 6).
+    """
     from agentic_cab.core.fingerprint import fingerprint as fp
     from agentic_cab.core.ids import new_draft_id
     from agentic_cab.core.types import Draft, Money, Option, RideOptionDetails
@@ -214,11 +220,12 @@ async def test_re_quote_no_intent_snapshot_falls_back_to_zero_drift(tmp_path: Pa
         session_id="S",
         turn_id="T",
     )
-    # Should proceed (no drift if no intent, drift=0)
-    assert result["status"] == "confirmed"
+    # Intent guard fires: rejected without executed row (invariant 6).
+    assert result["status"] == "rejected"
+    assert "intent_snapshot_missing_or_unsupported" in result.get("reason", "")
     rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
-    verified = next(r for r in rows if r["kind"] == "verified")
-    assert verified["checks"]["requote_price_drift_cents"] == 0
+    kinds = [r["kind"] for r in rows]
+    assert "executed" not in kinds
 
 
 @pytest.mark.asyncio

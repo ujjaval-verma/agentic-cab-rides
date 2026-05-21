@@ -236,6 +236,48 @@ class SqliteStateStore:
                 (booking.booking_id, booking.model_dump_json(), key),
             )
 
+    def release_claim(self: Self, key: str, scope: Literal["confirm", "cancel"]) -> None:
+        # Delete only unfinalized claims. The `booking_id IS NULL` guard ensures we
+        # never remove a finalized record — release is idempotent and safe to call
+        # on already-finalized keys (no-op) or never-claimed keys (no-op).
+        with self._write() as conn:
+            conn.execute(
+                "DELETE FROM idempotency_keys"
+                " WHERE key = ? AND scope = ? AND booking_id IS NULL",
+                (key, scope),
+            )
+
+    # --- Intent-bound idempotency (cross-session) ---
+
+    def find_active_booking_by_intent_hash(self: Self, intent_hash_hex: str) -> Booking | None:
+        row = self._conn.execute(
+            "SELECT booking_id FROM bookings"
+            " WHERE intent_hash = ?"
+            "   AND status NOT IN ('completed','cancelled','failed')"
+            " ORDER BY created_at ASC"
+            " LIMIT 1",
+            (intent_hash_hex,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self.get_booking(row[0])
+
+    def count_terminal_bookings_by_intent_hash(self: Self, intent_hash_hex: str) -> int:
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM bookings"
+            " WHERE intent_hash = ?"
+            "   AND status IN ('completed','cancelled','failed')",
+            (intent_hash_hex,),
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def set_booking_intent_hash(self: Self, booking_id: str, intent_hash_hex: str) -> None:
+        with self._write() as conn:
+            conn.execute(
+                "UPDATE bookings SET intent_hash = ? WHERE booking_id = ?",
+                (intent_hash_hex, booking_id),
+            )
+
     # --- Pending confirmations (restart-survival) ---
 
     def put_pending_confirmation(

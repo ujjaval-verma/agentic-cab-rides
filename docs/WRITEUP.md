@@ -38,15 +38,7 @@ different intent kind.
 
 ## 2. What breaks first in production
 
-**Cross-session idempotency.** Inside a session, intent-bound keys
-(`sha256({draft_id, fingerprint, op:"confirm"})`) make agent retries
-safe — `claim_or_recall` short-circuits the second provider call. But a
-fresh process that re-sends the same user intent generates a new
-`draft_id` and thus a new key. A user who repeats their request after a
-crash can double-book. The fix is to store the intent hash independently
-of the draft, derived from the user's stable inputs (pickup, dropoff,
-ride class). Tracked in `docs/FOLLOWUPS.md`; this is the first thing I
-would harden.
+**Cross-session idempotency.** Hardened. The confirm key is now bound to a hash of the user's stable intent (pickup, dropoff, time bucket, party size, vehicle class) rather than the per-session `draft_id`, with a generation counter for legitimate re-bookings and an agent-supplied nonce for the explicit "yes, book another" path. See `docs/superpowers/specs/2026-05-20-cross-session-idempotency-design.md`.
 
 **Price drift quote ↔ confirm.** Mitigated. `confirm_booking` re-quotes
 via `provider.discover()` after the fingerprint check and before invoking
@@ -71,15 +63,13 @@ agent prose is not redacted today; only structured fields are.
 
 ## 3. What I'd build next, in priority order
 
-1. **Cross-session idempotency** — store the intent hash at the tool
-   layer, not derived from `draft_id`. Closes the double-booking gap.
-2. **Background `track_booking` polling loop** — closes agent ↔ reality
+1. **Background `track_booking` polling loop** — closes agent ↔ reality
    state drift.
-3. **Webhook / Slack `ConfirmationChannel`** — proves the third channel
+2. **Webhook / Slack `ConfirmationChannel`** — proves the third channel
    works after CLI + web; closes the abstraction.
-4. **Real `LyftAdapter`** — empirical proof the contract holds against a
+3. **Real `LyftAdapter`** — empirical proof the contract holds against a
    second real provider, not just a second mock.
-5. **Payment authorization flow** — pre-confirm scope grant.
+4. **Payment authorization flow** — pre-confirm scope grant.
 
 ---
 

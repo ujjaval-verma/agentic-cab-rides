@@ -53,7 +53,12 @@ async def run_scenario(
     scn = _load(scenario_path)
     session_id = new_session_id()
     clock = FrozenClock(start=datetime.fromisoformat(scn["clock"]["start"]))
-    store = SqliteStateStore(db_path=data_dir / f"{scn['name']}.db")
+    db_path = data_dir / f"{scn['name']}.db"
+    # Each render must be fully reproducible from a clean slate. Delete any
+    # leftover DB from a previous run so state does not bleed across renders.
+    if db_path.exists():
+        db_path.unlink()
+    store = SqliteStateStore(db_path=db_path)
     store.apply_schema()
     log = JSONLActionLog(log_dir=log_dir)
 
