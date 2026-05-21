@@ -9,6 +9,7 @@ from typing import ClassVar
 import pytest
 
 from agentic_cab.adapters.action_log import JSONLActionLog
+from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.core.types import Booking, Draft, Intent, Money, Option, RideOptionDetails
 from agentic_cab.tools.track import TrackArgs, track_booking
 
@@ -47,6 +48,7 @@ class _StubProvider:
 
 
 _EXPIRES = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
+_FROZEN_CLOCK = FrozenClock(start=datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC))
 
 
 def _make_booking(booking_id: str = "BID-001") -> Booking:
@@ -84,6 +86,7 @@ async def test_happy_path_returns_booking_dict(tmp_path: Path) -> None:
         args,
         provider=provider,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S1",
         turn_id="T1",
     )
@@ -113,6 +116,7 @@ async def test_emits_requested_then_outcome_only(tmp_path: Path) -> None:
         args,
         provider=provider,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S2",
         turn_id="T2",
     )
@@ -131,21 +135,22 @@ async def test_emits_requested_then_outcome_only(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_runner_kwargs_no_clock_no_type_error(tmp_path: Path) -> None:
-    """Regression: runner._track passes (provider, log, session_id, turn_id) — no clock.
+async def test_runner_kwargs_with_clock_no_type_error(tmp_path: Path) -> None:
+    """Regression: runner._track passes (provider, log, clock, session_id, turn_id).
 
-    If track_booking ever gained a required `clock` param, or the runner stopped
-    threading kwargs explicitly, this would raise TypeError immediately.
+    Clock is now a required param (invariant 9). Verify the full call-site signature
+    compiles and executes without TypeError.
     """
     log = JSONLActionLog(log_dir=tmp_path / "logs")
     booking = _make_booking("BID-REG")
     provider = _StubProvider(booking)
 
-    # Replicate the exact kwargs the runner threads (no clock, no store, no channel)
+    # Replicate the exact kwargs the runner threads (with clock)
     result = await track_booking(
         TrackArgs(booking_id="BID-REG"),
         provider=provider,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S-REG",
         turn_id="T-REG",
     )
@@ -164,6 +169,7 @@ async def test_unknown_booking_returns_error_dict_no_raise(tmp_path: Path) -> No
         args,
         provider=provider,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S3",
         turn_id="T3",
     )

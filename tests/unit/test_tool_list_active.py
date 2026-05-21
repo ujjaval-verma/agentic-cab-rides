@@ -9,6 +9,7 @@ from typing import Any, Literal
 import pytest
 
 from agentic_cab.adapters.action_log import JSONLActionLog
+from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.core.types import Booking, Money, Option, RideOptionDetails
 from agentic_cab.tools.list_active import ListActiveArgs, list_active_bookings
@@ -18,6 +19,7 @@ from agentic_cab.tools.list_active import ListActiveArgs, list_active_bookings
 # ---------------------------------------------------------------------------
 
 _EXPIRES = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
+_FROZEN_CLOCK = FrozenClock(start=datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC))
 
 _BookingStatus = Literal[
     "confirmed",
@@ -136,6 +138,7 @@ async def test_empty_returns_empty_list(tmp_path: Path) -> None:
         args,
         store=store,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S1",
         turn_id="T1",
     )
@@ -174,6 +177,7 @@ async def test_filters_completed_cancelled_failed(tmp_path: Path) -> None:
         args,
         store=store,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S2",
         turn_id="T2",
     )
@@ -196,6 +200,7 @@ async def test_emits_requested_then_outcome_only(tmp_path: Path) -> None:
         args,
         store=store,
         log=log,
+        clock=_FROZEN_CLOCK,
         session_id="S3",
         turn_id="T3",
     )

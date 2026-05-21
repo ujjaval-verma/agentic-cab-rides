@@ -195,6 +195,7 @@ async def _run_happy_path_sequence(
         GeocodeArgs(query=_PICKUP),
         geocoder=geocoder,
         log=log,  # type: ignore[arg-type]
+        clock=clock,
         session_id=session_id,
         turn_id=turn_id,
     )
@@ -204,6 +205,7 @@ async def _run_happy_path_sequence(
         GeocodeArgs(query=_DROPOFF),
         geocoder=geocoder,
         log=log,  # type: ignore[arg-type]
+        clock=clock,
         session_id=session_id,
         turn_id=turn_id,
     )

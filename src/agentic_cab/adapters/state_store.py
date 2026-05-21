@@ -206,28 +206,28 @@ class SqliteStateStore:
     # --- Idempotency ---
 
     def claim_or_recall(self: Self, key: str, scope: Literal["confirm", "cancel"]) -> ClaimResult:
-        existing = self._conn.execute(
-            "SELECT booking_id, response_blob FROM idempotency_keys WHERE key = ?",
-            (key,),
-        ).fetchone()
-        if existing is not None:
-            booking_id: str | None = existing[0]
-            response_blob: str | None = existing[1]
-            if booking_id is not None and response_blob is not None:
-                # Return only the booking_id; callers re-fetch via get_booking so events
-                # are consistent (closes the Booking.events round-trip inconsistency).
-                return ClaimResult(status="recalled", booking_id=booking_id)
-            # Row exists but not yet finalised: a prior call claimed the key but has not
-            # completed (process crash or concurrent retry). Return "in_progress" so the
-            # caller can surface the race without issuing a duplicate provider call.
-            return ClaimResult(status="in_progress", booking_id=None)
+        # Atomic claim: INSERT OR IGNORE closes the TOCTOU window. cursor.rowcount
+        # reports 1 if this caller's INSERT happened, 0 if a prior row already
+        # existed. Then a single SELECT decides recalled vs in_progress for the
+        # rowcount==0 case.
         with self._write() as conn:
-            conn.execute(
-                "INSERT INTO idempotency_keys(key, scope, booking_id, response_blob, created_at)"
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO idempotency_keys"
+                "(key, scope, booking_id, response_blob, created_at)"
                 " VALUES (?, ?, NULL, NULL, ?)",
                 (key, scope, datetime.now(UTC).isoformat()),
             )
-        return ClaimResult(status="new", booking_id=None)
+            if cur.rowcount == 1:
+                return ClaimResult(status="new", booking_id=None)
+            row = conn.execute(
+                "SELECT booking_id, response_blob FROM idempotency_keys WHERE key = ?",
+                (key,),
+            ).fetchone()
+        booking_id: str | None = row[0]
+        response_blob: str | None = row[1]
+        if booking_id is not None and response_blob is not None:
+            return ClaimResult(status="recalled", booking_id=booking_id)
+        return ClaimResult(status="in_progress", booking_id=None)
 
     def finalize_idempotency(self: Self, key: str, booking: Booking) -> None:
         with self._write() as conn:

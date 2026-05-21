@@ -149,6 +149,7 @@ async def test_every_row_kind_carries_tool_field_track(tmp_path: Path) -> None:
         TrackArgs(booking_id="BID-TRACK"),
         provider=provider,
         log=log,
+        clock=FrozenClock(start=datetime(2026, 5, 19, 12, 0, tzinfo=UTC)),
         session_id="S",
         turn_id="T",
     )

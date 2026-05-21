@@ -124,6 +124,7 @@ def build_handlers(
             GeocodeArgs(**a),
             geocoder=geocoder,
             log=log,
+            clock=clock,
             session_id=session_id,
             turn_id=_turn_id(),
         )
@@ -177,6 +178,7 @@ def build_handlers(
             TrackArgs(**a),
             provider=sim,
             log=log,
+            clock=clock,
             session_id=session_id,
             turn_id=_turn_id(),
         )
@@ -186,6 +188,7 @@ def build_handlers(
             ListActiveArgs(**a),
             store=store,
             log=log,
+            clock=clock,
             session_id=session_id,
             turn_id=_turn_id(),
         )
