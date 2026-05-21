@@ -155,13 +155,13 @@ P5 (web UI) branches from P1 — the agent loop, tool surface, and one working s
 
 ## P4 — Remaining Scenarios
 
-**Goal:** all 5 transcripts render with invariants passing.
+**Goal:** all 6 transcripts render with invariants passing.
 
 **Acceptance:**
 - [ ] `scenarios/{02,03,04,05}_*.yaml` written
 - [ ] `make transcripts` produces 5 markdown files; all invariants green
 - [ ] `tests/scenarios/test_scenarios.py` exercises each in `--dry-run --assert-invariants` mode
-- [ ] All 5 transcripts committed to `transcripts/`
+- [ ] All 6 transcripts committed to `transcripts/`
 
 **Slices — independent, parallelizable via `superpowers:subagent-driven-development`:**
 - `scenarios/02_price_comparison.yaml` — three classes surfaced, agent picks cheapest
@@ -199,7 +199,7 @@ P5 (web UI) branches from P1 — the agent loop, tool surface, and one working s
 - [ ] `docs/ARCHITECTURE.md` written — layer diagram + port boundaries
 - [ ] `docs/WRITEUP.md` written — the 1-pager deliverable (marketplace swap + what breaks first)
 - [ ] `README.md` quickstart validated on a clean checkout
-- [ ] All 5 transcripts re-rendered and committed
+- [ ] All 6 transcripts re-rendered and committed
 - [ ] `make verify` clean on `main`
 - [ ] `make transcripts-ci` green in CI
 
@@ -208,6 +208,13 @@ P5 (web UI) branches from P1 — the agent loop, tool surface, and one working s
 - `docs/WRITEUP.md`
 - `README.md` polish + screenshot embed
 - Final lint/type pass + transcript re-render
+
+---
+
+## P7 — Cross-session intent-bound idempotency
+
+**Acceptance:**
+- [x] `idempotency_key` derived from `sha256(intent || generation || optional_nonce)`; survives `draft_id` regeneration and process restart. Scenario `06_cross_session_dedup` proves it.
 
 ---
 
