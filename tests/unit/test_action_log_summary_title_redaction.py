@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from agentic_cab.adapters.action_log import JSONLActionLog, redact
+from agentic_cab.adapters.action_log import _PHONE, JSONLActionLog, redact
 
 
 @pytest.fixture
@@ -89,3 +89,53 @@ def test_non_summary_title_string_unaffected() -> None:
     result = redact(payload)
     # 'note' is not summary_title — name regex not applied; only phone regex
     assert result["note"] == "This is a note from John Smith"
+
+
+# ---------------------------------------------------------------------------
+# Phone regex contract — pin the redaction boundary mechanically.
+#
+# The regex must:
+#   (a) redact realistic phone shapes that a real provider could embed in
+#       summary_title or freeform strings, AND
+#   (b) leave alone every shape the action log actually emits today —
+#       ISO timestamps, ULIDs, hex idempotency keys, lat/lng floats,
+#       option_ids, integer ids.
+# Both directions matter: a regex that over-matches corrupts every
+# transcript (the bug this PR fixes); a regex that under-matches lets PII
+# leak. Pin both.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "phone",
+    [
+        "+1 555-123-4567",  # E.164 with separators
+        "+44 20 7946 0958",  # E.164 international
+        "(555) 123-4567",  # NANP parenthesised
+        "(555)123-4567",  # NANP no space
+        "555-123-4567",  # plain 3-3-4 hyphen
+        "555.123.4567",  # plain 3-3-4 dot
+        "555 123 4567",  # plain 3-3-4 space
+    ],
+)
+def test_phone_regex_redacts_realistic_shapes(phone: str) -> None:
+    assert _PHONE.search(phone) is not None, f"expected match for {phone!r}"
+
+
+@pytest.mark.parametrize(
+    "benign",
+    [
+        "2026-05-19",  # ISO date (the bug this fix addresses)
+        "2026-05-19T12:00:00+00:00",  # ISO timestamp
+        "01KS5A7M9RS8N2RJTN8MG3S6QZ",  # ULID
+        "fd8f1fc601c2f0c249513b98f0f8e6c1650",  # hex idempotency-key prefix
+        "37.7749",  # lat/lng float
+        "-122.4194",  # lat/lng float negative
+        "opt-uberx-123005401501",  # option_id with 12-digit suffix
+        "opt-comfort-811856239313",  # option_id with 12-digit suffix
+        "1850",  # amount_cents
+        "180",  # eta_seconds
+    ],
+)
+def test_phone_regex_does_not_match_log_payload_shapes(benign: str) -> None:
+    assert _PHONE.search(benign) is None, f"unexpected match for {benign!r}"
