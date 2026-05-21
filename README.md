@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="docs/assets/logo.svg" alt="agentic-cab-rides" width="600"/>
+</div>
+
 # Agentic Cab Rides
 
 > *A take-home prototype that books rides end-to-end — structural confirmation gates, fingerprint-verified drafts, and a replayable four-phase action log.*
