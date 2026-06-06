@@ -139,3 +139,7 @@ Full diagram: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 ## What this is *not*
 
 Not multi-tenant, not authenticated, not payment-aware (assumes account-level pre-auth like real Uber), not routed via real maps (straight-line × fudge factor), not running against a real Uber API (which third parties haven't had book-grade access to in years — the sim is deterministic and seeded). See [`docs/WRITEUP.md`](docs/WRITEUP.md) for what would break first in production.
+
+## License
+
+[MIT](LICENSE) © Ujjaval Verma

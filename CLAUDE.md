@@ -33,7 +33,7 @@ Do not use LangChain, LlamaIndex, instructor, dspy, or any ORM. The Anthropic SD
 12. **No `--no-verify`. Ever.** Settings deny list enforces. If a hook is wrong, change it in a separate commit with a one-line rationale.
 13. **No `TODO`/`FIXME`/`XXX` in code.** Promote to `docs/FOLLOWUPS.md` or fix now. Ruff `FIX` rule enforces.
 14. **No `print()` outside the CLI/web rendering layer or scripts.** Use `structlog`. Ruff `T20` enforces.
-15. **Repo visibility is private — keep it that way.** Never run `gh repo edit --visibility public` (or any equivalent API/UI flip) on this repo. If a workflow appears to require it (e.g., a public-only GitHub feature), stop and ask. Verify with `gh repo view --json visibility` before any repo-settings change.
+15. **This repo is public — treat every commit as world-readable and permanent.** Secrets never enter the tree: `ANTHROPIC_API_KEY` and all credentials live only in a chmod-600 `.env` outside the repo (see the README quickstart). Never commit, hardcode, or paste a key, token, or PII into code, docs, transcripts, or logs. `scripts/check_secrets.py` runs pre-commit as a backstop, not the first line of defense. Before publishing any new artifact (a transcript, a sample log), confirm it carries no real key or personal data. A push to a public repo cannot be un-published — mirrors and caches retain it.
 
 ## Golden commands
 
