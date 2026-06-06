@@ -44,9 +44,8 @@ class TestCLIConfirmationChannel:
     ) -> None:
         """Structural proof (Invariant 2): stdin says 'n', tty says 'y' — channel must honor tty.
 
-        This test is the deliverable for T23. If it passes, the channel cannot be
-        bypassed by piping 'y' to stdin, which is the exact attack vector the spec
-        guards against.
+        If it passes, the channel cannot be bypassed by piping 'y' to stdin,
+        which is the exact attack vector Invariant 2 guards against.
         """
         fake_tty = tmp_path / "fake_tty"
         fake_tty.write_text("y\n")

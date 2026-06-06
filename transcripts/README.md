@@ -1,6 +1,6 @@
 # Scenario Transcripts
 
-The 6 scenario transcripts in this directory — 5 from the brief, plus `06_cross_session_dedup` covering intent-bound idempotency — are rendered from `scenarios/*.yaml` by `scripts/render_transcript.py`.
+The 6 scenario transcripts in this directory — the 5 core flows, plus `06_cross_session_dedup` covering intent-bound idempotency — are rendered from `scenarios/*.yaml` by `scripts/render_transcript.py`.
 
 | File | Scenario | Demonstrates |
 |---|---|---|

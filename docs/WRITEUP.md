@@ -66,7 +66,7 @@ the agent's context. Today the agent only learns about state changes
 when it asks.
 
 **Provider option durability — REPL/web parity assumed.** Not yet
-mitigated. The take-home assumes production needs both surfaces (REPL +
+mitigated. This project assumes production needs both surfaces (REPL +
 web) to be first-class — see
 [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#runtime-topology) for the
 current process model on each. The REPL is a single long-lived process so the
