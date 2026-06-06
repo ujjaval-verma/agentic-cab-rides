@@ -4,7 +4,7 @@
 External URLs (http/https/mailto) and pure anchors (#section) are skipped —
 they're not the failure mode this hook catches. The failure this catches is
 forward references to files that don't exist yet, or stale links after a
-rename. Both are silent until a grader (or a reader) clicks them.
+rename. Both are silent until a reader clicks them.
 
 Runs in <50ms across the full doc set. No network, no third-party deps.
 """

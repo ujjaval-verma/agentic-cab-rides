@@ -9,7 +9,7 @@ is enforced.
 
 This file owns the durable architecture story. Invariants live in
 [`CLAUDE.md`](../CLAUDE.md); the phase contract lives in
-[`docs/PHASES.md`](PHASES.md); the 1-pager deliverable is
+[`docs/PHASES.md`](PHASES.md); the production-readiness writeup is
 [`docs/WRITEUP.md`](WRITEUP.md). Type and port definitions are authoritative
 in code (`src/agentic_cab/core/types.py`, `src/agentic_cab/core/ports.py`).
 
@@ -37,7 +37,7 @@ calls tools, and tools take ports (not concrete classes) as parameters.
 ## Runtime topology
 
 The layer diagram above describes code dependencies. This section describes
-how the same layers are assembled into running processes today. The take-home
+how the same layers are assembled into running processes today. The project
 ships two first-class surfaces (REPL and web) and one batch surface
 (scenarios); production deployment is out of scope and discussed in
 [`docs/WRITEUP.md`](WRITEUP.md).
@@ -202,14 +202,14 @@ Two durable surfaces, deliberately not merged:
 - **JSONL (`logs/<session_id>.jsonl`, `chat/`, geocode cache)** holds
   append-only audit artifacts. Flat files because the audit story depends
   on being trivially `grep`-able, `tail -f`-able, and replayable without
-  a database. The action log is a deliverable surface — its format and
-  flatness matter externally, not just internally.
+  a database. The action log is an externally consumable surface — its
+  format and flatness matter externally, not just internally.
 
 Moving the action log into SQLite would lose this. The split is intentional
 and described in `CLAUDE.md` invariant 7.
 
 ## See also
 
-- [`docs/WRITEUP.md`](WRITEUP.md) — the 1-pager deliverable.
+- [`docs/WRITEUP.md`](WRITEUP.md) — the production-readiness writeup.
 - [`docs/PHASES.md`](PHASES.md) — phase contract.
 - [`CLAUDE.md`](../CLAUDE.md) — invariants every session must respect.

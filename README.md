@@ -4,7 +4,7 @@
 
 # Agentic Cab Rides
 
-> *A take-home prototype that books rides end-to-end — structural confirmation gates, fingerprint-verified drafts, and a replayable four-phase action log.*
+> *A prototype AI agent that books rides end-to-end — structural confirmation gates, fingerprint-verified drafts, and a replayable four-phase action log.*
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12-blue?style=flat-square" alt="Python 3.12"/>
@@ -37,7 +37,7 @@
   </tr>
 </table>
 
-The repo's name is `agentic-cab-rides` because the visible deliverable today is booking Uber rides — the architecture is intentionally not. The marketplace-agnostic adapter port means swapping Uber for Lyft is trivial; swapping for [Zocdoc](https://zocdoc.com) (not a cab service) requires only a new `Intent` variant and a new adapter. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design and [`docs/PHASES.md`](docs/PHASES.md) for what is shipped.
+The repo's name is `agentic-cab-rides` because what it visibly does today is book Uber rides — the architecture is intentionally not cab-specific. The marketplace-agnostic adapter port means swapping Uber for Lyft is trivial; swapping for [Zocdoc](https://zocdoc.com) (not a cab service) requires only a new `Intent` variant and a new adapter. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design and [`docs/PHASES.md`](docs/PHASES.md) for what is shipped.
 
 ## What this is
 
@@ -85,11 +85,11 @@ make transcripts                             # regenerate all 6 scenario transcr
 
 `make help` lists every target. The Makefile is the discovery surface; pre-commit and CI both call into it so there is one path.
 
-## Deliverables (per the brief)
+## What's included
 
 - Working repo, clone-to-run in 3 minutes
-- 6 transcripts under [`transcripts/`](transcripts/): the 5 required (happy path, price comparison, bad address, surge/edge case, cancellation) plus a bonus cross-session-dedup scenario
-- 1-page writeup at [`docs/WRITEUP.md`](docs/WRITEUP.md) on swapping for a different marketplace and what breaks first in production
+- 6 end-to-end transcripts under [`transcripts/`](transcripts/): happy path, price comparison, bad address, surge/edge case, cancellation, and cross-session dedup
+- A writeup at [`docs/WRITEUP.md`](docs/WRITEUP.md) on swapping for a different marketplace and what breaks first in production
 
 ## Stack & non-negotiables
 

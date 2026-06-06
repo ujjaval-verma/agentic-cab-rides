@@ -192,12 +192,12 @@ P5 (web UI) branches from P1 — the agent loop, tool surface, and one working s
 
 ## P6 — Polish + Writeup + Final Verification
 
-**Goal:** clone-to-run in 3 minutes; writeup credibly answers the brief.
+**Goal:** clone-to-run in 3 minutes; writeup credibly answers the marketplace-swap and production-failure-mode questions.
 
 **Acceptance:**
 - [ ] Fresh clone + `uv sync` + `ANTHROPIC_API_KEY=...` + `make repl` works in under 3 minutes on a clean machine (verified by clean checkout)
 - [ ] `docs/ARCHITECTURE.md` written — layer diagram + port boundaries
-- [ ] `docs/WRITEUP.md` written — the 1-pager deliverable (marketplace swap + what breaks first)
+- [ ] `docs/WRITEUP.md` written — the production-readiness writeup (marketplace swap + what breaks first)
 - [ ] `README.md` quickstart validated on a clean checkout
 - [ ] All 6 transcripts re-rendered and committed
 - [ ] `make verify` clean on `main`
