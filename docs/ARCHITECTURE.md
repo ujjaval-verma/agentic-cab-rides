@@ -181,11 +181,26 @@ rows linked by `action_id`; read-only tools emit `requested` + `outcome` only.
 (invariant 6). PII redaction (raw address text, phone, names) happens at the
 log boundary in `adapters/action_log.py::redact` (invariant 8).
 
-Cost fields on gated `outcome` rows (`llm_calls`, `total_cost_microcents`, P8)
-carry token counts and integer microcents only — `LLMCall.latency_ms` is kept in
-memory on the meter and deliberately never emitted, because wall-clock latency is
-machine noise that would make action-log rows irreproducible across re-runs
-(invariant 9).
+Cost fields on gated `outcome` rows (`llm_calls_since_last_action`,
+`cost_microcents_since_last_action`, P8) do **not** report the cost of the
+action they're attached to. The `CostMeter` is one per session, and the only
+drain point is inside the gated tool's `_emit_outcome`. So the value emitted is
+the cost of every Anthropic call recorded on this session's meter since the
+previous drain — not "this action's cost" and not "this turn's cost". It is
+wrong in two directions: it **over-counts** by including every conversational
+turn since the last gated action (discovery chit-chat, re-quotes, clarifying
+questions), and it **under-counts** by excluding the current turn's wrap-up
+call — the model call made after the tool returns, which is structurally
+unattributable because it happens after `_emit_outcome` has already drained
+the meter. A reader must not treat this number as the booking's cost; treat it
+as a rolling session-cost checkpoint that resets on every gated action.
+
+These fields carry token counts and integer microcents only —
+`LLMCall.latency_ms` is kept in memory on the meter and deliberately never
+emitted. The honest reason is not reproducibility (emitted token counts and
+cost are themselves per-run-variable, per invariant 9) — it's that wall-clock
+latency is pure machine noise carrying no auditable signal, whereas token
+counts and cost are the artifact under audit even though they vary run to run.
 
 Outcome statuses emitted today (`outcome.status` in `confirm_booking` /
 `cancel_booking`): `confirmed` (happy path), `rejected` (gate decline,

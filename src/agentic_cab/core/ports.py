@@ -161,7 +161,11 @@ class StateStore(Protocol):
 # ---------- CostMeter ----------
 
 # drain() returns everything recorded since the last drain and clears the buffer.
-# The agent loop is single-threaded per session, so no lock is needed.
+# The agent loop is single-threaded per session for CLI and scenarios, so no lock
+# is needed there. This is NOT true for the web surface: turns are dispatched via
+# asyncio.create_task with no per-session serialization, so a shared meter can see
+# interleaved record()/drain() calls across concurrent turns. See docs/FOLLOWUPS.md
+# ("Web surface permits intra-session turn interleaving into a shared meter").
 
 
 @runtime_checkable
