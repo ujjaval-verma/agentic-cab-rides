@@ -54,7 +54,7 @@ async def _prepare_draft(
 
 
 @pytest.mark.asyncio
-async def test_active_prior_booking_without_nonce_returns_duplicate_intent(harness) -> None:
+async def test_active_prior_booking_without_nonce_returns_duplicate_intent(harness, meter) -> None:
     store, log, clock, sim = harness
     intent = RideIntent(
         pickup=_addr("A", 37.0, -122.0),
@@ -76,6 +76,7 @@ async def test_active_prior_booking_without_nonce_returns_duplicate_intent(harne
         log=log,
         channel=channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -91,6 +92,7 @@ async def test_active_prior_booking_without_nonce_returns_duplicate_intent(harne
         log=log,
         channel=channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -100,7 +102,7 @@ async def test_active_prior_booking_without_nonce_returns_duplicate_intent(harne
 
 
 @pytest.mark.asyncio
-async def test_active_prior_booking_with_nonce_proceeds(harness) -> None:
+async def test_active_prior_booking_with_nonce_proceeds(harness, meter) -> None:
     store, log, clock, sim = harness
     intent = RideIntent(
         pickup=_addr("A", 37.0, -122.0),
@@ -121,6 +123,7 @@ async def test_active_prior_booking_with_nonce_proceeds(harness) -> None:
         log=log,
         channel=channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -134,6 +137,7 @@ async def test_active_prior_booking_with_nonce_proceeds(harness) -> None:
         log=log,
         channel=channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -142,7 +146,7 @@ async def test_active_prior_booking_with_nonce_proceeds(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_terminal_prior_booking_lets_new_through(harness) -> None:
+async def test_terminal_prior_booking_lets_new_through(harness, meter) -> None:
     store, log, clock, sim = harness
     intent = RideIntent(
         pickup=_addr("A", 37.0, -122.0),
@@ -163,6 +167,7 @@ async def test_terminal_prior_booking_lets_new_through(harness) -> None:
         log=log,
         channel=channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -187,6 +192,7 @@ async def test_terminal_prior_booking_lets_new_through(harness) -> None:
         log=log,
         channel=channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -195,7 +201,7 @@ async def test_terminal_prior_booking_lets_new_through(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_duplicate_intent_log_shape_no_executed_row(harness) -> None:
+async def test_duplicate_intent_log_shape_no_executed_row(harness, meter) -> None:
     """Invariant 6: duplicate_intent must produce requested→verified(rejected)→outcome only."""
     store, log, clock, sim = harness
     intent = RideIntent(
@@ -217,6 +223,7 @@ async def test_duplicate_intent_log_shape_no_executed_row(harness) -> None:
         log=log,
         channel=channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -230,6 +237,7 @@ async def test_duplicate_intent_log_shape_no_executed_row(harness) -> None:
         log=log,
         channel=channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -259,7 +267,7 @@ async def test_duplicate_intent_log_shape_no_executed_row(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_recall_path_heals_null_intent_hash(harness) -> None:
+async def test_recall_path_heals_null_intent_hash(harness, meter) -> None:
     """Crash-recovery: if a prior confirm crashed between finalize_idempotency and
     set_booking_intent_hash, the booking row has intent_hash IS NULL.  The recall
     path must write the intent_hash so future dedup lookups can find the booking.
@@ -292,6 +300,7 @@ async def test_recall_path_heals_null_intent_hash(harness) -> None:
         log=log,
         channel=channel_first,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -323,6 +332,7 @@ async def test_recall_path_heals_null_intent_hash(harness) -> None:
         log=log,
         channel=channel_second,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -336,7 +346,7 @@ async def test_recall_path_heals_null_intent_hash(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_decline_then_retry_proceeds(harness) -> None:
+async def test_decline_then_retry_proceeds(harness, meter) -> None:
     """User declines at gate, then retries the same intent. The intent-bound key
     is the same, but release_claim removes the in_progress row so the retry is
     not blocked by a phantom claim. Regression guard for the user-decline poison
@@ -366,6 +376,7 @@ async def test_decline_then_retry_proceeds(harness) -> None:
         log=log,
         channel=decline_channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )
@@ -381,6 +392,7 @@ async def test_decline_then_retry_proceeds(harness) -> None:
         log=log,
         channel=approve_channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=new_turn_id(),
     )

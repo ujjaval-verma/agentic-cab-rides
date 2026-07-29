@@ -66,7 +66,7 @@ def _make_deps(tmp_path: Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def test_build_handlers_has_all_seven_tools(tmp_path: Path) -> None:
+def test_build_handlers_has_all_seven_tools(tmp_path: Path, meter) -> None:
     deps = _make_deps(tmp_path)
     turn_id_ref = ["T0"]
     handlers = build_handlers(
@@ -76,6 +76,7 @@ def test_build_handlers_has_all_seven_tools(tmp_path: Path) -> None:
         clock=deps["clock"],
         channel=deps["channel"],
         geocoder=deps["geocoder"],
+        meter=meter,
         session_id="S0",
         turn_id_ref=turn_id_ref,
     )
@@ -110,6 +111,19 @@ def test_tool_defs_has_all_seven_tools() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _stub_usage(input_tokens: int = 100, output_tokens: int = 20) -> MagicMock:
+    """Return a usage stub with real int attributes — the P8 cost-meter seam in
+    run_turn constructs a StrictInt LLMCall from these, so a bare MagicMock
+    (whose attribute access auto-vivifies further MagicMocks) will not validate.
+    """
+    usage = MagicMock()
+    usage.input_tokens = input_tokens
+    usage.output_tokens = output_tokens
+    usage.cache_read_input_tokens = 0
+    usage.cache_creation_input_tokens = 0
+    return usage
+
+
 def _stub_client_end_message(text: str = "Done.") -> MagicMock:
     """Return a stub Anthropic client whose .messages.create() immediately
     returns a final text response (stop_reason='end_turn'), so run_turn
@@ -122,6 +136,7 @@ def _stub_client_end_message(text: str = "Done.") -> MagicMock:
     response = MagicMock()
     response.stop_reason = "end_turn"
     response.content = [content_block]
+    response.usage = _stub_usage()
 
     client = MagicMock()
     client.messages.create.return_value = response
@@ -268,6 +283,7 @@ async def test_repl_handler_dispatch_discover_options(tmp_path: Path) -> None:
     tool_use_response = MagicMock()
     tool_use_response.stop_reason = "tool_use"
     tool_use_response.content = [tool_use_block]
+    tool_use_response.usage = _stub_usage()
 
     # Second response: agent replies with text
     text_block = MagicMock()
@@ -277,6 +293,7 @@ async def test_repl_handler_dispatch_discover_options(tmp_path: Path) -> None:
     final_response = MagicMock()
     final_response.stop_reason = "end_turn"
     final_response.content = [text_block]
+    final_response.usage = _stub_usage()
 
     stub_client = MagicMock()
     stub_client.messages.create.side_effect = [tool_use_response, final_response]

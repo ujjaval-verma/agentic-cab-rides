@@ -30,11 +30,13 @@ import pytest
 
 from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.adapters.confirmation.scripted import ScriptedConfirmationChannel
+from agentic_cab.adapters.cost_meter import InMemoryCostMeter
 from agentic_cab.adapters.geocoding.cache import GeocodeCache
 from agentic_cab.adapters.geocoding.nominatim import NominatimGeocoder
 from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
 from agentic_cab.core.ids import new_session_id, new_turn_id
+from agentic_cab.core.ports import CostMeter
 from agentic_cab.tools.confirm import ConfirmArgs, confirm_booking
 from agentic_cab.tools.discover import DiscoverArgs, discover_options
 from agentic_cab.tools.geocode import GeocodeArgs, geocode_address
@@ -179,6 +181,7 @@ async def _run_happy_path_sequence(
     channel: ScriptedConfirmationChannel,
     geocoder: NominatimGeocoder,
     session_id: str,
+    meter: CostMeter,
 ) -> str:
     """Execute the happy-path tool sequence without an LLM.
 
@@ -257,6 +260,7 @@ async def _run_happy_path_sequence(
         log=log,  # type: ignore[arg-type]
         channel=channel,
         clock=clock,
+        meter=meter,
         session_id=session_id,
         turn_id=turn_id,
     )
@@ -357,6 +361,7 @@ async def test_repl_web_parity_happy_path(tmp_path: Path) -> None:
     repl_log = _MemActionLog()
     repl_channel = ScriptedConfirmationChannel(script=_CONFIRM_SCRIPT, clock=clock)
     repl_session = new_session_id()
+    repl_meter = InMemoryCostMeter()
 
     repl_booking_id = await _run_happy_path_sequence(
         store=repl_store,
@@ -365,6 +370,7 @@ async def test_repl_web_parity_happy_path(tmp_path: Path) -> None:
         channel=repl_channel,
         geocoder=geocoder,
         session_id=repl_session,
+        meter=repl_meter,
     )
 
     # ------------------------------------------------------------------
@@ -383,6 +389,7 @@ async def test_repl_web_parity_happy_path(tmp_path: Path) -> None:
     # WebConfirmationChannel — both satisfy the ConfirmationChannel Protocol.
     web_channel = ScriptedConfirmationChannel(script=_CONFIRM_SCRIPT, clock=clock)
     web_session = new_session_id()
+    web_meter = InMemoryCostMeter()
 
     web_booking_id = await _run_happy_path_sequence(
         store=web_store,
@@ -391,6 +398,7 @@ async def test_repl_web_parity_happy_path(tmp_path: Path) -> None:
         channel=web_channel,
         geocoder=geocoder,
         session_id=web_session,
+        meter=web_meter,
     )
 
     # ------------------------------------------------------------------

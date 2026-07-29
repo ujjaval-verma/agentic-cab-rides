@@ -84,7 +84,7 @@ def _make_booking(booking_id: str = "BID-001") -> Booking:
 
 
 @pytest.mark.asyncio
-async def test_every_row_kind_carries_tool_field_confirm(tmp_path: Path) -> None:
+async def test_every_row_kind_carries_tool_field_confirm(tmp_path: Path, meter) -> None:
     """All four rows emitted by confirm_booking carry tool='confirm_booking'."""
     store = SqliteStateStore(db_path=tmp_path / "s.db")
     store.apply_schema()
@@ -126,6 +126,7 @@ async def test_every_row_kind_carries_tool_field_confirm(tmp_path: Path) -> None
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )

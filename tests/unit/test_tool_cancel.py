@@ -31,7 +31,11 @@ def harness(tmp_path: Path):
 
 
 async def _book(
-    sim: UberSimAdapter, store: SqliteStateStore, log: JSONLActionLog, clock: FrozenClock
+    sim: UberSimAdapter,
+    store: SqliteStateStore,
+    log: JSONLActionLog,
+    clock: FrozenClock,
+    meter,
 ) -> str:
     """Helper: discover → prepare → confirm → return booking_id."""
     d_args = DiscoverArgs(
@@ -63,6 +67,7 @@ async def _book(
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -71,10 +76,10 @@ async def _book(
 
 
 @pytest.mark.asyncio
-async def test_cancel_happy_path_emits_four_rows(harness) -> None:
+async def test_cancel_happy_path_emits_four_rows(harness, meter) -> None:
     """book → cancel → assert exactly requested → verified(ok) → executed → outcome(cancelled)."""
     store, log, clock, sim = harness
-    booking_id = await _book(sim, store, log, clock)
+    booking_id = await _book(sim, store, log, clock, meter)
 
     ch = ScriptedConfirmationChannel(script=[{"match": "Cancel", "action": "approve"}], clock=clock)
     result = await cancel_booking(
@@ -84,6 +89,7 @@ async def test_cancel_happy_path_emits_four_rows(harness) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -94,10 +100,10 @@ async def test_cancel_happy_path_emits_four_rows(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_declined_emits_three_rows_no_executed(harness) -> None:
+async def test_cancel_declined_emits_three_rows_no_executed(harness, meter) -> None:
     """Scripted channel returns approved=False → no executed row, outcome:status='rejected'."""
     store, log, clock, sim = harness
-    booking_id = await _book(sim, store, log, clock)
+    booking_id = await _book(sim, store, log, clock, meter)
 
     ch = ScriptedConfirmationChannel(script=[{"match": "Cancel", "action": "decline"}], clock=clock)
     result = await cancel_booking(
@@ -107,6 +113,7 @@ async def test_cancel_declined_emits_three_rows_no_executed(harness) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -120,7 +127,7 @@ async def test_cancel_declined_emits_three_rows_no_executed(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_unknown_booking(harness) -> None:
+async def test_cancel_unknown_booking(harness, meter) -> None:
     """outcome:status='rejected', reason='unknown booking'. No gate invocation."""
     store, log, clock, sim = harness
 
@@ -141,6 +148,7 @@ async def test_cancel_unknown_booking(harness) -> None:
         log=log,
         channel=SpyChannel(),
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -150,10 +158,10 @@ async def test_cancel_unknown_booking(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_already_cancelled_short_circuits(harness) -> None:
+async def test_cancel_already_cancelled_short_circuits(harness, meter) -> None:
     """A booking already in 'cancelled' state → outcome:status='rejected'. No gate."""
     store, log, clock, sim = harness
-    booking_id = await _book(sim, store, log, clock)
+    booking_id = await _book(sim, store, log, clock, meter)
 
     # Cancel once (gate approves)
     ch = ScriptedConfirmationChannel(script=[{"match": "Cancel", "action": "approve"}], clock=clock)
@@ -164,6 +172,7 @@ async def test_cancel_already_cancelled_short_circuits(harness) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -187,6 +196,7 @@ async def test_cancel_already_cancelled_short_circuits(harness) -> None:
         log=log,
         channel=CountingChannel(),
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T2",
     )
@@ -196,10 +206,10 @@ async def test_cancel_already_cancelled_short_circuits(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_idempotency_replay(harness) -> None:
+async def test_cancel_idempotency_replay(harness, meter) -> None:
     """Two cancel calls with the same key_factory → second recalls, gate NOT re-invoked."""
     store, log, clock, sim = harness
-    booking_id = await _book(sim, store, log, clock)
+    booking_id = await _book(sim, store, log, clock, meter)
 
     invoke_count = 0
 
@@ -225,6 +235,7 @@ async def test_cancel_idempotency_replay(harness) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
         key_factory=fixed_key,
@@ -238,6 +249,7 @@ async def test_cancel_idempotency_replay(harness) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T2",
         key_factory=fixed_key,
@@ -253,10 +265,10 @@ async def test_cancel_idempotency_replay(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_request_uses_subject_kind_booking(harness) -> None:
+async def test_cancel_request_uses_subject_kind_booking(harness, meter) -> None:
     """cancel_booking must emit subject_kind='booking' and subject_id=booking_id on the gate."""
     store, log, clock, sim = harness
-    booking_id = await _book(sim, store, log, clock)
+    booking_id = await _book(sim, store, log, clock, meter)
 
     captured: list[ConfirmationRequest] = []
 
@@ -274,6 +286,7 @@ async def test_cancel_request_uses_subject_kind_booking(harness) -> None:
         log=log,
         channel=CapturingChannel(),
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -286,7 +299,7 @@ async def test_cancel_request_uses_subject_kind_booking(harness) -> None:
 
 @pytest.mark.asyncio
 async def test_cancel_idempotency_key_is_deterministic_in_tool_path(
-    harness, monkeypatch: pytest.MonkeyPatch
+    harness, monkeypatch: pytest.MonkeyPatch, meter
 ) -> None:
     """Key determinism in the cancel tool path: same inputs → same key, key logged, gate once.
 
@@ -306,7 +319,7 @@ async def test_cancel_idempotency_key_is_deterministic_in_tool_path(
     from agentic_cab.core.ids import cancel_idempotency_key
 
     store, log, clock, sim = harness
-    booking_id = await _book(sim, store, log, clock)
+    booking_id = await _book(sim, store, log, clock, meter)
 
     booking = store.get_booking(booking_id)
     assert booking is not None
@@ -345,6 +358,7 @@ async def test_cancel_idempotency_key_is_deterministic_in_tool_path(
         log=log,
         channel=OnceApproveChannel(),
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
         key_factory=spy_factory,
@@ -383,10 +397,10 @@ async def test_cancel_idempotency_key_is_deterministic_in_tool_path(
 
 
 @pytest.mark.asyncio
-async def test_cancel_fee_in_gate_summary(harness) -> None:
+async def test_cancel_fee_in_gate_summary(harness, meter) -> None:
     """Spy channel captures req.summary; assert it contains the dollar amount from _compute_fee."""
     store, log, clock, sim = harness
-    booking_id = await _book(sim, store, log, clock)
+    booking_id = await _book(sim, store, log, clock, meter)
 
     captured_summary: list[str] = []
 
@@ -404,6 +418,7 @@ async def test_cancel_fee_in_gate_summary(harness) -> None:
         log=log,
         channel=CapturingChannel(),
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
