@@ -11,6 +11,9 @@ from anthropic import Anthropic
 
 from agentic_cab.agent.system_prompt import SYSTEM_PROMPT
 from agentic_cab.core.constants import AGENT_MAX_TOKENS, MODEL_ID
+from agentic_cab.core.ports import Clock, CostMeter
+from agentic_cab.core.pricing import price_call
+from agentic_cab.core.types import LLMCall
 
 log = structlog.get_logger()
 
@@ -24,6 +27,8 @@ async def run_turn(
     history: list[dict[str, Any]],
     tools: list[dict[str, Any]],
     handlers: dict[str, ToolHandler],
+    meter: CostMeter,
+    clock: Clock,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Run one user turn until the model returns a final text response.
 
@@ -34,6 +39,7 @@ async def run_turn(
         # Note: claude-opus-4-7 is an extended-thinking model and rejects the
         # 'temperature' parameter (API returns 400).  Determinism is maintained
         # via FrozenClock + seeded RNG in scenario mode (CLAUDE.md inv. 9).
+        start_ns = clock.monotonic_ns()
         response = client.messages.create(
             model=MODEL_ID,
             max_tokens=AGENT_MAX_TOKENS,
@@ -41,6 +47,40 @@ async def run_turn(
             tools=tools,  # type: ignore[arg-type]
             messages=history,  # type: ignore[arg-type]
         )
+        end_ns = clock.monotonic_ns()
+
+        usage = response.usage
+        input_tokens = usage.input_tokens
+        output_tokens = usage.output_tokens
+        # Cache fields are not present on every SDK version, and when present may
+        # be `int | None` — read defensively so a `None` never reaches StrictInt.
+        cache_read_input_tokens = getattr(usage, "cache_read_input_tokens", 0) or 0
+        cache_creation_input_tokens = getattr(usage, "cache_creation_input_tokens", 0) or 0
+
+        cost_microcents = price_call(
+            model=MODEL_ID,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_input_tokens=cache_read_input_tokens,
+            cache_creation_input_tokens=cache_creation_input_tokens,
+        )
+
+        # Record BEFORE the stop_reason branch so every iteration is captured —
+        # including the final, non-tool_use response of the turn. Recording only
+        # inside the tool_use branch would silently drop the last call of every turn.
+        meter.record(
+            LLMCall(
+                provider="anthropic",
+                model=MODEL_ID,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cache_read_input_tokens=cache_read_input_tokens,
+                cache_creation_input_tokens=cache_creation_input_tokens,
+                cost_microcents=cost_microcents,
+                latency_ms=(end_ns - start_ns) // 1_000_000,
+            )
+        )
+
         if response.stop_reason == "tool_use":
             # Collect tool_use blocks
             tool_uses = [b for b in response.content if b.type == "tool_use"]
