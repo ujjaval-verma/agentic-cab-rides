@@ -118,10 +118,10 @@ async def test_confirm_happy_path_carries_cost_fields(harness) -> None:
     )
 
     outcome = _outcome_row(log, "S", result["action_id"])
-    assert len(outcome["llm_calls"]) == 2
-    assert outcome["total_cost_microcents"] == 3500
-    assert outcome["total_cost_microcents"] == sum(
-        c["cost_microcents"] for c in outcome["llm_calls"]
+    assert len(outcome["llm_calls_since_last_action"]) == 2
+    assert outcome["cost_microcents_since_last_action"] == 3500
+    assert outcome["cost_microcents_since_last_action"] == sum(
+        c["cost_microcents"] for c in outcome["llm_calls_since_last_action"]
     )
 
 
@@ -146,10 +146,10 @@ async def test_cancel_happy_path_carries_cost_fields(harness) -> None:
     )
 
     outcome = _outcome_row(log, "S", result["action_id"])
-    assert len(outcome["llm_calls"]) == 1
-    assert outcome["total_cost_microcents"] == 777
-    assert outcome["total_cost_microcents"] == sum(
-        c["cost_microcents"] for c in outcome["llm_calls"]
+    assert len(outcome["llm_calls_since_last_action"]) == 1
+    assert outcome["cost_microcents_since_last_action"] == 777
+    assert outcome["cost_microcents_since_last_action"] == sum(
+        c["cost_microcents"] for c in outcome["llm_calls_since_last_action"]
     )
 
 
@@ -189,7 +189,7 @@ async def test_confirm_provider_raises_still_carries_cost_fields(
     action_id = confirm_requested[0]["action_id"]
     outcome = _outcome_row(log, "S", action_id)
     assert outcome["status"] == "error"
-    assert outcome["llm_calls"] == [
+    assert outcome["llm_calls_since_last_action"] == [
         {
             "provider": "anthropic",
             "model": "claude-opus-4-7",
@@ -200,8 +200,8 @@ async def test_confirm_provider_raises_still_carries_cost_fields(
             "cost_microcents": 4200,
         }
     ]
-    assert outcome["total_cost_microcents"] == 4200
-    assert "latency_ms" not in outcome["llm_calls"][0]
+    assert outcome["cost_microcents_since_last_action"] == 4200
+    assert "latency_ms" not in outcome["llm_calls_since_last_action"][0]
 
 
 @pytest.mark.asyncio
@@ -240,8 +240,8 @@ async def test_cancel_provider_raises_still_carries_cost_fields(
     action_id = cancel_requested[0]["action_id"]
     outcome = _outcome_row(log, "S", action_id)
     assert outcome["status"] == "error"
-    assert outcome["total_cost_microcents"] == 999
-    assert "latency_ms" not in outcome["llm_calls"][0]
+    assert outcome["cost_microcents_since_last_action"] == 999
+    assert "latency_ms" not in outcome["llm_calls_since_last_action"][0]
 
 
 @pytest.mark.asyncio
@@ -266,8 +266,8 @@ async def test_empty_drain_emits_empty_list_and_zero_total(harness) -> None:
     )
 
     outcome = _outcome_row(log, "S", result["action_id"])
-    assert outcome["llm_calls"] == []
-    assert outcome["total_cost_microcents"] == 0
+    assert outcome["llm_calls_since_last_action"] == []
+    assert outcome["cost_microcents_since_last_action"] == 0
 
 
 @pytest.mark.asyncio
@@ -289,8 +289,8 @@ async def test_read_only_tool_outcome_row_unchanged(harness) -> None:
         r for r in log.read("S") if r["kind"] == "outcome" and r["tool"] == "discover_options"
     ]
     assert len(outcome_rows) == 1
-    assert "llm_calls" not in outcome_rows[0]
-    assert "total_cost_microcents" not in outcome_rows[0]
+    assert "llm_calls_since_last_action" not in outcome_rows[0]
+    assert "cost_microcents_since_last_action" not in outcome_rows[0]
 
 
 @pytest.mark.asyncio
@@ -316,7 +316,7 @@ async def test_second_gated_action_sees_only_calls_since_previous_drain(harness)
         turn_id="T",
     )
     outcome1 = _outcome_row(log, "S", r1["action_id"])
-    assert outcome1["total_cost_microcents"] == 1000
+    assert outcome1["cost_microcents_since_last_action"] == 1000
 
     # Second gated action (cancel) on the same session/meter — records a fresh call.
     meter.record(_call(50))
@@ -335,5 +335,5 @@ async def test_second_gated_action_sees_only_calls_since_previous_drain(harness)
         turn_id="T2",
     )
     outcome2 = _outcome_row(log, "S", r2["action_id"])
-    assert outcome2["total_cost_microcents"] == 50
-    assert len(outcome2["llm_calls"]) == 1
+    assert outcome2["cost_microcents_since_last_action"] == 50
+    assert len(outcome2["llm_calls_since_last_action"]) == 1
