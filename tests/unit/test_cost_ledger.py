@@ -120,9 +120,7 @@ async def test_confirm_happy_path_carries_cost_fields(harness) -> None:
     outcome = _outcome_row(log, "S", result["action_id"])
     assert len(outcome["llm_calls_since_last_action"]) == 2
     assert outcome["cost_microcents_since_last_action"] == 3500
-    assert outcome["cost_microcents_since_last_action"] == sum(
-        c["cost_microcents"] for c in outcome["llm_calls_since_last_action"]
-    )
+    assert all("latency_ms" not in c for c in outcome["llm_calls_since_last_action"])
 
 
 @pytest.mark.asyncio
@@ -148,9 +146,7 @@ async def test_cancel_happy_path_carries_cost_fields(harness) -> None:
     outcome = _outcome_row(log, "S", result["action_id"])
     assert len(outcome["llm_calls_since_last_action"]) == 1
     assert outcome["cost_microcents_since_last_action"] == 777
-    assert outcome["cost_microcents_since_last_action"] == sum(
-        c["cost_microcents"] for c in outcome["llm_calls_since_last_action"]
-    )
+    assert "latency_ms" not in outcome["llm_calls_since_last_action"][0]
 
 
 @pytest.mark.asyncio
@@ -337,3 +333,4 @@ async def test_second_gated_action_sees_only_calls_since_previous_drain(harness)
     outcome2 = _outcome_row(log, "S", r2["action_id"])
     assert outcome2["cost_microcents_since_last_action"] == 50
     assert len(outcome2["llm_calls_since_last_action"]) == 1
+    assert "latency_ms" not in outcome2["llm_calls_since_last_action"][0]

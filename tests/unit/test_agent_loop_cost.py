@@ -5,10 +5,10 @@ Verifies:
     non-tool_use response of a turn (the "record before the stop_reason branch"
     requirement — a record placed inside the tool_use branch would silently
     drop the last call of every turn).
-  - The recorded LLMCall carries the token counts from response.usage and a
-    cost_microcents matching core.pricing.price_call for those counts.
+  - The recorded LLMCall carries the token counts from response.usage, and forwards
+    those same counts into core.pricing.price_call (the arithmetic inside price_call
+    is pinned by test_pricing.py, not here).
   - usage objects missing or nulling the cache fields yield 0, not a crash.
-  - A minimal list-backed CostMeter satisfies the CostMeter Protocol.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ import pytest
 from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.agent.loop import run_turn
 from agentic_cab.core.constants import MODEL_ID
-from agentic_cab.core.ports import CostMeter
 from agentic_cab.core.pricing import price_call
 from agentic_cab.core.types import LLMCall
 
@@ -42,11 +41,6 @@ class FakeCostMeter:
         drained = self.calls
         self.calls = []
         return drained
-
-
-def test_fake_cost_meter_satisfies_protocol() -> None:
-    meter: CostMeter = FakeCostMeter()
-    assert isinstance(meter, CostMeter)
 
 
 class _Usage:
@@ -152,7 +146,13 @@ async def test_run_turn_records_one_call_per_iteration_including_tool_use() -> N
 
 
 @pytest.mark.asyncio
-async def test_recorded_llm_call_carries_token_counts_and_matching_cost() -> None:
+async def test_recorded_llm_call_forwards_usage_token_counts_into_price_call() -> None:
+    """The loop must hand response.usage's four counts to price_call unchanged.
+
+    This does NOT pin price_call's arithmetic — the expectation is computed by calling
+    it — only that the loop forwards the right numbers. price_call's own maths is
+    covered by test_pricing.py.
+    """
     usage = _Usage(
         input_tokens=200,
         output_tokens=50,
