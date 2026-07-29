@@ -33,6 +33,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.clock import SystemClock
+from agentic_cab.adapters.cost_meter import InMemoryCostMeter
 from agentic_cab.adapters.geocoding.cache import GeocodeCache
 from agentic_cab.adapters.geocoding.nominatim import NominatimGeocoder
 from agentic_cab.adapters.state_store import SqliteStateStore
@@ -75,6 +76,7 @@ _channels: dict[str, WebConfirmationChannel] = {}
 _turn_id_refs: dict[str, list[str]] = {}
 _chat_histories: dict[str, list[dict[str, Any]]] = {}
 _sim_adapters: dict[str, UberSimAdapter] = {}
+_meters: dict[str, InMemoryCostMeter] = {}
 
 
 def _get_channel(
@@ -105,6 +107,14 @@ def _get_sim(
         rng_seed = int.from_bytes(os.urandom(4), "big")
         _sim_adapters[session_id] = UberSimAdapter(store=store, clock=clock, rng_seed=rng_seed)
     return _sim_adapters[session_id]
+
+
+def _get_meter(session_id: str) -> InMemoryCostMeter:
+    """Memoize one CostMeter per session — the same instance run_turn fills and
+    the gated tools will drain (P8)."""
+    if session_id not in _meters:
+        _meters[session_id] = InMemoryCostMeter()
+    return _meters[session_id]
 
 
 # ---------- App factory ----------
@@ -203,6 +213,7 @@ def create_app(
         clock = SystemClock()
         sim = _get_sim(session_id, store=store, clock=clock)
         channel = _get_channel(session_id, store=store, clock=clock)
+        meter = _get_meter(session_id)
 
         geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
         geocoder = NominatimGeocoder(
@@ -239,6 +250,7 @@ def create_app(
             clock=clock,
             channel=channel,
             geocoder=geocoder,
+            meter=meter,
             session_id=session_id,
             turn_id_ref=turn_id_ref,
         )
@@ -253,6 +265,8 @@ def create_app(
                     history=history,
                     tools=_get_tool_defs(),
                     handlers=handlers,
+                    meter=meter,
+                    clock=clock,
                 )
                 _chat_histories[session_id] = new_history
                 # Publish the final agent reply as an SSE event.

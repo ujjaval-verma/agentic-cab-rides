@@ -25,6 +25,7 @@ from rich.panel import Panel
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.clock import SystemClock
 from agentic_cab.adapters.confirmation.cli import CLIConfirmationChannel
+from agentic_cab.adapters.cost_meter import InMemoryCostMeter
 from agentic_cab.adapters.geocoding.cache import GeocodeCache
 from agentic_cab.adapters.geocoding.nominatim import NominatimGeocoder
 from agentic_cab.adapters.state_store import SqliteStateStore
@@ -36,6 +37,7 @@ from agentic_cab.core.ports import (
     BookingProvider,
     Clock,
     ConfirmationChannel,
+    CostMeter,
     GeocoderPort,
     StateStore,
 )
@@ -103,6 +105,7 @@ def build_handlers(
     clock: Clock,
     channel: ConfirmationChannel,
     geocoder: GeocoderPort,
+    meter: CostMeter,
     session_id: str,
     turn_id_ref: list[str],
 ) -> dict[str, ToolHandler]:
@@ -157,6 +160,7 @@ def build_handlers(
             provider=sim,
             log=log,
             clock=clock,
+            meter=meter,
             session_id=session_id,
             turn_id=_turn_id(),
         )
@@ -169,6 +173,7 @@ def build_handlers(
             provider=sim,
             log=log,
             clock=clock,
+            meter=meter,
             session_id=session_id,
             turn_id=_turn_id(),
         )
@@ -228,6 +233,8 @@ async def _repl_loop(
     session_id: str,
     turn_id_ref: list[str],
     chat_log_path: Path,
+    meter: CostMeter,
+    clock: Clock,
 ) -> None:
     """Core REPL loop — shared between interactive and scripted modes."""
     history: list[dict[str, Any]] = []
@@ -264,6 +271,8 @@ async def _repl_loop(
                 history=history,
                 tools=_TOOL_DEFS,
                 handlers=handlers,
+                meter=meter,
+                clock=clock,
             )
         except Exception as exc:
             _log.exception("repl.turn.error", exc=exc)
@@ -322,6 +331,10 @@ async def run_repl(
 
     turn_id_ref: list[str] = [new_turn_id()]
 
+    # One CostMeter per session, shared between the agent loop (which fills it)
+    # and the gated tools (which will drain it in a later slice — P8).
+    meter = InMemoryCostMeter()
+
     handlers = build_handlers(
         sim=sim,
         store=store,
@@ -329,6 +342,7 @@ async def run_repl(
         clock=clock,
         channel=_channel,
         geocoder=geocoder,
+        meter=meter,
         session_id=session_id,
         turn_id_ref=turn_id_ref,
     )
@@ -346,6 +360,8 @@ async def run_repl(
         session_id=session_id,
         turn_id_ref=turn_id_ref,
         chat_log_path=chat_log_path,
+        meter=meter,
+        clock=clock,
     )
 
     _log.info("repl.end", session_id=session_id)
