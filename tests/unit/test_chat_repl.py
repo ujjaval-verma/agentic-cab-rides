@@ -316,18 +316,50 @@ async def test_repl_handler_dispatch_discover_options(tmp_path: Path) -> None:
     assert "list_active_bookings" in rows_text
 
 
+def _end_turn_response(text: str = "Done.") -> MagicMock:
+    content_block = MagicMock()
+    content_block.type = "text"
+    content_block.text = text
+
+    response = MagicMock()
+    response.stop_reason = "end_turn"
+    response.content = [content_block]
+    response.usage = _stub_usage()
+    return response
+
+
+def _gated_tool_use_response(tool_name: str, tool_input: dict[str, Any]) -> MagicMock:
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = tool_name
+    block.id = f"tu_{tool_name}"
+    block.input = tool_input
+
+    response = MagicMock()
+    response.stop_reason = "tool_use"
+    response.content = [block]
+    response.usage = _stub_usage()
+    return response
+
+
 @pytest.mark.asyncio
-async def test_repl_uses_one_meter_instance_for_handlers_and_run_turn(tmp_path: Path) -> None:
+async def test_repl_uses_one_meter_instance_for_run_turn_and_both_gated_tools(
+    tmp_path: Path,
+) -> None:
     """run_repl must construct exactly one CostMeter and pass the SAME instance to
-    both build_handlers (confirm_booking/cancel_booking) and run_turn.
+    run_turn and to *both* gated tools.
 
     Regression: a second meter in one session means the gated tools would drain
     a buffer run_turn never filled into — a silent cost-ledger data loss that no
-    structural check (pyright, four-row log shape) would catch. Wrap the real
-    build_handlers/run_turn with spies that record the `meter` kwarg each
-    receives, then assert identity.
+    structural check (pyright, four-row log shape) would catch.
+
+    The assertion deliberately lands on `confirm_booking` / `cancel_booking`
+    themselves, not on `build_handlers`: build_handlers receiving the right meter
+    says nothing about what the closures it builds pass onward, so a spy one layer
+    up stops short of the bug. The ids below are bogus, so both tools reject before
+    the gate — this test cares only about which meter instance each received.
     """
-    inputs = iter(["List my active bookings please.", "/quit"])
+    inputs = iter(["Confirm and then cancel, please.", "/quit"])
 
     def _input_source() -> str | None:
         return next(inputs, None)
@@ -336,26 +368,38 @@ async def test_repl_uses_one_meter_instance_for_handlers_and_run_turn(tmp_path: 
 
     console = Console(force_terminal=False, no_color=True)
     deps = _make_deps(tmp_path)
-    stub_client = _stub_client_end_message("You have no active bookings.")
+
+    stub_client = MagicMock()
+    stub_client.messages.create.side_effect = [
+        _gated_tool_use_response("confirm_booking", {"draft_id": "no-such-draft"}),
+        _gated_tool_use_response("cancel_booking", {"booking_id": "no-such-booking"}),
+        _end_turn_response("All done."),
+    ]
 
     import agentic_cab.agent.chat as chat_mod
 
     captured: dict[str, Any] = {}
-    real_build_handlers = chat_mod.build_handlers
     real_run_turn = chat_mod.run_turn
-
-    def _spy_build_handlers(**kwargs: Any) -> Any:
-        captured["build_handlers_meter"] = kwargs["meter"]
-        return real_build_handlers(**kwargs)
+    real_confirm_booking = chat_mod.confirm_booking
+    real_cancel_booking = chat_mod.cancel_booking
 
     async def _spy_run_turn(client: Any, **kwargs: Any) -> Any:
         captured["run_turn_meter"] = kwargs["meter"]
         return await real_run_turn(client, **kwargs)
 
+    async def _spy_confirm_booking(*args: Any, **kwargs: Any) -> Any:
+        captured["confirm_booking_meter"] = kwargs["meter"]
+        return await real_confirm_booking(*args, **kwargs)
+
+    async def _spy_cancel_booking(*args: Any, **kwargs: Any) -> Any:
+        captured["cancel_booking_meter"] = kwargs["meter"]
+        return await real_cancel_booking(*args, **kwargs)
+
     with (
         patch("agentic_cab.agent.chat.Anthropic", return_value=stub_client),
-        patch("agentic_cab.agent.chat.build_handlers", side_effect=_spy_build_handlers),
         patch("agentic_cab.agent.chat.run_turn", side_effect=_spy_run_turn),
+        patch("agentic_cab.agent.chat.confirm_booking", side_effect=_spy_confirm_booking),
+        patch("agentic_cab.agent.chat.cancel_booking", side_effect=_spy_cancel_booking),
     ):
         await run_repl(
             data_dir=tmp_path / "data",
@@ -366,8 +410,12 @@ async def test_repl_uses_one_meter_instance_for_handlers_and_run_turn(tmp_path: 
             channel=deps["channel"],
         )
 
-    assert "build_handlers_meter" in captured, "build_handlers was not called"
     assert "run_turn_meter" in captured, "run_turn was not called"
+    assert "confirm_booking_meter" in captured, "the confirm_booking handler was not reached"
+    assert "cancel_booking_meter" in captured, "the cancel_booking handler was not reached"
     assert (
-        captured["build_handlers_meter"] is captured["run_turn_meter"]
-    ), "handlers and run_turn must share the SAME CostMeter instance"
+        captured["run_turn_meter"] is captured["confirm_booking_meter"]
+    ), "run_turn and confirm_booking must share the SAME CostMeter instance"
+    assert (
+        captured["run_turn_meter"] is captured["cancel_booking_meter"]
+    ), "run_turn and cancel_booking must share the SAME CostMeter instance"
