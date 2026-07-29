@@ -228,7 +228,7 @@ P5 (web UI) branches from P1 — the agent loop, tool surface, and one working s
 - [ ] Gated `outcome` rows carry `llm_calls_since_last_action` and `cost_microcents_since_last_action`, **including on the provider-raises path**.
 - [ ] Tail loss — model calls after the last gated drain in a session — measured against real scenario runs, with the actual number written into `docs/WRITEUP.md`. Not asserted to be zero.
 - [ ] `docs/WRITEUP.md` gains a cost-ledger section: what the ledger is, the price table, the tail-loss number, and the reproducibility caveat (invariant 9 — the model rejects `temperature`, so token counts vary with the reasoning chain; `FrozenClock` and seeded RNG do not help here).
-- [ ] Transcript re-render: **not done, and the "no re-render" claim below is false.** All six files under `transcripts/` predate the cost ledger — none contains any cost field (verified: zero matches across all six). They will not carry `llm_calls_since_last_action` / `cost_microcents_since_last_action` until regenerated with `make transcripts`, which makes real, paid Anthropic API calls. Deliberately deferred as a follow-up rather than run here.
+- [ ] Transcript re-render: **not done.** An earlier draft of this bullet claimed no re-render was needed; that was false. All six files under `transcripts/` predate the cost ledger — none contains any cost field (verified: zero matches across all six). They will not carry `llm_calls_since_last_action` / `cost_microcents_since_last_action` until regenerated with `make transcripts`, which makes real, paid Anthropic API calls. Deliberately deferred as a follow-up rather than run here.
 
 **Slices:**
 - CostMeter port + `LLMCall` + integer-microcent pricing
