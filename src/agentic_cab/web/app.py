@@ -20,7 +20,7 @@ import json
 import os
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -69,15 +69,19 @@ class ConfirmationRequest(BaseModel):
 
 _bus = SessionEventBus()
 
+# Bounded per-session state.
+#
+# One dict, one lifetime, one eviction point. Five parallel dicts keyed
+# identically by session_id would make partial eviction a live hazard —
+# evicting four of five could leave a session holding a stale meter or a
+# stale option cache, a subtler bug than the leak itself.
+_SESSION_IDLE_TTL = timedelta(hours=1)
+_MAX_SESSIONS = 64
+
 
 @dataclass
 class _SessionState:
     """Everything one browser session needs, created together and evicted together.
-
-    One dict, one lifetime, one eviction point. Five parallel dicts keyed
-    identically by session_id would make partial eviction a live hazard —
-    evicting four of five could leave a session holding a stale meter or a
-    stale option cache, a subtler bug than the leak itself.
 
     The sim adapter carries in-memory state (option cache, intent cache, the
     surge re-quote flag) that must survive across web turns within a process —
@@ -127,6 +131,43 @@ def _get_session(
     return state
 
 
+def _evict_stale_sessions(clock: Clock) -> None:
+    """Bound `_sessions` memory: idle TTL, then a hard LRU cap.
+
+    A session whose `WebConfirmationChannel` still holds an unresolved pending
+    confirmation is pinned — never evicted by either rule — so a human waiting
+    at the gate is never stranded. Pending confirmations carry their own
+    `expires_at`, so a pinned session cannot pin memory indefinitely.
+    """
+    now = clock.now()
+
+    idle_ids = [
+        sid
+        for sid, state in _sessions.items()
+        if now - state.last_used_at > _SESSION_IDLE_TTL and not state.channel.has_pending()
+    ]
+    for sid in idle_ids:
+        del _sessions[sid]
+        _log.info("web.session.evicted", session_id=sid, reason="idle")
+
+    overflow = len(_sessions) - _MAX_SESSIONS
+    if overflow > 0:
+        evictable = sorted(
+            ((sid, state) for sid, state in _sessions.items() if not state.channel.has_pending()),
+            key=lambda item: item[1].last_used_at,
+        )
+        for sid, _state in evictable[:overflow]:
+            del _sessions[sid]
+            _log.info("web.session.evicted", session_id=sid, reason="lru")
+
+        remaining_overflow = len(_sessions) - _MAX_SESSIONS
+        if remaining_overflow > 0:
+            _log.warning(
+                "web.session.cap_exceeded_pinned",
+                overflow=remaining_overflow,
+            )
+
+
 # ---------- App factory ----------
 
 
@@ -135,14 +176,19 @@ def create_app(
     data_dir: Path | None = None,
     log_dir: Path | None = None,
     geocode_fixtures_dir: Path | None = None,
+    clock: Clock | None = None,
 ) -> FastAPI:
     """Create and return the FastAPI application.
 
-    All paths are injectable so tests can isolate filesystem state.
+    All paths are injectable so tests can isolate filesystem state. `clock` is
+    injectable too — production wiring defaults to `SystemClock`, and tests
+    inject a `FrozenClock` to drive session-eviction timing without sleeping
+    (CLAUDE.md invariant 9).
     """
     _data_dir = data_dir or Path("data")
     _log_dir = log_dir or Path("logs")
     _geocode_fixtures_dir = geocode_fixtures_dir or Path("fixtures/geocode")
+    _clock: Clock = clock or SystemClock()
 
     _data_dir.mkdir(parents=True, exist_ok=True)
     _log_dir.mkdir(parents=True, exist_ok=True)
@@ -152,8 +198,7 @@ def create_app(
         """Re-publish pending confirmations that survived a prior process crash."""
         store = SqliteStateStore(db_path=_data_dir / "state.db", check_same_thread=False)
         store.apply_schema()
-        clock = SystemClock()
-        pending = store.list_pending_confirmations(now=clock.now())
+        pending = store.list_pending_confirmations(now=_clock.now())
         for record in pending:
             req = record.request
             _log.info(
@@ -215,12 +260,16 @@ def create_app(
         session_id = body.session_id
         _log.info("web.chat", session_id=session_id)
 
+        clock = _clock
+
+        # Bound session memory before this session's own state is touched.
+        _evict_stale_sessions(clock)
+
         # Build per-session infrastructure (idempotent on second call for same session).
         store = SqliteStateStore(db_path=_data_dir / "state.db", check_same_thread=False)
         store.apply_schema()
 
         action_log = JSONLActionLog(log_dir=_log_dir)
-        clock = SystemClock()
         state = _get_session(session_id, store=store, clock=clock)
         sim = state.sim
         channel = state.channel
