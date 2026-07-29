@@ -9,12 +9,16 @@ and calling POST /confirmations.
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from agentic_cab.web.app import (
+    _MAX_SESSIONS,
+    _SESSION_IDLE_TTL,
+    _evict_stale_sessions,
     _get_session,
     _sessions,
     create_app,
@@ -358,3 +362,181 @@ def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
     data = response.json()
     assert data["status"] == "ok"
     assert data["session_id"] == "test-session-chat"
+
+
+# ---------- Session eviction (bounded per-session state) ----------
+
+
+def test_idle_session_evicted_together(tmp_path: Path) -> None:
+    """An idle session past the TTL is evicted — the whole record disappears together.
+
+    Regression: five parallel dicts made partial eviction a live hazard (a
+    session could keep a stale meter or option cache). Consolidating into one
+    `_SessionState` record means eviction is one dict.pop, never a partial one.
+    """
+    from datetime import UTC, datetime
+
+    from agentic_cab.adapters.clock import FrozenClock
+
+    _sessions.clear()
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    fastapi_app = create_app(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+        clock=clock,
+    )
+    client = TestClient(fastapi_app, raise_server_exceptions=False)
+
+    client.post("/chat", json={"session_id": "sess-idle", "message": "hi"})
+    assert "sess-idle" in _sessions
+
+    clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
+    # Any subsequent /chat call runs the eviction sweep before touching its own state.
+    client.post("/chat", json={"session_id": "sess-trigger", "message": "hi"})
+
+    assert "sess-idle" not in _sessions, "the whole session record must be gone"
+
+
+def test_session_touched_within_ttl_survives(tmp_path: Path) -> None:
+    """A session touched within the idle TTL is not evicted."""
+    from datetime import UTC, datetime
+
+    from agentic_cab.adapters.clock import FrozenClock
+
+    _sessions.clear()
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    fastapi_app = create_app(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+        clock=clock,
+    )
+    client = TestClient(fastapi_app, raise_server_exceptions=False)
+
+    client.post("/chat", json={"session_id": "sess-fresh", "message": "hi"})
+    clock.tick(timedelta(minutes=30))
+    client.post("/chat", json={"session_id": "sess-trigger", "message": "hi"})
+
+    assert "sess-fresh" in _sessions
+
+
+def test_exceeding_max_sessions_evicts_lru_first(tmp_path: Path) -> None:
+    """Once `_MAX_SESSIONS` is exceeded, the least-recently-used session goes first."""
+    from datetime import UTC, datetime
+
+    from agentic_cab.adapters.clock import FrozenClock
+
+    _sessions.clear()
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    fastapi_app = create_app(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+        clock=clock,
+    )
+    client = TestClient(fastapi_app, raise_server_exceptions=False)
+
+    for i in range(_MAX_SESSIONS):
+        client.post("/chat", json={"session_id": f"sess-{i}", "message": "hi"})
+        clock.tick(timedelta(seconds=1))
+    assert len(_sessions) == _MAX_SESSIONS
+
+    # A brand-new session pushes the count to _MAX_SESSIONS + 1; the sweep at
+    # its entry still saw exactly the cap, so no eviction happens yet.
+    client.post("/chat", json={"session_id": "sess-new", "message": "hi"})
+    clock.tick(timedelta(seconds=1))
+
+    # Re-touching an existing session runs the sweep again, which now sees
+    # _MAX_SESSIONS + 1 and evicts the LRU session (sess-0, the oldest
+    # last_used_at) before touching its own (already-existing) state — so
+    # this call doesn't grow the dict itself.
+    client.post("/chat", json={"session_id": "sess-new", "message": "hi again"})
+
+    assert "sess-0" not in _sessions, "least-recently-used session should be evicted first"
+    assert "sess-new" in _sessions
+    assert len(_sessions) == _MAX_SESSIONS
+
+
+@pytest.mark.asyncio
+async def test_pinned_session_with_pending_confirmation_survives_eviction(
+    tmp_path: Path,
+) -> None:
+    """A session with an unresolved pending confirmation is never evicted.
+
+    Evicting it would strand a human waiting at the gate. We drive this via
+    the real `WebConfirmationChannel.request()` / `_evict_stale_sessions`
+    path rather than poking a parallel registry.
+    """
+    from datetime import UTC, datetime
+
+    from agentic_cab.adapters.clock import FrozenClock
+    from agentic_cab.adapters.state_store import SqliteStateStore
+    from agentic_cab.core.ports import ConfirmationRequest
+
+    _sessions.clear()
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    store = SqliteStateStore(db_path=tmp_path / "state.db", check_same_thread=False)
+    store.apply_schema()
+
+    state = _get_session("sess-pinned", store=store, clock=clock)
+    req = ConfirmationRequest(
+        subject_id="draft-pinned",
+        subject_kind="draft",
+        summary="Book UberX $12.00 from A to B",
+        fingerprint="b" * 64,
+        details={},
+        expires_at=clock.now() + timedelta(hours=2),
+    )
+    task = asyncio.ensure_future(state.channel.request(req))
+    await asyncio.sleep(0)  # let the future register
+
+    # Push well past the idle TTL — the pinned session must survive.
+    clock.tick(_SESSION_IDLE_TTL + timedelta(hours=1))
+    _evict_stale_sessions(clock)
+    assert "sess-pinned" in _sessions
+
+    # It must also survive an LRU sweep even once the cap is exceeded — the
+    # pinned session has the oldest last_used_at of the lot, so it would be
+    # the first LRU candidate if it weren't filtered out.
+    for i in range(_MAX_SESSIONS + 5):
+        _get_session(f"sess-filler-{i}", store=store, clock=clock)
+    _evict_stale_sessions(clock)
+    assert "sess-pinned" in _sessions
+    assert len(_sessions) <= _MAX_SESSIONS + 1  # +1 for the pinned session itself
+
+    # Clean up: resolve so the awaited task doesn't dangle past the test.
+    state.channel.resolve("draft-pinned", approved=False, approver=None)
+    await asyncio.wait_for(task, timeout=2.0)
+
+
+def test_session_reused_after_eviction_gets_fresh_state(tmp_path: Path) -> None:
+    """Re-using a session id after eviction creates a fresh record and does not crash."""
+    from datetime import UTC, datetime
+
+    from agentic_cab.adapters.clock import FrozenClock
+
+    _sessions.clear()
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    fastapi_app = create_app(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+        clock=clock,
+    )
+    client = TestClient(fastapi_app, raise_server_exceptions=False)
+
+    client.post("/chat", json={"session_id": "sess-reuse", "message": "hi"})
+    original_meter = _sessions["sess-reuse"].meter
+    original_sim = _sessions["sess-reuse"].sim
+
+    clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
+    client.post("/chat", json={"session_id": "sess-trigger", "message": "hi"})
+    assert "sess-reuse" not in _sessions
+
+    response = client.post("/chat", json={"session_id": "sess-reuse", "message": "hi again"})
+    assert response.status_code == 200
+
+    new_state = _sessions["sess-reuse"]
+    assert new_state.meter is not original_meter, "reused session must get a fresh meter"
+    assert new_state.sim is not original_sim, "reused session must get a fresh sim adapter"
