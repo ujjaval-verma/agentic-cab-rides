@@ -65,7 +65,7 @@ Not deployed today: no container, no orchestrator, no horizontal scale. The web 
 | `ConfirmationChannel` | `core/ports.py` | Owns the y/n decision for every state-mutating action. The agent cannot self-approve. | `CLIConfirmationChannel` (TTY), `WebConfirmationChannel` (SSE + POST), `ScriptedConfirmationChannel` (scenarios) |
 | `ActionLog` | `core/ports.py` | Append-only JSONL emission, four rows per gated action. PII redacted at the boundary. | `JSONLActionLog` |
 | `StateStore` | `core/ports.py` | SQLite-backed durable state: drafts, bookings, booking_events, idempotency_keys, pending_confirmations. | `SqliteStateStore` |
-| `Clock` | `core/ports.py` | Now-source. Real time in interactive mode, frozen in scenario mode for determinism. | `SystemClock`, `FrozenClock` |
+| `Clock` | `core/ports.py` | Now-source plus a monotonic counter (`monotonic_ns`) for call-latency timing. Real time in interactive mode, frozen/deterministic in scenario mode. | `SystemClock`, `FrozenClock` |
 | `GeocoderPort` | `core/ports.py` | Address → `{formatted, lat, lng, confidence}`. Cached. | `InMemoryGeocoder`, `MapboxGeocoderAdapter` |
 
 ## Invariants and where they live

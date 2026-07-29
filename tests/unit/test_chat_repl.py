@@ -314,3 +314,60 @@ async def test_repl_handler_dispatch_discover_options(tmp_path: Path) -> None:
     assert action_log_files, "Expected an action log file"
     rows_text = action_log_files[0].read_text()
     assert "list_active_bookings" in rows_text
+
+
+@pytest.mark.asyncio
+async def test_repl_uses_one_meter_instance_for_handlers_and_run_turn(tmp_path: Path) -> None:
+    """run_repl must construct exactly one CostMeter and pass the SAME instance to
+    both build_handlers (confirm_booking/cancel_booking) and run_turn.
+
+    Regression: a second meter in one session means the gated tools would drain
+    a buffer run_turn never filled into — a silent cost-ledger data loss that no
+    structural check (pyright, four-row log shape) would catch. Wrap the real
+    build_handlers/run_turn with spies that record the `meter` kwarg each
+    receives, then assert identity.
+    """
+    inputs = iter(["List my active bookings please.", "/quit"])
+
+    def _input_source() -> str | None:
+        return next(inputs, None)
+
+    from rich.console import Console
+
+    console = Console(force_terminal=False, no_color=True)
+    deps = _make_deps(tmp_path)
+    stub_client = _stub_client_end_message("You have no active bookings.")
+
+    import agentic_cab.agent.chat as chat_mod
+
+    captured: dict[str, Any] = {}
+    real_build_handlers = chat_mod.build_handlers
+    real_run_turn = chat_mod.run_turn
+
+    def _spy_build_handlers(**kwargs: Any) -> Any:
+        captured["build_handlers_meter"] = kwargs["meter"]
+        return real_build_handlers(**kwargs)
+
+    async def _spy_run_turn(client: Any, **kwargs: Any) -> Any:
+        captured["run_turn_meter"] = kwargs["meter"]
+        return await real_run_turn(client, **kwargs)
+
+    with (
+        patch("agentic_cab.agent.chat.Anthropic", return_value=stub_client),
+        patch("agentic_cab.agent.chat.build_handlers", side_effect=_spy_build_handlers),
+        patch("agentic_cab.agent.chat.run_turn", side_effect=_spy_run_turn),
+    ):
+        await run_repl(
+            data_dir=tmp_path / "data",
+            log_dir=tmp_path / "logs",
+            geocode_fixtures_dir=tmp_path / "geocode",
+            console=console,
+            input_source=_input_source,
+            channel=deps["channel"],
+        )
+
+    assert "build_handlers_meter" in captured, "build_handlers was not called"
+    assert "run_turn_meter" in captured, "run_turn was not called"
+    assert (
+        captured["build_handlers_meter"] is captured["run_turn_meter"]
+    ), "handlers and run_turn must share the SAME CostMeter instance"

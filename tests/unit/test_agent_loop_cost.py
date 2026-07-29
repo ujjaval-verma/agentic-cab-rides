@@ -269,5 +269,9 @@ async def test_recorded_latency_ms_reflects_frozen_clock_advance() -> None:
     )
 
     call = meter.calls[0]
-    assert call.latency_ms >= 0
-    assert isinstance(call.latency_ms, int)
+    # FrozenClock.monotonic_ns() advances by a fixed 1ms per call (see
+    # adapters/clock.py::_FROZEN_MONOTONIC_STEP_NS). run_turn calls it once before
+    # and once after client.messages.create, so the single iteration here spans
+    # exactly one step: latency_ms must be the real elapsed value (1), not a
+    # hardcoded 0 — the regression this test exists to catch.
+    assert call.latency_ms == 1

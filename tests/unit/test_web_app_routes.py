@@ -14,7 +14,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from agentic_cab.web.app import _channels, _get_channel, _get_sim, _sim_adapters, create_app
+from agentic_cab.web.app import (
+    _channels,
+    _get_channel,
+    _get_meter,
+    _get_sim,
+    _meters,
+    _sim_adapters,
+    create_app,
+)
 
 
 @pytest.fixture
@@ -301,6 +309,23 @@ def test_get_sim_memoizes_per_session(tmp_path: Path) -> None:
 
     assert sim_a1 is sim_a2, "same session must reuse the cached adapter"
     assert sim_a1 is not sim_b, "different sessions must get distinct adapters"
+
+
+def test_get_meter_memoizes_per_session(tmp_path: Path) -> None:
+    """Two calls with the same session_id return the same CostMeter instance.
+
+    Regression: a second meter per session means confirm_booking/cancel_booking
+    would drain a buffer run_turn never filled — the exact silent-data-loss
+    failure mode the P8 cost ledger is designed to avoid (see docs/plans).
+    """
+    _meters.clear()
+
+    meter_a1 = _get_meter("sess-a")
+    meter_a2 = _get_meter("sess-a")
+    meter_b = _get_meter("sess-b")
+
+    assert meter_a1 is meter_a2, "same session must reuse the cached meter"
+    assert meter_a1 is not meter_b, "different sessions must get distinct meters"
 
 
 def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
