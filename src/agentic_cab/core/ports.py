@@ -83,6 +83,8 @@ class ConfirmationChannel(Protocol):
 class Clock(Protocol):
     def now(self: Self) -> datetime: ...
 
+    def monotonic_ns(self: Self) -> int: ...
+
 
 # ---------- ActionLog ----------
 
