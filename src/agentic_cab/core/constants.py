@@ -3,8 +3,9 @@
 MODEL_ID = "claude-opus-4-7"
 
 # Price per million tokens, in microcents (1 cent = 1_000_000 microcents).
-# Snapshot from the Anthropic pricing page, captured 2026-07-29. NOT fetched at
-# runtime. Stale prices are a correctness bug — re-verify when MODEL_ID changes.
+# Snapshot verified against the claude-api skill's cached model reference
+# (cache date 2026-06-24), checked 2026-07-29. NOT fetched at runtime. Stale
+# prices are a correctness bug — re-verify when MODEL_ID changes.
 # claude-opus-4-7: $5.00 / $25.00 per MTok input/output; cache read is 0.1x input,
 # cache write is 1.25x input (default 5-minute TTL).
 MODEL_PRICES_MICROCENTS_PER_MTOK: dict[str, dict[str, int]] = {
