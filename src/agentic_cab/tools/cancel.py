@@ -37,6 +37,7 @@ from agentic_cab.core.ports import (
     Clock,
     ConfirmationChannel,
     ConfirmationRequest,
+    CostMeter,
     StateStore,
 )
 
@@ -75,6 +76,7 @@ async def cancel_booking(
     log: ActionLog,
     channel: ConfirmationChannel,
     clock: Clock,
+    meter: CostMeter,
     session_id: str,
     turn_id: str,
     key_factory: Callable[[str, int, str], str] = cancel_idempotency_key,

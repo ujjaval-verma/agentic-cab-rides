@@ -37,6 +37,7 @@ from agentic_cab.core.ports import (
     Clock,
     ConfirmationChannel,
     ConfirmationRequest,
+    CostMeter,
     StateStore,
 )
 from agentic_cab.core.types import Draft, RideIntent, RideOptionDetails
@@ -239,6 +240,7 @@ async def confirm_booking(
     log: ActionLog,
     channel: ConfirmationChannel,
     clock: Clock,
+    meter: CostMeter,
     session_id: str,
     turn_id: str,
 ) -> dict[str, Any]:
