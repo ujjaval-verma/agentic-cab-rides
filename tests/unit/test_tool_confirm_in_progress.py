@@ -147,7 +147,7 @@ class _NeverCalledChannel:
 
 
 @pytest.mark.asyncio
-async def test_in_progress_claim_returns_in_progress_outcome(tmp_path: Path) -> None:
+async def test_in_progress_claim_returns_in_progress_outcome(tmp_path: Path, meter) -> None:
     """claim_or_recall returning in_progress must produce outcome.status='in_progress'
     with no executed row (invariant 6) and no provider.confirm call."""
     draft = _draft()
@@ -186,6 +186,7 @@ async def test_in_progress_claim_returns_in_progress_outcome(tmp_path: Path) -> 
         log=log,
         channel=channel,  # type: ignore[arg-type]
         clock=clock,
+        meter=meter,
         session_id="S-ip",
         turn_id="T-ip",
     )

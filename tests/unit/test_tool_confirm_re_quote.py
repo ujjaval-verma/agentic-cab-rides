@@ -68,7 +68,7 @@ async def _discover_prepare(
 
 
 @pytest.mark.asyncio
-async def test_re_quote_within_threshold_proceeds(tmp_path: Path) -> None:
+async def test_re_quote_within_threshold_proceeds(tmp_path: Path, meter) -> None:
     """Without surge, discover returns same price at prepare and confirm → proceeds."""
     store, log, clock, sim = _harness(tmp_path)
     draft_id = await _discover_prepare(sim, log, clock)
@@ -80,6 +80,7 @@ async def test_re_quote_within_threshold_proceeds(tmp_path: Path) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -95,6 +96,7 @@ async def test_re_quote_within_threshold_proceeds(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_re_quote_above_threshold_returns_price_changed_with_new_draft(
     tmp_path: Path,
+    meter,
 ) -> None:
     """With force_surge_on_confirm=True, re-quote drift exceeds threshold → price_changed."""
     # Surge is off during discover (peak ended 2 hours ago) but force_surge_on_confirm=True
@@ -118,6 +120,7 @@ async def test_re_quote_above_threshold_returns_price_changed_with_new_draft(
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -151,6 +154,7 @@ async def test_re_quote_above_threshold_returns_price_changed_with_new_draft(
 @pytest.mark.asyncio
 async def test_re_quote_drift_recorded_in_verified_checks_within_threshold(
     tmp_path: Path,
+    meter,
 ) -> None:
     """Under-threshold drift is recorded in verified.checks even when proceeding."""
     store, log, clock, sim = _harness(tmp_path)
@@ -163,6 +167,7 @@ async def test_re_quote_drift_recorded_in_verified_checks_within_threshold(
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -173,7 +178,7 @@ async def test_re_quote_drift_recorded_in_verified_checks_within_threshold(
 
 
 @pytest.mark.asyncio
-async def test_re_quote_no_intent_snapshot_rejected(tmp_path: Path) -> None:
+async def test_re_quote_no_intent_snapshot_rejected(tmp_path: Path, meter) -> None:
     """Drafts without intent_snapshot are rejected by the 3a intent guard.
 
     After the cross-session idempotency rework, confirm_booking requires a
@@ -217,6 +222,7 @@ async def test_re_quote_no_intent_snapshot_rejected(tmp_path: Path) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -229,7 +235,7 @@ async def test_re_quote_no_intent_snapshot_rejected(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_price_drift_stub_test_is_now_a_real_call(tmp_path: Path) -> None:
+async def test_price_drift_stub_test_is_now_a_real_call(tmp_path: Path, meter) -> None:
     """P1 stub test must now demonstrate a real discover() call is made.
 
     This test was originally called test_price_drift_branch_is_stubbed_in_p1.
@@ -246,6 +252,7 @@ async def test_price_drift_stub_test_is_now_a_real_call(tmp_path: Path) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )

@@ -37,6 +37,7 @@ from agentic_cab.core.ports import (
     Clock,
     ConfirmationChannel,
     ConfirmationRequest,
+    CostMeter,
     StateStore,
 )
 from agentic_cab.core.types import Draft, RideIntent, RideOptionDetails
@@ -239,6 +240,7 @@ async def confirm_booking(
     log: ActionLog,
     channel: ConfirmationChannel,
     clock: Clock,
+    meter: CostMeter,
     session_id: str,
     turn_id: str,
 ) -> dict[str, Any]:
@@ -275,6 +277,12 @@ async def confirm_booking(
         result: dict[str, Any] | None = None,
         error: str | None = None,
     ) -> dict[str, Any]:
+        drained_calls = meter.drain()
+        llm_calls_since_last_action = [
+            {k: v for k, v in call.model_dump().items() if k != "latency_ms"}
+            for call in drained_calls
+        ]
+        cost_microcents_since_last_action = sum(call.cost_microcents for call in drained_calls)
         log.emit(
             {
                 "ts": clock.now().isoformat(),
@@ -285,6 +293,8 @@ async def confirm_booking(
                 "status": status,
                 "result": result,
                 "error": error,
+                "llm_calls_since_last_action": llm_calls_since_last_action,
+                "cost_microcents_since_last_action": cost_microcents_since_last_action,
             }
         )
         out: dict[str, Any] = {"status": status, "action_id": action_id}
@@ -429,18 +439,7 @@ async def confirm_booking(
         store.finalize_idempotency(key, booking=booking)
         store.set_booking_intent_hash(booking.booking_id, ih)
     except Exception as e:  # re-raise after closing the action_id in the log
-        log.emit(
-            {
-                "ts": clock.now().isoformat(),
-                "session_id": session_id,
-                "action_id": action_id,
-                "kind": "outcome",
-                "tool": "confirm_booking",
-                "status": "error",
-                "result": None,
-                "error": str(e),
-            }
-        )
+        _emit_outcome("error", error=str(e))
         raise
 
     return _emit_outcome("confirmed", {"booking_id": booking.booking_id})

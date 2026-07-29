@@ -58,7 +58,7 @@ async def _prepare(sim, log, clock) -> str:
 
 
 @pytest.mark.asyncio
-async def test_happy_path_emits_4_rows_in_order(harness) -> None:
+async def test_happy_path_emits_4_rows_in_order(harness, meter) -> None:
     store, log, clock, sim = harness
     draft_id = await _prepare(sim, log, clock)
     ch = ScriptedConfirmationChannel(script=[{"match": "UberX", "action": "approve"}], clock=clock)
@@ -69,6 +69,7 @@ async def test_happy_path_emits_4_rows_in_order(harness) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -79,7 +80,7 @@ async def test_happy_path_emits_4_rows_in_order(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fingerprint_mismatch_short_circuits(harness) -> None:
+async def test_fingerprint_mismatch_short_circuits(harness, meter) -> None:
     store, log, clock, sim = harness
     draft_id = await _prepare(sim, log, clock)
     # Mutate the stored draft's option_snapshot to break the fingerprint
@@ -99,6 +100,7 @@ async def test_fingerprint_mismatch_short_circuits(harness) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -112,7 +114,7 @@ async def test_fingerprint_mismatch_short_circuits(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_consumed_draft_rejected(harness) -> None:
+async def test_consumed_draft_rejected(harness, meter) -> None:
     store, log, clock, sim = harness
     draft_id = await _prepare(sim, log, clock)
     store.consume_draft(draft_id, at=clock.now())
@@ -124,6 +126,7 @@ async def test_consumed_draft_rejected(harness) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -132,7 +135,7 @@ async def test_consumed_draft_rejected(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_idempotency_replay_short_circuits_second_provider_call(harness) -> None:
+async def test_idempotency_replay_short_circuits_second_provider_call(harness, meter) -> None:
     """Two confirms with the same intent on the SAME draft → second recalls, no double-book.
 
     With the intent-bound key, two calls for the same draft produce the same
@@ -159,6 +162,7 @@ async def test_idempotency_replay_short_circuits_second_provider_call(harness) -
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -167,7 +171,7 @@ async def test_idempotency_replay_short_circuits_second_provider_call(harness) -
 
 
 @pytest.mark.asyncio
-async def test_provider_exception_closes_log_with_outcome(harness, monkeypatch) -> None:
+async def test_provider_exception_closes_log_with_outcome(harness, monkeypatch, meter) -> None:
     """If provider.confirm raises, action_id must still close with an outcome row.
     Invariant 6 protects against orphaned verified=ok rows with no executed/outcome."""
     store, log, clock, sim = harness
@@ -187,6 +191,7 @@ async def test_provider_exception_closes_log_with_outcome(harness, monkeypatch) 
             log=log,
             channel=ch,
             clock=clock,
+            meter=meter,
             session_id="S",
             turn_id="T",
         )
@@ -208,7 +213,7 @@ async def test_provider_exception_closes_log_with_outcome(harness, monkeypatch) 
 
 
 @pytest.mark.asyncio
-async def test_confirm_request_uses_subject_kind_draft(harness) -> None:
+async def test_confirm_request_uses_subject_kind_draft(harness, meter) -> None:
     """confirm_booking must emit subject_kind='draft' and subject_id=draft_id on the gate."""
     from agentic_cab.core.ports import ConfirmationRequest, ConfirmationResult
 
@@ -231,6 +236,7 @@ async def test_confirm_request_uses_subject_kind_draft(harness) -> None:
         log=log,
         channel=CapturingChannel(),
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -243,7 +249,7 @@ async def test_confirm_request_uses_subject_kind_draft(harness) -> None:
 
 @pytest.mark.asyncio
 async def test_retry_after_synthetic_failure_reuses_idempotency_key(
-    harness, monkeypatch: pytest.MonkeyPatch
+    harness, monkeypatch: pytest.MonkeyPatch, meter
 ) -> None:
     """Recall path: one draft, two confirm_booking calls, provider.confirm invoked ONCE.
 
@@ -320,6 +326,7 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
             log=log,
             channel=ch,
             clock=clock,
+            meter=meter,
             session_id="S",
             turn_id="T",
         )
@@ -335,6 +342,7 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
             log=log,
             channel=ch,
             clock=clock,
+            meter=meter,
             session_id="S",
             turn_id="T2",
         )
@@ -375,7 +383,7 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
 
 
 @pytest.mark.asyncio
-async def test_price_drift_is_zero_with_no_surge(harness) -> None:
+async def test_price_drift_is_zero_with_no_surge(harness, meter) -> None:
     """P3 real re-quote: when no surge curve is set, drift from provider.discover()
     is 0 (same price at prepare-time and confirm-time for stable fares)."""
     store, log, clock, sim = harness
@@ -388,6 +396,7 @@ async def test_price_drift_is_zero_with_no_surge(harness) -> None:
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )

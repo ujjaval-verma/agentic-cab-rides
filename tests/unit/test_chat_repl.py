@@ -66,7 +66,7 @@ def _make_deps(tmp_path: Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def test_build_handlers_has_all_seven_tools(tmp_path: Path) -> None:
+def test_build_handlers_has_all_seven_tools(tmp_path: Path, meter) -> None:
     deps = _make_deps(tmp_path)
     turn_id_ref = ["T0"]
     handlers = build_handlers(
@@ -76,6 +76,7 @@ def test_build_handlers_has_all_seven_tools(tmp_path: Path) -> None:
         clock=deps["clock"],
         channel=deps["channel"],
         geocoder=deps["geocoder"],
+        meter=meter,
         session_id="S0",
         turn_id_ref=turn_id_ref,
     )
@@ -110,6 +111,19 @@ def test_tool_defs_has_all_seven_tools() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _stub_usage(input_tokens: int = 100, output_tokens: int = 20) -> MagicMock:
+    """Return a usage stub with real int attributes — the P8 cost-meter seam in
+    run_turn constructs a StrictInt LLMCall from these, so a bare MagicMock
+    (whose attribute access auto-vivifies further MagicMocks) will not validate.
+    """
+    usage = MagicMock()
+    usage.input_tokens = input_tokens
+    usage.output_tokens = output_tokens
+    usage.cache_read_input_tokens = 0
+    usage.cache_creation_input_tokens = 0
+    return usage
+
+
 def _stub_client_end_message(text: str = "Done.") -> MagicMock:
     """Return a stub Anthropic client whose .messages.create() immediately
     returns a final text response (stop_reason='end_turn'), so run_turn
@@ -122,6 +136,7 @@ def _stub_client_end_message(text: str = "Done.") -> MagicMock:
     response = MagicMock()
     response.stop_reason = "end_turn"
     response.content = [content_block]
+    response.usage = _stub_usage()
 
     client = MagicMock()
     client.messages.create.return_value = response
@@ -268,6 +283,7 @@ async def test_repl_handler_dispatch_discover_options(tmp_path: Path) -> None:
     tool_use_response = MagicMock()
     tool_use_response.stop_reason = "tool_use"
     tool_use_response.content = [tool_use_block]
+    tool_use_response.usage = _stub_usage()
 
     # Second response: agent replies with text
     text_block = MagicMock()
@@ -277,6 +293,7 @@ async def test_repl_handler_dispatch_discover_options(tmp_path: Path) -> None:
     final_response = MagicMock()
     final_response.stop_reason = "end_turn"
     final_response.content = [text_block]
+    final_response.usage = _stub_usage()
 
     stub_client = MagicMock()
     stub_client.messages.create.side_effect = [tool_use_response, final_response]
@@ -297,3 +314,108 @@ async def test_repl_handler_dispatch_discover_options(tmp_path: Path) -> None:
     assert action_log_files, "Expected an action log file"
     rows_text = action_log_files[0].read_text()
     assert "list_active_bookings" in rows_text
+
+
+def _end_turn_response(text: str = "Done.") -> MagicMock:
+    content_block = MagicMock()
+    content_block.type = "text"
+    content_block.text = text
+
+    response = MagicMock()
+    response.stop_reason = "end_turn"
+    response.content = [content_block]
+    response.usage = _stub_usage()
+    return response
+
+
+def _gated_tool_use_response(tool_name: str, tool_input: dict[str, Any]) -> MagicMock:
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = tool_name
+    block.id = f"tu_{tool_name}"
+    block.input = tool_input
+
+    response = MagicMock()
+    response.stop_reason = "tool_use"
+    response.content = [block]
+    response.usage = _stub_usage()
+    return response
+
+
+@pytest.mark.asyncio
+async def test_repl_uses_one_meter_instance_for_run_turn_and_both_gated_tools(
+    tmp_path: Path,
+) -> None:
+    """run_repl must construct exactly one CostMeter and pass the SAME instance to
+    run_turn and to *both* gated tools.
+
+    Regression: a second meter in one session means the gated tools would drain
+    a buffer run_turn never filled into — a silent cost-ledger data loss that no
+    structural check (pyright, four-row log shape) would catch.
+
+    The assertion deliberately lands on `confirm_booking` / `cancel_booking`
+    themselves, not on `build_handlers`: build_handlers receiving the right meter
+    says nothing about what the closures it builds pass onward, so a spy one layer
+    up stops short of the bug. The ids below are bogus, so both tools reject before
+    the gate — this test cares only about which meter instance each received.
+    """
+    inputs = iter(["Confirm and then cancel, please.", "/quit"])
+
+    def _input_source() -> str | None:
+        return next(inputs, None)
+
+    from rich.console import Console
+
+    console = Console(force_terminal=False, no_color=True)
+    deps = _make_deps(tmp_path)
+
+    stub_client = MagicMock()
+    stub_client.messages.create.side_effect = [
+        _gated_tool_use_response("confirm_booking", {"draft_id": "no-such-draft"}),
+        _gated_tool_use_response("cancel_booking", {"booking_id": "no-such-booking"}),
+        _end_turn_response("All done."),
+    ]
+
+    import agentic_cab.agent.chat as chat_mod
+
+    captured: dict[str, Any] = {}
+    real_run_turn = chat_mod.run_turn
+    real_confirm_booking = chat_mod.confirm_booking
+    real_cancel_booking = chat_mod.cancel_booking
+
+    async def _spy_run_turn(client: Any, **kwargs: Any) -> Any:
+        captured["run_turn_meter"] = kwargs["meter"]
+        return await real_run_turn(client, **kwargs)
+
+    async def _spy_confirm_booking(*args: Any, **kwargs: Any) -> Any:
+        captured["confirm_booking_meter"] = kwargs["meter"]
+        return await real_confirm_booking(*args, **kwargs)
+
+    async def _spy_cancel_booking(*args: Any, **kwargs: Any) -> Any:
+        captured["cancel_booking_meter"] = kwargs["meter"]
+        return await real_cancel_booking(*args, **kwargs)
+
+    with (
+        patch("agentic_cab.agent.chat.Anthropic", return_value=stub_client),
+        patch("agentic_cab.agent.chat.run_turn", side_effect=_spy_run_turn),
+        patch("agentic_cab.agent.chat.confirm_booking", side_effect=_spy_confirm_booking),
+        patch("agentic_cab.agent.chat.cancel_booking", side_effect=_spy_cancel_booking),
+    ):
+        await run_repl(
+            data_dir=tmp_path / "data",
+            log_dir=tmp_path / "logs",
+            geocode_fixtures_dir=tmp_path / "geocode",
+            console=console,
+            input_source=_input_source,
+            channel=deps["channel"],
+        )
+
+    assert "run_turn_meter" in captured, "run_turn was not called"
+    assert "confirm_booking_meter" in captured, "the confirm_booking handler was not reached"
+    assert "cancel_booking_meter" in captured, "the cancel_booking handler was not reached"
+    assert (
+        captured["run_turn_meter"] is captured["confirm_booking_meter"]
+    ), "run_turn and confirm_booking must share the SAME CostMeter instance"
+    assert (
+        captured["run_turn_meter"] is captured["cancel_booking_meter"]
+    ), "run_turn and cancel_booking must share the SAME CostMeter instance"

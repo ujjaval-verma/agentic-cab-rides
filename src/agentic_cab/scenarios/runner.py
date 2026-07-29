@@ -14,6 +14,7 @@ from anthropic import Anthropic
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.adapters.confirmation.scripted import ScriptedConfirmationChannel
+from agentic_cab.adapters.cost_meter import InMemoryCostMeter
 from agentic_cab.adapters.geocoding.cache import GeocodeCache
 from agentic_cab.adapters.geocoding.nominatim import NominatimGeocoder
 from agentic_cab.adapters.state_store import SqliteStateStore
@@ -127,6 +128,10 @@ async def run_scenario(
         ),
     ]
     turn_id = new_turn_id()
+    # One CostMeter per scenario run, shared between run_turn (fills it) and the
+    # gated tools (will drain it in a later slice — P8). Deliberately NOT added
+    # to `common` — only confirm_booking and cancel_booking accept a meter.
+    meter = InMemoryCostMeter()
     common: dict[str, Any] = dict(
         provider=sim,
         log=log,
@@ -156,6 +161,7 @@ async def run_scenario(
             ConfirmArgs(**a),
             store=store,
             channel=channel,
+            meter=meter,
             **common,
         )
 
@@ -164,6 +170,7 @@ async def run_scenario(
             CancelArgs(**a),
             store=store,
             channel=channel,
+            meter=meter,
             **common,
         )
 
@@ -206,6 +213,8 @@ async def run_scenario(
                 history=history,
                 tools=tools,
                 handlers=handlers,
+                meter=meter,
+                clock=clock,
             )
     finally:
         await http_client.aclose()

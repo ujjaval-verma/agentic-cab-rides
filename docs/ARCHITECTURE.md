@@ -65,7 +65,7 @@ Not deployed today: no container, no orchestrator, no horizontal scale. The web 
 | `ConfirmationChannel` | `core/ports.py` | Owns the y/n decision for every state-mutating action. The agent cannot self-approve. | `CLIConfirmationChannel` (TTY), `WebConfirmationChannel` (SSE + POST), `ScriptedConfirmationChannel` (scenarios) |
 | `ActionLog` | `core/ports.py` | Append-only JSONL emission, four rows per gated action. PII redacted at the boundary. | `JSONLActionLog` |
 | `StateStore` | `core/ports.py` | SQLite-backed durable state: drafts, bookings, booking_events, idempotency_keys, pending_confirmations. | `SqliteStateStore` |
-| `Clock` | `core/ports.py` | Now-source. Real time in interactive mode, frozen in scenario mode for determinism. | `SystemClock`, `FrozenClock` |
+| `Clock` | `core/ports.py` | Now-source plus a monotonic counter (`monotonic_ns`) for call-latency timing. Real time in interactive mode, frozen/deterministic in scenario mode. | `SystemClock`, `FrozenClock` |
 | `GeocoderPort` | `core/ports.py` | Address → `{formatted, lat, lng, confidence}`. Cached. | `InMemoryGeocoder`, `MapboxGeocoderAdapter` |
 
 ## Invariants and where they live
@@ -170,7 +170,7 @@ rows linked by `action_id`; read-only tools emit `requested` + `outcome` only.
 // executed
 {"ts":"...","action_id":"...","tool":"confirm_booking","kind":"executed",
  "provider":"uber-sim","method":"confirm","idempotency_key":"...",
- "request":{...},"latency_ms":143}
+ "request":{...},"latency_ms":0}
 
 // outcome
 {"ts":"...","action_id":"...","tool":"confirm_booking","kind":"outcome",
@@ -180,6 +180,27 @@ rows linked by `action_id`; read-only tools emit `requested` + `outcome` only.
 `verified.result == "rejected"` short-circuits — no `executed` row follows
 (invariant 6). PII redaction (raw address text, phone, names) happens at the
 log boundary in `adapters/action_log.py::redact` (invariant 8).
+
+Cost fields on gated `outcome` rows (`llm_calls_since_last_action`,
+`cost_microcents_since_last_action`, P8) do **not** report the cost of the
+action they're attached to. The `CostMeter` is one per session, and the only
+drain point is inside the gated tool's `_emit_outcome`. So the value emitted is
+the cost of every Anthropic call recorded on this session's meter since the
+previous drain — not "this action's cost" and not "this turn's cost". It is
+wrong in two directions: it **over-counts** by including every conversational
+turn since the last gated action (discovery chit-chat, re-quotes, clarifying
+questions), and it **under-counts** by excluding the current turn's wrap-up
+call — the model call made after the tool returns, which is structurally
+unattributable because it happens after `_emit_outcome` has already drained
+the meter. A reader must not treat this number as the booking's cost; treat it
+as a rolling session-cost checkpoint that resets on every gated action.
+
+These fields carry token counts and integer microcents only —
+`LLMCall.latency_ms` is kept in memory on the meter and deliberately never
+emitted. The honest reason is not reproducibility (emitted token counts and
+cost are themselves per-run-variable, per invariant 9) — it's that wall-clock
+latency is pure machine noise carrying no auditable signal, whereas token
+counts and cost are the artifact under audit even though they vary run to run.
 
 Outcome statuses emitted today (`outcome.status` in `confirm_booking` /
 `cancel_booking`): `confirmed` (happy path), `rejected` (gate decline,

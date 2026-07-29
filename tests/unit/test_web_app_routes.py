@@ -9,20 +9,42 @@ and calling POST /confirmations.
 from __future__ import annotations
 
 import asyncio
+import time
+from collections.abc import Iterator
+from datetime import timedelta
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from agentic_cab.web.app import _channels, _get_channel, _get_sim, _sim_adapters, create_app
+from agentic_cab.web.app import (
+    _MAX_SESSIONS,
+    _SESSION_IDLE_TTL,
+    _evict_stale_sessions,
+    _get_session,
+    _sessions,
+    create_app,
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_sessions() -> Iterator[None]:
+    """Isolate the module-level `_sessions` registry around every test in this file.
+
+    `web.app._sessions` is process-global. Clearing only on entry (the previous
+    pattern) leaves whatever this test created visible to the next one — order-dependent
+    global state in a suite that otherwise injects its dependencies. Clear on both
+    sides so neither direction can leak.
+    """
+    _sessions.clear()
+    yield
+    _sessions.clear()
 
 
 @pytest.fixture
 def app(tmp_path: Path) -> TestClient:
     """Create a TestClient with isolated filesystem dirs."""
-    # Clear module-level state between tests.
-    _channels.clear()
-
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
@@ -46,9 +68,10 @@ async def test_post_confirmations_resolves_pending_future(tmp_path: Path) -> Non
     """POST /confirmations/{subject_id} resolves a pending WebConfirmationChannel future."""
     from datetime import UTC, datetime, timedelta
 
+    from agentic_cab.adapters.clock import SystemClock
+    from agentic_cab.adapters.state_store import SqliteStateStore
     from agentic_cab.core.ports import ConfirmationRequest
 
-    _channels.clear()
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
@@ -57,7 +80,9 @@ async def test_post_confirmations_resolves_pending_future(tmp_path: Path) -> Non
     client = TestClient(fastapi_app, raise_server_exceptions=True)
 
     session_id = "test-session-conf"
-    channel = _get_channel(session_id)
+    store = SqliteStateStore(db_path=tmp_path / "data" / "state.db", check_same_thread=False)
+    store.apply_schema()
+    channel = _get_session(session_id, store=store, clock=SystemClock()).channel
 
     req = ConfirmationRequest(
         subject_id="draft-xyz",
@@ -94,7 +119,6 @@ async def test_post_confirmations_resolves_pending_future(tmp_path: Path) -> Non
 
 def test_post_confirmations_returns_404_when_no_pending(tmp_path: Path) -> None:
     """POST /confirmations/{subject_id} returns 404 if no pending future exists."""
-    _channels.clear()
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
@@ -125,7 +149,6 @@ def test_get_events_route_is_registered(tmp_path: Path) -> None:
     and is independently exercised by the SessionEventBus and
     WebConfirmationChannel unit tests.
     """
-    _channels.clear()
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
@@ -138,7 +161,6 @@ def test_get_events_route_is_registered(tmp_path: Path) -> None:
 
 def test_get_session_log_returns_empty_for_unknown_session(tmp_path: Path) -> None:
     """GET /sessions/{id}/log returns empty rows list for an unknown session."""
-    _channels.clear()
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
@@ -191,7 +213,6 @@ def test_startup_flushes_pending_confirmations(tmp_path: Path) -> None:
     )
 
     # Creating the app triggers the startup hook when used as a context manager.
-    _channels.clear()
     fastapi_app = create_app(
         data_dir=data_dir,
         log_dir=tmp_path / "logs",
@@ -261,7 +282,6 @@ def test_startup_hook_publishes_to_session_id_not_subject_id(tmp_path: Path) -> 
     _app_module._bus = _RecordingBus()  # type: ignore[assignment]
 
     try:
-        _channels.clear()
         fastapi_app = create_app(
             data_dir=data_dir,
             log_dir=tmp_path / "logs",
@@ -290,17 +310,156 @@ def test_get_sim_memoizes_per_session(tmp_path: Path) -> None:
     from agentic_cab.adapters.clock import SystemClock
     from agentic_cab.adapters.state_store import SqliteStateStore
 
-    _sim_adapters.clear()
     store = SqliteStateStore(db_path=tmp_path / "state.db", check_same_thread=False)
     store.apply_schema()
     clock = SystemClock()
 
-    sim_a1 = _get_sim("sess-a", store=store, clock=clock)
-    sim_a2 = _get_sim("sess-a", store=store, clock=clock)
-    sim_b = _get_sim("sess-b", store=store, clock=clock)
+    sim_a1 = _get_session("sess-a", store=store, clock=clock).sim
+    sim_a2 = _get_session("sess-a", store=store, clock=clock).sim
+    sim_b = _get_session("sess-b", store=store, clock=clock).sim
 
     assert sim_a1 is sim_a2, "same session must reuse the cached adapter"
     assert sim_a1 is not sim_b, "different sessions must get distinct adapters"
+
+
+def _gated_tool_use_response(tool_name: str, tool_input: dict) -> MagicMock:
+    """A stubbed model response asking for one gated tool. No network call is made."""
+    usage = MagicMock()
+    usage.input_tokens = 100
+    usage.output_tokens = 20
+    usage.cache_read_input_tokens = 0
+    usage.cache_creation_input_tokens = 0
+
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = tool_name
+    block.id = f"tu_{tool_name}"
+    block.input = tool_input
+
+    response = MagicMock()
+    response.stop_reason = "tool_use"
+    response.content = [block]
+    response.usage = usage
+    return response
+
+
+def _end_turn_response() -> MagicMock:
+    usage = MagicMock()
+    usage.input_tokens = 100
+    usage.output_tokens = 20
+    usage.cache_read_input_tokens = 0
+    usage.cache_creation_input_tokens = 0
+
+    block = MagicMock()
+    block.type = "text"
+    block.text = "All done."
+
+    response = MagicMock()
+    response.stop_reason = "end_turn"
+    response.content = [block]
+    response.usage = usage
+    return response
+
+
+def test_post_chat_uses_one_meter_for_run_turn_and_both_gated_tools(tmp_path: Path) -> None:
+    """POST /chat must pass the session's single CostMeter to run_turn AND to the
+    gated tools the handlers dispatch to.
+
+    Regression: a second meter anywhere on this route means confirm_booking /
+    cancel_booking drain a buffer run_turn never filled — every web cost row then
+    reports `[]` / 0, silently and forever.
+
+    The assertion lands on `confirm_booking` / `cancel_booking` themselves rather than
+    on `build_handlers`, because build_handlers receiving the right meter says nothing
+    about what the closures it builds pass onward. The ids are bogus, so both tools
+    reject before the gate and the background turn finishes without a human.
+    """
+    captured: dict[str, object] = {}
+
+    import agentic_cab.agent.chat as chat_mod
+    import agentic_cab.web.app as app_mod
+
+    real_run_turn = app_mod.run_turn
+    real_confirm_booking = chat_mod.confirm_booking
+    real_cancel_booking = chat_mod.cancel_booking
+
+    async def _spy_run_turn(client: object, **kwargs: object) -> object:
+        captured["run_turn_meter"] = kwargs["meter"]
+        return await real_run_turn(client, **kwargs)  # type: ignore[arg-type]
+
+    async def _spy_confirm_booking(*args: object, **kwargs: object) -> object:
+        captured["confirm_booking_meter"] = kwargs["meter"]
+        return await real_confirm_booking(*args, **kwargs)  # type: ignore[arg-type]
+
+    async def _spy_cancel_booking(*args: object, **kwargs: object) -> object:
+        captured["cancel_booking_meter"] = kwargs["meter"]
+        return await real_cancel_booking(*args, **kwargs)  # type: ignore[arg-type]
+
+    stub_client = MagicMock()
+    stub_client.messages.create.side_effect = [
+        _gated_tool_use_response("confirm_booking", {"draft_id": "no-such-draft"}),
+        _gated_tool_use_response("cancel_booking", {"booking_id": "no-such-booking"}),
+        _end_turn_response(),
+    ]
+
+    fastapi_app = create_app(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+    )
+
+    with (
+        patch("agentic_cab.web.app.Anthropic", return_value=stub_client),
+        patch("agentic_cab.web.app.run_turn", side_effect=_spy_run_turn),
+        patch("agentic_cab.agent.chat.confirm_booking", side_effect=_spy_confirm_booking),
+        patch("agentic_cab.agent.chat.cancel_booking", side_effect=_spy_cancel_booking),
+        TestClient(fastapi_app, raise_server_exceptions=True) as client,
+    ):
+        response = client.post(
+            "/chat",
+            json={"session_id": "sess-meter-identity", "message": "confirm then cancel"},
+        )
+        assert response.status_code == 200
+
+        # The turn runs in a background task on the TestClient's portal loop; poll
+        # (bounded) until both gated tools have been reached.
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and "cancel_booking_meter" not in captured:
+            time.sleep(0.01)
+
+    assert "run_turn_meter" in captured, "run_turn was not called"
+    assert "confirm_booking_meter" in captured, "the confirm_booking handler was not reached"
+    assert "cancel_booking_meter" in captured, "the cancel_booking handler was not reached"
+
+    session_meter = _sessions["sess-meter-identity"].meter
+    assert captured["run_turn_meter"] is session_meter
+    assert (
+        captured["confirm_booking_meter"] is session_meter
+    ), "confirm_booking must receive the session's own CostMeter"
+    assert (
+        captured["cancel_booking_meter"] is session_meter
+    ), "cancel_booking must receive the session's own CostMeter"
+
+
+def test_get_meter_is_stable_per_session_and_distinct_across_sessions(tmp_path: Path) -> None:
+    """Two lookups of one session return the same CostMeter; two sessions never share one.
+
+    The route-level test above pins the wiring; this pins the registry itself — a
+    shared meter across sessions would cross-attribute one user's spend to another.
+    """
+    from agentic_cab.adapters.clock import SystemClock
+    from agentic_cab.adapters.state_store import SqliteStateStore
+
+    store = SqliteStateStore(db_path=tmp_path / "state.db", check_same_thread=False)
+    store.apply_schema()
+    clock = SystemClock()
+
+    meter_a1 = _get_session("sess-a", store=store, clock=clock).meter
+    meter_a2 = _get_session("sess-a", store=store, clock=clock).meter
+    meter_b = _get_session("sess-b", store=store, clock=clock).meter
+
+    assert meter_a1 is meter_a2, "same session must reuse the cached meter"
+    assert meter_a1 is not meter_b, "different sessions must get distinct meters"
 
 
 def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
@@ -309,7 +468,6 @@ def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
     The agent loop integration is tested end-to-end in T32. Here we only verify
     the endpoint is wired and returns the session_id echo.
     """
-    _channels.clear()
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
@@ -327,3 +485,176 @@ def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
     data = response.json()
     assert data["status"] == "ok"
     assert data["session_id"] == "test-session-chat"
+
+
+# ---------- Session eviction (bounded per-session state) ----------
+
+
+def test_idle_session_evicted_together(tmp_path: Path) -> None:
+    """An idle session past the TTL is evicted — the whole record disappears together.
+
+    Regression: five parallel dicts made partial eviction a live hazard (a
+    session could keep a stale meter or option cache). Consolidating into one
+    `_SessionState` record means eviction is one dict.pop, never a partial one.
+    """
+    from datetime import UTC, datetime
+
+    from agentic_cab.adapters.clock import FrozenClock
+
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    fastapi_app = create_app(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+        clock=clock,
+    )
+    client = TestClient(fastapi_app, raise_server_exceptions=False)
+
+    client.post("/chat", json={"session_id": "sess-idle", "message": "hi"})
+    assert "sess-idle" in _sessions
+
+    clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
+    # Any subsequent /chat call runs the eviction sweep before touching its own state.
+    client.post("/chat", json={"session_id": "sess-trigger", "message": "hi"})
+
+    assert "sess-idle" not in _sessions, "the whole session record must be gone"
+
+
+def test_session_touched_within_ttl_survives(tmp_path: Path) -> None:
+    """A session touched within the idle TTL is not evicted."""
+    from datetime import UTC, datetime
+
+    from agentic_cab.adapters.clock import FrozenClock
+
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    fastapi_app = create_app(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+        clock=clock,
+    )
+    client = TestClient(fastapi_app, raise_server_exceptions=False)
+
+    client.post("/chat", json={"session_id": "sess-fresh", "message": "hi"})
+    clock.tick(timedelta(minutes=30))
+    client.post("/chat", json={"session_id": "sess-trigger", "message": "hi"})
+
+    assert "sess-fresh" in _sessions
+
+
+def test_exceeding_max_sessions_evicts_lru_first(tmp_path: Path) -> None:
+    """Once `_MAX_SESSIONS` is exceeded, the least-recently-used session goes first."""
+    from datetime import UTC, datetime
+
+    from agentic_cab.adapters.clock import FrozenClock
+
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    fastapi_app = create_app(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+        clock=clock,
+    )
+    client = TestClient(fastapi_app, raise_server_exceptions=False)
+
+    for i in range(_MAX_SESSIONS):
+        client.post("/chat", json={"session_id": f"sess-{i}", "message": "hi"})
+        clock.tick(timedelta(seconds=1))
+    assert len(_sessions) == _MAX_SESSIONS
+
+    # A brand-new session pushes the count to _MAX_SESSIONS + 1; the sweep at
+    # its entry still saw exactly the cap, so no eviction happens yet.
+    client.post("/chat", json={"session_id": "sess-new", "message": "hi"})
+    clock.tick(timedelta(seconds=1))
+
+    # Re-touching an existing session runs the sweep again, which now sees
+    # _MAX_SESSIONS + 1 and evicts the LRU session (sess-0, the oldest
+    # last_used_at) before touching its own (already-existing) state — so
+    # this call doesn't grow the dict itself.
+    client.post("/chat", json={"session_id": "sess-new", "message": "hi again"})
+
+    assert "sess-0" not in _sessions, "least-recently-used session should be evicted first"
+    assert "sess-new" in _sessions
+    assert len(_sessions) == _MAX_SESSIONS
+
+
+@pytest.mark.asyncio
+async def test_pinned_session_with_pending_confirmation_survives_eviction(
+    tmp_path: Path,
+) -> None:
+    """A session with an unresolved pending confirmation is never evicted.
+
+    Evicting it would strand a human waiting at the gate. We drive this via
+    the real `WebConfirmationChannel.request()` / `_evict_stale_sessions`
+    path rather than poking a parallel registry.
+    """
+    from datetime import UTC, datetime
+
+    from agentic_cab.adapters.clock import FrozenClock
+    from agentic_cab.adapters.state_store import SqliteStateStore
+    from agentic_cab.core.ports import ConfirmationRequest
+
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    store = SqliteStateStore(db_path=tmp_path / "state.db", check_same_thread=False)
+    store.apply_schema()
+
+    state = _get_session("sess-pinned", store=store, clock=clock)
+    req = ConfirmationRequest(
+        subject_id="draft-pinned",
+        subject_kind="draft",
+        summary="Book UberX $12.00 from A to B",
+        fingerprint="b" * 64,
+        details={},
+        expires_at=clock.now() + timedelta(hours=2),
+    )
+    task = asyncio.ensure_future(state.channel.request(req))
+    await asyncio.sleep(0)  # let the future register
+
+    # Push well past the idle TTL — the pinned session must survive.
+    clock.tick(_SESSION_IDLE_TTL + timedelta(hours=1))
+    _evict_stale_sessions(clock)
+    assert "sess-pinned" in _sessions
+
+    # It must also survive an LRU sweep even once the cap is exceeded — the
+    # pinned session has the oldest last_used_at of the lot, so it would be
+    # the first LRU candidate if it weren't filtered out.
+    for i in range(_MAX_SESSIONS + 5):
+        _get_session(f"sess-filler-{i}", store=store, clock=clock)
+    _evict_stale_sessions(clock)
+    assert "sess-pinned" in _sessions
+    assert len(_sessions) <= _MAX_SESSIONS + 1  # +1 for the pinned session itself
+
+    # Clean up: resolve so the awaited task doesn't dangle past the test.
+    state.channel.resolve("draft-pinned", approved=False, approver=None)
+    await asyncio.wait_for(task, timeout=2.0)
+
+
+def test_session_reused_after_eviction_gets_fresh_state(tmp_path: Path) -> None:
+    """Re-using a session id after eviction creates a fresh record and does not crash."""
+    from datetime import UTC, datetime
+
+    from agentic_cab.adapters.clock import FrozenClock
+
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    fastapi_app = create_app(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+        clock=clock,
+    )
+    client = TestClient(fastapi_app, raise_server_exceptions=False)
+
+    client.post("/chat", json={"session_id": "sess-reuse", "message": "hi"})
+    original_meter = _sessions["sess-reuse"].meter
+    original_sim = _sessions["sess-reuse"].sim
+
+    clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
+    client.post("/chat", json={"session_id": "sess-trigger", "message": "hi"})
+    assert "sess-reuse" not in _sessions
+
+    response = client.post("/chat", json={"session_id": "sess-reuse", "message": "hi again"})
+    assert response.status_code == 200
+
+    new_state = _sessions["sess-reuse"]
+    assert new_state.meter is not original_meter, "reused session must get a fresh meter"
+    assert new_state.sim is not original_sim, "reused session must get a fresh sim adapter"

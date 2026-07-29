@@ -16,6 +16,25 @@ class Money(BaseModel):
     currency: str
 
 
+# Why microcents and not cents: a single model call costs a fraction of a cent, so
+# integer cents would round nearly every call to zero and the ledger would report 0.
+# Microcents (1 cent = 1_000_000 microcents) keep the arithmetic exact and integer —
+# this honours CLAUDE.md invariant 10 rather than carving a float exception into it.
+# Conversion to Money happens only at a render boundary, after summing.
+class LLMCall(BaseModel):
+    """One model API call, priced. Cost is integer microcents — see CLAUDE.md invariant 10."""
+
+    model_config = ConfigDict(frozen=True)
+    provider: str
+    model: str
+    input_tokens: StrictInt
+    output_tokens: StrictInt
+    cache_read_input_tokens: StrictInt = 0
+    cache_creation_input_tokens: StrictInt = 0
+    cost_microcents: StrictInt
+    latency_ms: StrictInt
+
+
 class AddressRef(BaseModel):
     model_config = ConfigDict(frozen=True)
     raw: str

@@ -12,7 +12,16 @@ from typing import Any, ClassVar, Literal, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel
 
-from agentic_cab.core.types import AddressRef, Booking, BookingEvent, Draft, Intent, Money, Option
+from agentic_cab.core.types import (
+    AddressRef,
+    Booking,
+    BookingEvent,
+    Draft,
+    Intent,
+    LLMCall,
+    Money,
+    Option,
+)
 
 # ---------- BookingProvider ----------
 
@@ -73,6 +82,8 @@ class ConfirmationChannel(Protocol):
 @runtime_checkable
 class Clock(Protocol):
     def now(self: Self) -> datetime: ...
+
+    def monotonic_ns(self: Self) -> int: ...
 
 
 # ---------- ActionLog ----------
@@ -145,6 +156,23 @@ class StateStore(Protocol):
     def list_pending_confirmations(
         self: Self, now: datetime
     ) -> list[PendingConfirmationRecord]: ...
+
+
+# ---------- CostMeter ----------
+
+# drain() returns everything recorded since the last drain and clears the buffer.
+# The agent loop is single-threaded per session for CLI and scenarios, so no lock
+# is needed there. This is NOT true for the web surface: turns are dispatched via
+# asyncio.create_task with no per-session serialization, so a shared meter can see
+# interleaved record()/drain() calls across concurrent turns. See docs/FOLLOWUPS.md
+# ("Web surface permits intra-session turn interleaving into a shared meter").
+
+
+@runtime_checkable
+class CostMeter(Protocol):
+    def record(self: Self, call: LLMCall) -> None: ...
+
+    def drain(self: Self) -> list[LLMCall]: ...
 
 
 # ---------- GeocoderPort ----------

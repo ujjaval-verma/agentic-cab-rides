@@ -38,7 +38,11 @@ def harness(tmp_path: Path):
 
 
 async def _book(
-    sim: UberSimAdapter, store: SqliteStateStore, log: JSONLActionLog, clock: FrozenClock
+    sim: UberSimAdapter,
+    store: SqliteStateStore,
+    log: JSONLActionLog,
+    clock: FrozenClock,
+    meter,
 ) -> str:
     """Helper: discover → prepare → confirm → return booking_id."""
     d_args = DiscoverArgs(
@@ -70,6 +74,7 @@ async def _book(
         log=log,
         channel=ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T",
     )
@@ -78,7 +83,7 @@ async def _book(
 
 
 @pytest.mark.asyncio
-async def test_declined_cancel_does_not_block_retry(harness) -> None:
+async def test_declined_cancel_does_not_block_retry(harness, meter) -> None:
     """Decline → retry with approve → retry must succeed (claim was released on decline).
 
     Without release_claim on the decline path, the declined call leaves an unfinalized
@@ -86,7 +91,7 @@ async def test_declined_cancel_does_not_block_retry(harness) -> None:
     blocked permanently — the declined cancel becomes a poison pill.
     """
     store, log, clock, sim = harness
-    booking_id = await _book(sim, store, log, clock)
+    booking_id = await _book(sim, store, log, clock, meter)
 
     # Use a fixed key_factory so both calls derive the same idempotency key,
     # replicating the real scenario where key = f(booking_id, fee_cents, status_at_quote)
@@ -105,6 +110,7 @@ async def test_declined_cancel_does_not_block_retry(harness) -> None:
         log=log,
         channel=decline_ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T1",
         key_factory=fixed_key,
@@ -122,6 +128,7 @@ async def test_declined_cancel_does_not_block_retry(harness) -> None:
         log=log,
         channel=approve_ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T2",
         key_factory=fixed_key,
@@ -133,14 +140,14 @@ async def test_declined_cancel_does_not_block_retry(harness) -> None:
 
 
 @pytest.mark.asyncio
-async def test_declined_cancel_leaves_no_unfinalized_claim(harness) -> None:
+async def test_declined_cancel_leaves_no_unfinalized_claim(harness, meter) -> None:
     """After a user decline, claim_or_recall must return 'new' (not 'in_progress').
 
     This directly asserts that release_claim cleaned up the unfinalized row.
     Without the fix, claim_or_recall would return 'in_progress' after a decline.
     """
     store, log, clock, sim = harness
-    booking_id = await _book(sim, store, log, clock)
+    booking_id = await _book(sim, store, log, clock, meter)
 
     def fixed_key(bid: str, fee_cents: int, status_at_quote: str) -> str:
         return "K-CANCEL-CLAIM-CHECK"
@@ -156,6 +163,7 @@ async def test_declined_cancel_leaves_no_unfinalized_claim(harness) -> None:
         log=log,
         channel=decline_ch,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T1",
         key_factory=fixed_key,

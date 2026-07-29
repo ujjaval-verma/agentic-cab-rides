@@ -108,6 +108,16 @@ class WebConfirmationChannel:
             if self._store is not None:
                 self._store.pop_pending_confirmation(req.subject_id)
 
+    def has_pending(self: Self) -> bool:
+        """True if this channel still holds an unresolved pending confirmation.
+
+        Used by the web session-eviction sweep (app.py) to pin a session in
+        memory rather than stranding a human waiting at the gate — pending
+        confirmations carry their own `expires_at`, so a pinned session cannot
+        pin memory indefinitely.
+        """
+        return bool(self._pending)
+
     def resolve(self: Self, subject_id: str, *, approved: bool, approver: str | None) -> bool:
         """Resolve a pending confirmation request from the browser.
 

@@ -153,7 +153,7 @@ def test_in_progress_key_visible_across_store_instances(tmp_path: Path) -> None:
 
 @pytest.mark.contract
 @pytest.mark.asyncio
-async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path) -> None:
+async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path, meter) -> None:
     """Two confirm_booking calls with the same intent-bound key on different
     (unconsumed) drafts → both return the same booking_id.
 
@@ -228,6 +228,7 @@ async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path) -> 
         log=log,
         channel=ch1,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T1",
     )
@@ -258,6 +259,7 @@ async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path) -> 
         log=log,
         channel=ch2,
         clock=clock,
+        meter=meter,
         session_id="S",
         turn_id="T2",
     )
