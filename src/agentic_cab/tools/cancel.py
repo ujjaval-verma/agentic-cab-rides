@@ -252,19 +252,8 @@ async def cancel_booking(
         )
         store.put_booking(updated_booking)
         store.finalize_idempotency(key, booking=updated_booking)
-    except Exception as e:
-        log.emit(
-            {
-                "ts": clock.now().isoformat(),
-                "session_id": session_id,
-                "action_id": action_id,
-                "kind": "outcome",
-                "tool": "cancel_booking",
-                "status": "error",
-                "result": None,
-                "error": str(e),
-            }
-        )
+    except Exception as e:  # re-raise after closing the action_id in the log
+        _emit_outcome("error", error=str(e))
         raise
 
     return _emit_outcome("cancelled", {"booking_id": updated_booking.booking_id})

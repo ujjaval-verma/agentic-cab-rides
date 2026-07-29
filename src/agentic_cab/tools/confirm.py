@@ -429,18 +429,7 @@ async def confirm_booking(
         store.finalize_idempotency(key, booking=booking)
         store.set_booking_intent_hash(booking.booking_id, ih)
     except Exception as e:  # re-raise after closing the action_id in the log
-        log.emit(
-            {
-                "ts": clock.now().isoformat(),
-                "session_id": session_id,
-                "action_id": action_id,
-                "kind": "outcome",
-                "tool": "confirm_booking",
-                "status": "error",
-                "result": None,
-                "error": str(e),
-            }
-        )
+        _emit_outcome("error", error=str(e))
         raise
 
     return _emit_outcome("confirmed", {"booking_id": booking.booking_id})
