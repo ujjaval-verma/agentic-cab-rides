@@ -31,6 +31,9 @@ notes/*
 *.local.md
 .review-*.md
 **/.review-*.md
+# Subagent-driven-development scratch: per-plan ledgers, task briefs, implementer
+# reports, review packages. The plan in docs/plans/ is durable; this is not.
+.superpowers/
 
 # Secrets
 .env
