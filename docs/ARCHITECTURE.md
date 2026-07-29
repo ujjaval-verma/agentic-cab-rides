@@ -170,7 +170,7 @@ rows linked by `action_id`; read-only tools emit `requested` + `outcome` only.
 // executed
 {"ts":"...","action_id":"...","tool":"confirm_booking","kind":"executed",
  "provider":"uber-sim","method":"confirm","idempotency_key":"...",
- "request":{...},"latency_ms":143}
+ "request":{...},"latency_ms":0}
 
 // outcome
 {"ts":"...","action_id":"...","tool":"confirm_booking","kind":"outcome",
@@ -180,6 +180,12 @@ rows linked by `action_id`; read-only tools emit `requested` + `outcome` only.
 `verified.result == "rejected"` short-circuits — no `executed` row follows
 (invariant 6). PII redaction (raw address text, phone, names) happens at the
 log boundary in `adapters/action_log.py::redact` (invariant 8).
+
+Cost fields on gated `outcome` rows (`llm_calls`, `total_cost_microcents`, P8)
+carry token counts and integer microcents only — `LLMCall.latency_ms` is kept in
+memory on the meter and deliberately never emitted, because wall-clock latency is
+machine noise that would make action-log rows irreproducible across re-runs
+(invariant 9).
 
 Outcome statuses emitted today (`outcome.status` in `confirm_booking` /
 `cancel_booking`): `confirmed` (happy path), `rejected` (gate decline,
