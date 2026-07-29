@@ -1,7 +1,7 @@
 """Unit tests for P8 cost-ledger wiring: draining the CostMeter onto gated outcome rows.
 
 Covers `_emit_outcome` in tools/confirm.py and tools/cancel.py — see
-.superpowers/sdd/2026-07-29-cost-ledger-wiring/task-2-brief.md. CLAUDE.md invariants
+docs/plans/2026-07-29-cost-ledger-wiring.md. CLAUDE.md invariants
 6 (action log shape), 7 (persistence split), 9 (determinism — latency_ms must not
 leak into the log), 13 (no TODOs).
 """
