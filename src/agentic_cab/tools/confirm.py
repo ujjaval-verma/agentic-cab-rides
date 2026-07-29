@@ -277,6 +277,12 @@ async def confirm_booking(
         result: dict[str, Any] | None = None,
         error: str | None = None,
     ) -> dict[str, Any]:
+        drained_calls = meter.drain()
+        llm_calls = [
+            {k: v for k, v in call.model_dump().items() if k != "latency_ms"}
+            for call in drained_calls
+        ]
+        total_cost_microcents = sum(call.cost_microcents for call in drained_calls)
         log.emit(
             {
                 "ts": clock.now().isoformat(),
@@ -287,6 +293,8 @@ async def confirm_booking(
                 "status": status,
                 "result": result,
                 "error": error,
+                "llm_calls": llm_calls,
+                "total_cost_microcents": total_cost_microcents,
             }
         )
         out: dict[str, Any] = {"status": status, "action_id": action_id}
