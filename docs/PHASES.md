@@ -231,7 +231,7 @@ P5 (web UI) branches from P1 — the agent loop, tool surface, and one working s
 - [ ] No transcript re-render — this phase does not change the default model path.
 
 **Slices:**
-- CostMeter port + `LLMCall` + integer-microcent pricing  *(committed locally, not yet pushed)*
+- CostMeter port + `LLMCall` + integer-microcent pricing
 - Seam at `agent/loop.py` + the three wiring sites
 - Drain at `_emit_outcome` in `tools/confirm.py` / `tools/cancel.py`
 - Tail-loss measurement + writeup section
