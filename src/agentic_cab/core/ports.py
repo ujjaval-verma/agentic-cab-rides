@@ -12,7 +12,16 @@ from typing import Any, ClassVar, Literal, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel
 
-from agentic_cab.core.types import AddressRef, Booking, BookingEvent, Draft, Intent, Money, Option
+from agentic_cab.core.types import (
+    AddressRef,
+    Booking,
+    BookingEvent,
+    Draft,
+    Intent,
+    LLMCall,
+    Money,
+    Option,
+)
 
 # ---------- BookingProvider ----------
 
@@ -145,6 +154,19 @@ class StateStore(Protocol):
     def list_pending_confirmations(
         self: Self, now: datetime
     ) -> list[PendingConfirmationRecord]: ...
+
+
+# ---------- CostMeter ----------
+
+# drain() returns everything recorded since the last drain and clears the buffer.
+# The agent loop is single-threaded per session, so no lock is needed.
+
+
+@runtime_checkable
+class CostMeter(Protocol):
+    def record(self: Self, call: LLMCall) -> None: ...
+
+    def drain(self: Self) -> list[LLMCall]: ...
 
 
 # ---------- GeocoderPort ----------
