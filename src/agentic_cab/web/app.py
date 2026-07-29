@@ -19,6 +19,8 @@ import contextlib
 import json
 import os
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +44,7 @@ from agentic_cab.agent.chat import _TOOL_DEFS as _AGENT_TOOL_DEFS
 from agentic_cab.agent.chat import build_handlers
 from agentic_cab.agent.loop import run_turn
 from agentic_cab.core.ids import new_turn_id
+from agentic_cab.core.ports import Clock
 from agentic_cab.web.channel import WebConfirmationChannel
 from agentic_cab.web.sse import SessionEventBus
 
@@ -66,55 +69,62 @@ class ConfirmationRequest(BaseModel):
 
 _bus = SessionEventBus()
 
-# Per-session state: channels, turn-id refs, chat histories, sim adapters.
-#
-# The sim adapter carries in-memory state (option cache, intent cache, the
-# surge re-quote flag) that must survive across web turns within a process —
-# otherwise a fresh adapter on every POST /chat sees an empty option cache
-# and `prepare_booking(option_id=…)` raises `unknown option_id`.
-_channels: dict[str, WebConfirmationChannel] = {}
-_turn_id_refs: dict[str, list[str]] = {}
-_chat_histories: dict[str, list[dict[str, Any]]] = {}
-_sim_adapters: dict[str, UberSimAdapter] = {}
-_meters: dict[str, InMemoryCostMeter] = {}
+
+@dataclass
+class _SessionState:
+    """Everything one browser session needs, created together and evicted together.
+
+    One dict, one lifetime, one eviction point. Five parallel dicts keyed
+    identically by session_id would make partial eviction a live hazard —
+    evicting four of five could leave a session holding a stale meter or a
+    stale option cache, a subtler bug than the leak itself.
+
+    The sim adapter carries in-memory state (option cache, intent cache, the
+    surge re-quote flag) that must survive across web turns within a process —
+    otherwise a fresh adapter on every POST /chat sees an empty option cache
+    and `prepare_booking(option_id=…)` raises `unknown option_id`. The meter
+    must be the same instance `run_turn` fills and the gated tools drain (P8).
+    """
+
+    channel: WebConfirmationChannel
+    turn_id_ref: list[str]
+    history: list[dict[str, Any]]
+    sim: UberSimAdapter
+    meter: InMemoryCostMeter
+    last_used_at: datetime
 
 
-def _get_channel(
-    session_id: str,
-    store: SqliteStateStore | None = None,
-    clock: SystemClock | None = None,
-) -> WebConfirmationChannel:
-    if session_id not in _channels:
-        _channels[session_id] = WebConfirmationChannel(
-            bus=_bus, session_id=session_id, store=store, clock=clock
-        )
-    return _channels[session_id]
+_sessions: dict[str, _SessionState] = {}
 
 
-def _get_sim(
+def _get_session(
     session_id: str,
     *,
     store: SqliteStateStore,
-    clock: SystemClock,
-) -> UberSimAdapter:
-    """Memoize one `UberSimAdapter` per session.
+    clock: Clock,
+) -> _SessionState:
+    """Get-or-create the full per-session state record, touching `last_used_at`.
 
-    The adapter's option/intent caches must persist across turns inside one
-    process. They are not durable across a restart — option durability would
-    require persisting options to SQLite (see docs/FOLLOWUPS.md).
+    Replaces the former `_get_channel` / `_get_sim` / `_get_meter` trio — one
+    accessor owns creation of all five members so a session's state is never
+    partially initialized or partially evicted.
     """
-    if session_id not in _sim_adapters:
-        rng_seed = int.from_bytes(os.urandom(4), "big")
-        _sim_adapters[session_id] = UberSimAdapter(store=store, clock=clock, rng_seed=rng_seed)
-    return _sim_adapters[session_id]
+    state = _sessions.get(session_id)
+    if state is not None:
+        state.last_used_at = clock.now()
+        return state
 
-
-def _get_meter(session_id: str) -> InMemoryCostMeter:
-    """Memoize one CostMeter per session — the same instance run_turn fills and
-    the gated tools will drain (P8)."""
-    if session_id not in _meters:
-        _meters[session_id] = InMemoryCostMeter()
-    return _meters[session_id]
+    rng_seed = int.from_bytes(os.urandom(4), "big")
+    state = _SessionState(
+        channel=WebConfirmationChannel(bus=_bus, session_id=session_id, store=store, clock=clock),
+        turn_id_ref=[new_turn_id()],
+        history=[],
+        sim=UberSimAdapter(store=store, clock=clock, rng_seed=rng_seed),
+        meter=InMemoryCostMeter(),
+        last_used_at=clock.now(),
+    )
+    _sessions[session_id] = state
+    return state
 
 
 # ---------- App factory ----------
@@ -211,9 +221,10 @@ def create_app(
 
         action_log = JSONLActionLog(log_dir=_log_dir)
         clock = SystemClock()
-        sim = _get_sim(session_id, store=store, clock=clock)
-        channel = _get_channel(session_id, store=store, clock=clock)
-        meter = _get_meter(session_id)
+        state = _get_session(session_id, store=store, clock=clock)
+        sim = state.sim
+        channel = state.channel
+        meter = state.meter
 
         geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
         geocoder = NominatimGeocoder(
@@ -221,14 +232,10 @@ def create_app(
             http=httpx.AsyncClient(timeout=10),
         )
 
-        if session_id not in _turn_id_refs:
-            _turn_id_refs[session_id] = [new_turn_id()]
-        turn_id_ref = _turn_id_refs[session_id]
+        turn_id_ref = state.turn_id_ref
         turn_id_ref[0] = new_turn_id()
 
-        if session_id not in _chat_histories:
-            _chat_histories[session_id] = []
-        history = _chat_histories[session_id]
+        history = state.history
 
         # Wrap action_log to also publish each row to the SSE bus.
         _sid_cap = session_id  # capture for the closure
@@ -268,7 +275,7 @@ def create_app(
                     meter=meter,
                     clock=clock,
                 )
-                _chat_histories[session_id] = new_history
+                state.history = new_history
                 # Publish the final agent reply as an SSE event.
                 _bus.publish(session_id, {"kind": "agent_reply", "text": text})
             except Exception as exc:
@@ -284,8 +291,10 @@ def create_app(
     async def resolve_confirmation(subject_id: str, body: ConfirmationRequest) -> JSONResponse:
         """Resolve a pending WebConfirmationChannel future from the browser."""
         # Find the channel for the session that owns this subject_id.
-        for _sid, ch in _channels.items():
-            resolved = ch.resolve(subject_id, approved=body.approved, approver=body.approver)
+        for _sid, state in _sessions.items():
+            resolved = state.channel.resolve(
+                subject_id, approved=body.approved, approver=body.approver
+            )
             if resolved:
                 _log.info(
                     "web.confirmation.resolved",

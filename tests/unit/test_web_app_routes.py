@@ -15,12 +15,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from agentic_cab.web.app import (
-    _channels,
-    _get_channel,
-    _get_meter,
-    _get_sim,
-    _meters,
-    _sim_adapters,
+    _get_session,
+    _sessions,
     create_app,
 )
 
@@ -29,7 +25,7 @@ from agentic_cab.web.app import (
 def app(tmp_path: Path) -> TestClient:
     """Create a TestClient with isolated filesystem dirs."""
     # Clear module-level state between tests.
-    _channels.clear()
+    _sessions.clear()
 
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
@@ -54,9 +50,11 @@ async def test_post_confirmations_resolves_pending_future(tmp_path: Path) -> Non
     """POST /confirmations/{subject_id} resolves a pending WebConfirmationChannel future."""
     from datetime import UTC, datetime, timedelta
 
+    from agentic_cab.adapters.clock import SystemClock
+    from agentic_cab.adapters.state_store import SqliteStateStore
     from agentic_cab.core.ports import ConfirmationRequest
 
-    _channels.clear()
+    _sessions.clear()
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
@@ -65,7 +63,9 @@ async def test_post_confirmations_resolves_pending_future(tmp_path: Path) -> Non
     client = TestClient(fastapi_app, raise_server_exceptions=True)
 
     session_id = "test-session-conf"
-    channel = _get_channel(session_id)
+    store = SqliteStateStore(db_path=tmp_path / "data" / "state.db", check_same_thread=False)
+    store.apply_schema()
+    channel = _get_session(session_id, store=store, clock=SystemClock()).channel
 
     req = ConfirmationRequest(
         subject_id="draft-xyz",
@@ -102,7 +102,7 @@ async def test_post_confirmations_resolves_pending_future(tmp_path: Path) -> Non
 
 def test_post_confirmations_returns_404_when_no_pending(tmp_path: Path) -> None:
     """POST /confirmations/{subject_id} returns 404 if no pending future exists."""
-    _channels.clear()
+    _sessions.clear()
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
@@ -133,7 +133,7 @@ def test_get_events_route_is_registered(tmp_path: Path) -> None:
     and is independently exercised by the SessionEventBus and
     WebConfirmationChannel unit tests.
     """
-    _channels.clear()
+    _sessions.clear()
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
@@ -146,7 +146,7 @@ def test_get_events_route_is_registered(tmp_path: Path) -> None:
 
 def test_get_session_log_returns_empty_for_unknown_session(tmp_path: Path) -> None:
     """GET /sessions/{id}/log returns empty rows list for an unknown session."""
-    _channels.clear()
+    _sessions.clear()
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
@@ -199,7 +199,7 @@ def test_startup_flushes_pending_confirmations(tmp_path: Path) -> None:
     )
 
     # Creating the app triggers the startup hook when used as a context manager.
-    _channels.clear()
+    _sessions.clear()
     fastapi_app = create_app(
         data_dir=data_dir,
         log_dir=tmp_path / "logs",
@@ -269,7 +269,7 @@ def test_startup_hook_publishes_to_session_id_not_subject_id(tmp_path: Path) -> 
     _app_module._bus = _RecordingBus()  # type: ignore[assignment]
 
     try:
-        _channels.clear()
+        _sessions.clear()
         fastapi_app = create_app(
             data_dir=data_dir,
             log_dir=tmp_path / "logs",
@@ -298,14 +298,14 @@ def test_get_sim_memoizes_per_session(tmp_path: Path) -> None:
     from agentic_cab.adapters.clock import SystemClock
     from agentic_cab.adapters.state_store import SqliteStateStore
 
-    _sim_adapters.clear()
+    _sessions.clear()
     store = SqliteStateStore(db_path=tmp_path / "state.db", check_same_thread=False)
     store.apply_schema()
     clock = SystemClock()
 
-    sim_a1 = _get_sim("sess-a", store=store, clock=clock)
-    sim_a2 = _get_sim("sess-a", store=store, clock=clock)
-    sim_b = _get_sim("sess-b", store=store, clock=clock)
+    sim_a1 = _get_session("sess-a", store=store, clock=clock).sim
+    sim_a2 = _get_session("sess-a", store=store, clock=clock).sim
+    sim_b = _get_session("sess-b", store=store, clock=clock).sim
 
     assert sim_a1 is sim_a2, "same session must reuse the cached adapter"
     assert sim_a1 is not sim_b, "different sessions must get distinct adapters"
@@ -318,11 +318,17 @@ def test_get_meter_memoizes_per_session(tmp_path: Path) -> None:
     would drain a buffer run_turn never filled — the exact silent-data-loss
     failure mode the P8 cost ledger is designed to avoid (see docs/plans).
     """
-    _meters.clear()
+    from agentic_cab.adapters.clock import SystemClock
+    from agentic_cab.adapters.state_store import SqliteStateStore
 
-    meter_a1 = _get_meter("sess-a")
-    meter_a2 = _get_meter("sess-a")
-    meter_b = _get_meter("sess-b")
+    _sessions.clear()
+    store = SqliteStateStore(db_path=tmp_path / "state.db", check_same_thread=False)
+    store.apply_schema()
+    clock = SystemClock()
+
+    meter_a1 = _get_session("sess-a", store=store, clock=clock).meter
+    meter_a2 = _get_session("sess-a", store=store, clock=clock).meter
+    meter_b = _get_session("sess-b", store=store, clock=clock).meter
 
     assert meter_a1 is meter_a2, "same session must reuse the cached meter"
     assert meter_a1 is not meter_b, "different sessions must get distinct meters"
@@ -334,7 +340,7 @@ def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
     The agent loop integration is tested end-to-end in T32. Here we only verify
     the endpoint is wired and returns the session_id echo.
     """
-    _channels.clear()
+    _sessions.clear()
     fastapi_app = create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
