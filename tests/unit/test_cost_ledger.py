@@ -3,7 +3,7 @@
 Covers `_emit_outcome` in tools/confirm.py and tools/cancel.py — see
 docs/plans/2026-07-29-cost-ledger-wiring.md. CLAUDE.md invariants
 6 (action log shape), 7 (persistence split), 9 (determinism — latency_ms must not
-leak into the log), 13 (no TODOs).
+leak into the log), 13 (no deferred-work markers in code).
 """
 
 from __future__ import annotations
