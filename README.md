@@ -133,6 +133,7 @@ Full diagram: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layer diagram, ports, core flow, type contracts
 - [`docs/PHASES.md`](docs/PHASES.md) — Definition of Done + phases
 - [`docs/FOLLOWUPS.md`](docs/FOLLOWUPS.md) — durable follow-ups (only legal home for TODO-class items)
+- [`.github/SECURITY.md`](.github/SECURITY.md) — security policy and how to report a vulnerability
 - [`.claude/skills/slice-delivery/`](.claude/skills/slice-delivery/) — execution wrapper for the repo
 - [`docs/scratch/`](docs/scratch/) and [`notes/`](notes/) — gitignored work-in-progress (see [CLAUDE.md § Documentation: durable vs transient](CLAUDE.md))
 
