@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,41 @@ def test_secret_scan_job_scans_full_history() -> None:
     assert checkouts[0]["with"]["fetch-depth"] == 0
     runs = [s["run"] for s in job["steps"] if "run" in s]
     assert any("gitleaks git" in r and "--redact" in r for r in runs)
+
+
+def test_every_checkout_drops_persisted_credentials() -> None:
+    for job in _load()["jobs"].values():
+        checkouts = [
+            s for s in job["steps"] if str(s.get("uses", "")).startswith("actions/checkout@")
+        ]
+        assert checkouts
+        for step in checkouts:
+            assert step["with"]["persist-credentials"] is False
+
+
+def test_secret_scan_uses_repo_gitleaks_config() -> None:
+    job = _load()["jobs"]["secret-scan"]
+    scans = [s["run"] for s in job["steps"] if "gitleaks git" in s.get("run", "")]
+    assert scans
+    assert all("--config .gitleaks.toml" in r for r in scans)
+
+
+def test_gitleaks_config_extends_default_with_narrow_allowlists() -> None:
+    config = tomllib.loads((ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    assert config["extend"] == {"useDefault": True}
+    assert "rules" not in config
+    allowlists = config["allowlists"]
+    assert allowlists
+    for allow in allowlists:
+        assert allow["targetRules"] == ["generic-api-key"]
+        assert allow["condition"] == "AND"
+        assert allow["paths"]
+        assert allow["regexes"]
+        assert "commits" not in allow
+        assert "stopwords" not in allow
+        for path in allow["paths"]:
+            assert path.startswith("^")
+            assert not path.startswith("^.*")
 
 
 def test_security_policy_lives_under_github_dir() -> None:
