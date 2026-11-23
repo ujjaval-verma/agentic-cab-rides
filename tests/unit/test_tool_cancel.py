@@ -100,6 +100,31 @@ async def test_cancel_happy_path_emits_four_rows(harness, meter) -> None:
 
 
 @pytest.mark.asyncio
+async def test_cancel_verified_row_records_approver_id_and_channel(harness, meter) -> None:
+    """The gate's approver identity and channel land on the cancel verified row."""
+    store, log, clock, sim = harness
+    booking_id = await _book(sim, store, log, clock, meter)
+
+    ch = ScriptedConfirmationChannel(script=[{"match": "Cancel", "action": "approve"}], clock=clock)
+    result = await cancel_booking(
+        CancelArgs(booking_id=booking_id),
+        provider=sim,
+        store=store,
+        log=log,
+        channel=ch,
+        clock=clock,
+        meter=meter,
+        session_id="S",
+        turn_id="T",
+    )
+    rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
+    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]
+    confirmation = next(r for r in rows if r["kind"] == "verified")["checks"]["confirmation"]
+    assert confirmation["approver_id"] == "scripted"
+    assert confirmation["channel"] == "scripted"
+
+
+@pytest.mark.asyncio
 async def test_cancel_declined_emits_three_rows_no_executed(harness, meter) -> None:
     """Scripted channel returns approved=False → no executed row, outcome:status='rejected'."""
     store, log, clock, sim = harness

@@ -7,6 +7,9 @@ from typing import Any, Self
 from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.core.ports import ConfirmationRequest, ConfirmationResult
 
+# Constant principal so scenario logs stay deterministic (invariant 9).
+_SCRIPTED_PRINCIPAL_ID = "scripted"
+
 
 class ScriptedConfirmationChannel:
     def __init__(self: Self, script: list[dict[str, Any]], clock: FrozenClock) -> None:
@@ -22,6 +25,8 @@ class ScriptedConfirmationChannel:
                     reason="approved" if approved else "declined",
                     approved_at=self._clock.now() if approved else None,
                     approver="scripted",
+                    approver_id=_SCRIPTED_PRINCIPAL_ID if approved else None,
+                    channel="scripted",
                 )
         msg = (
             f"ScriptedConfirmationChannel: no rule matched summary={req.summary!r}; "
