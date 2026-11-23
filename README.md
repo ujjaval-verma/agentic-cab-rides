@@ -85,6 +85,12 @@ make transcripts                             # regenerate all 6 scenario transcr
 
 `make help` lists every target. The Makefile is the discovery surface; pre-commit and CI both call into it so there is one path.
 
+## Development
+
+- `make verify`: the full gate (format check, lint, typecheck, fast tests); the pre-push hook runs it.
+- `make test`: the full pytest suite.
+- `make audit`: `pip-audit` over the locked dependencies in `uv.lock`. It warns and passes when the advisory service is unreachable (offline), and fails on any known vulnerability. CI runs `make audit AUDIT_FLAGS=--strict` (see [the CI workflow](.github/workflows/ci.yml)), where an unreachable service also fails. Dependabot opens weekly update PRs for `uv` and GitHub Actions.
+
 ## What's included
 
 - Working repo, clone-to-run in 3 minutes

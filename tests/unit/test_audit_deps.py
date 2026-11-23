@@ -144,6 +144,14 @@ def test_argv_passed_to_tools() -> None:
     assert audit[audit.index("-f") + 1] == "json"
 
 
+def test_readme_development_section_mentions_make_audit() -> None:
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    start = text.index("## Development")
+    end = text.find("\n## ", start + 1)
+    section = text[start : end if end != -1 else len(text)]
+    assert "make audit" in section
+
+
 def test_makefile_audit_target_runs_script_with_flags() -> None:
     text = (ROOT / "Makefile").read_text(encoding="utf-8")
     phony = re.search(r"^\.PHONY:((?:.*\\\n)*.*)$", text, re.MULTILINE)
