@@ -45,7 +45,7 @@ ships two first-class surfaces (REPL and web) and one batch surface
 | Surface | Entry point | Process model | Confirmation channel | Per-session state |
 |---------|-------------|---------------|----------------------|-------------------|
 | **REPL** | `make repl` → `python -m agentic_cab repl` | One long-lived Python process. Stdin loop reads chat input; agent calls tools in-process. | `CLIConfirmationChannel` reads bare y/n from `/dev/tty` — a separate file handle from stdin, so chat text cannot inject approvals. | Adapter instance lives for the whole process; provider in-memory caches (`_option_cache`, `_intent_cache`) survive across turns naturally. |
-| **Web** | `make web` → `uvicorn agentic_cab.web.app:create_app --factory` | Single uvicorn worker, FastAPI app. One browser tab = one server-minted `session_id` (`POST /sessions`). SSE stream pushes assistant tokens and gate prompts; `POST /confirmations/{subject_id}` delivers the y/n. | `WebConfirmationChannel` blocks the tool call on an `asyncio.Future` resolved by the POST handler. | `UberSimAdapter` is memoized per `session_id` (PR #8) so option/intent caches survive within a session. They do not survive worker restart — see WRITEUP §2 "Provider option durability". |
+| **Web** | `make web` → `uvicorn agentic_cab.web.app:create_app --factory` | Single uvicorn worker, FastAPI app. One browser tab = one server-minted `session_id` (`POST /sessions`). SSE stream pushes assistant tokens and gate prompts; `POST /sessions/{session_id}/confirmations/{subject_id}` delivers the y/n. See "Web session authentication" below. | `WebConfirmationChannel` blocks the tool call on an `asyncio.Future` resolved by the POST handler — only the caller's own session channel is reachable. | `UberSimAdapter` is memoized per `session_id` (PR #8) so option/intent caches survive within a session. They do not survive worker restart — see WRITEUP §2 "Provider option durability". |
 | **Scenarios** | `make transcripts` (or `pytest -m scenario`) | Per-scenario in-process run with a `FrozenClock` and a `ScriptedConfirmationChannel`. Each scenario is a fresh state DB and adapter under a `tmp_path`. | `ScriptedConfirmationChannel` reads decisions from the scenario YAML. | Isolated per run; not shared with REPL/web. |
 
 Shared by all three surfaces:
@@ -54,6 +54,33 @@ Shared by all three surfaces:
 - **Action log + chat history** — per-session JSONL under `logs/` (`<session_id>.jsonl`, `<session_id>.chat.jsonl`). REPL and web write to the same directory. `session_id` is validated as a canonical ULID at every input boundary (web request models, `scripts/replay.py`, `make replay`), and path builders in `core/paths.py` resolve the final path and refuse anything outside the log dir.
 - **Geocode cache** — file-system fixtures under `fixtures/geocode/` (one JSON per `sha1(query.strip().lower())`). Shared across surfaces and worktrees.
 - **Secrets** — `.env` symlinked from `~/.config/agentic-cab-rides/.env`; loaded at process start.
+
+### Web session authentication
+
+`POST /sessions` mints three server-side values: the `session_id` (ULID,
+returned in the body), a **token** (`secrets.token_urlsafe(32)`, 256 bits),
+and a **principal** (`principal_id`, a ULID). The token is set only as an
+`HttpOnly; SameSite=Strict; Path=/` browser-session cookie named
+`cab_session_<session_id>` — one per session so tabs never clobber each
+other — and is never returned in a body, logged, or put in a URL (a cookie
+rather than a header because `EventSource` cannot set headers, and a query
+string would leak into access logs). `SameSite=Strict` blocks cross-site POSTs
+to the confirmation route. `Secure` is not set because `make web` serves plain
+http on localhost.
+
+Every session route requires the cookie, checked with `hmac.compare_digest`:
+`POST /chat`, `GET /events`, `POST /sessions/{id}/confirmations/{subject_id}`,
+and `GET /sessions/{id}/log`. Unknown, evicted, cookie-less, or mismatched
+sessions all get the same 403; an authorized caller naming a `subject_id` not
+pending in its own session gets 404. Sessions are created only by
+`POST /sessions` — an evicted id is never revived.
+
+Token vs principal: the token is a credential (proves "this browser owns this
+session") and lives only in process memory and the cookie. The principal is
+an identifier (who approved) and is recorded as `approver_id` on the
+`verified` row. The confirmation body carries only `approved`; the approver is
+set inside `WebConfirmationChannel`, whose `resolve()` has no approver
+parameter at all.
 
 Not deployed today: no container, no orchestrator, no horizontal scale. The web surface assumes a single worker (in-memory adapter memoization is per-process; SSE expects sticky sessions). Production direction — a worker pool with shared-store option durability, secrets-manager-backed credentials, and a polling `track_booking` loop — is sketched in [`docs/WRITEUP.md`](WRITEUP.md) §2 and the priority list in §3.
 
@@ -155,6 +182,13 @@ fee → execute. Cancel keys are bound to `(booking_id, fee_cents, status_at_quo
 Per-session JSONL at `logs/<session_id>.jsonl`. Every gated action emits four
 rows linked by `action_id`; read-only tools emit `requested` + `outcome` only.
 
+`verified.checks.confirmation` is the channel's `ConfirmationResult` verbatim.
+`channel` is one of `cli` / `web` / `scripted`; `approver_id` is a
+server-issued principal (a per-REPL ULID for the CLI, the session's
+`principal_id` for the web, the constant `"scripted"` for scenarios) and is
+`null` on decline or timeout. Neither is ever taken from client input or OS
+identity.
+
 ```json
 // requested
 {"ts":"...","session_id":"...","turn_id":"...","action_id":"...",
@@ -164,7 +198,9 @@ rows linked by `action_id`; read-only tools emit `requested` + `outcome` only.
 {"ts":"...","action_id":"...","tool":"confirm_booking","kind":"verified",
  "checks":{"draft_found":true,"fingerprint_match":true,
            "requote_price_drift_cents":0,
-           "confirmation":{"approved":true,"approver":"cli-tty","approved_at":"..."}},
+           "confirmation":{"approved":true,"reason":"approved","approver":"cli-tty",
+                           "approved_at":"...","approver_id":"<principal ULID>",
+                           "channel":"cli"}},
  "result":"ok"}      // or "rejected" with "reason"
 
 // executed
