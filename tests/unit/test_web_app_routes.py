@@ -42,6 +42,66 @@ def _isolated_sessions() -> Iterator[None]:
     _sessions.clear()
 
 
+_ULID = "01KS5HMK9QJZ8PCJ92B9VM7BRA"
+
+
+def _ulid(n: int) -> str:
+    """Deterministic valid session ULID, distinct per `n`."""
+    return f"01KS5HMK9QJZ8PCJ92B9{n:06d}"
+
+
+_BAD_SESSION_IDS = [
+    "../../etc/x",
+    "/abs",
+    _ULID.lower(),
+    "123e4567-e89b-42d3-a456-426614174000",
+]
+
+
+@pytest.mark.parametrize("bad", _BAD_SESSION_IDS)
+def test_chat_rejects_invalid_session_id(app: TestClient, tmp_path: Path, bad: str) -> None:
+    response = app.post("/chat", json={"session_id": bad, "message": "hi"})
+    assert response.status_code == 422
+    assert not (tmp_path / "logs").exists() or list((tmp_path / "logs").iterdir()) == []
+    assert not _sessions
+
+
+@pytest.mark.parametrize("bad", _BAD_SESSION_IDS)
+def test_events_rejects_invalid_session_id(app: TestClient, bad: str) -> None:
+    assert app.get("/events", params={"session_id": bad}).status_code == 422
+
+
+@pytest.mark.parametrize("bad", [_ULID.lower(), "not-a-ulid", "%2E%2E"])
+def test_session_log_rejects_invalid_session_id(app: TestClient, bad: str) -> None:
+    assert app.get(f"/sessions/{bad}/log").status_code == 422
+
+
+@pytest.mark.parametrize("bad", ["..%2F..%2Fetc%2Fx", "%2Fabs"])
+def test_session_log_encoded_slashes_never_reach_the_handler(app: TestClient, bad: str) -> None:
+    # Decoded slashes change the route shape, so the router refuses before validation.
+    assert app.get(f"/sessions/{bad}/log").status_code in (404, 422)
+
+
+def test_chat_accepts_valid_ulid(app: TestClient) -> None:
+    response = app.post("/chat", json={"session_id": _ULID, "message": "hi"})
+    assert response.status_code == 200
+    assert response.json()["session_id"] == _ULID
+
+
+def test_session_log_accepts_valid_ulid(app: TestClient) -> None:
+    response = app.get(f"/sessions/{_ULID}/log")
+    assert response.status_code == 200
+    assert response.json() == {"session_id": _ULID, "rows": []}
+
+
+def test_post_sessions_mints_valid_ulid(app: TestClient) -> None:
+    from agentic_cab.core.ids import parse_session_id
+
+    response = app.post("/sessions")
+    assert response.status_code == 200
+    assert parse_session_id(response.json()["session_id"])
+
+
 @pytest.fixture
 def app(tmp_path: Path) -> TestClient:
     """Create a TestClient with isolated filesystem dirs."""
@@ -168,10 +228,10 @@ def test_get_session_log_returns_empty_for_unknown_session(tmp_path: Path) -> No
     )
     client = TestClient(fastapi_app, raise_server_exceptions=True)
 
-    response = client.get("/sessions/no-such-session/log")
+    response = client.get(f"/sessions/{_ulid(1)}/log")
     assert response.status_code == 200
     data = response.json()
-    assert data["session_id"] == "no-such-session"
+    assert data["session_id"] == _ulid(1)
     assert data["rows"] == []
 
 
@@ -221,7 +281,7 @@ def test_startup_flushes_pending_confirmations(tmp_path: Path) -> None:
     client = TestClient(fastapi_app, raise_server_exceptions=True)
 
     # A simple GET request forces the TestClient to run lifespan startup.
-    response = client.get("/sessions/any/log")
+    response = client.get(f"/sessions/{_ulid(2)}/log")
     assert response.status_code == 200
 
     # The pending row is still in the DB (startup hook publishes but does NOT pop).
@@ -417,7 +477,7 @@ def test_post_chat_uses_one_meter_for_run_turn_and_both_gated_tools(tmp_path: Pa
     ):
         response = client.post(
             "/chat",
-            json={"session_id": "sess-meter-identity", "message": "confirm then cancel"},
+            json={"session_id": _ulid(3), "message": "confirm then cancel"},
         )
         assert response.status_code == 200
 
@@ -431,7 +491,7 @@ def test_post_chat_uses_one_meter_for_run_turn_and_both_gated_tools(tmp_path: Pa
     assert "confirm_booking_meter" in captured, "the confirm_booking handler was not reached"
     assert "cancel_booking_meter" in captured, "the cancel_booking handler was not reached"
 
-    session_meter = _sessions["sess-meter-identity"].meter
+    session_meter = _sessions[_ulid(3)].meter
     assert captured["run_turn_meter"] is session_meter
     assert (
         captured["confirm_booking_meter"] is session_meter
@@ -477,14 +537,14 @@ def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
 
     response = client.post(
         "/chat",
-        json={"session_id": "test-session-chat", "message": "hello"},
+        json={"session_id": _ulid(4), "message": "hello"},
     )
     # 200 means the background task was kicked off; the agent error (no API key)
     # will be emitted as an SSE error event, not as an HTTP error.
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
-    assert data["session_id"] == "test-session-chat"
+    assert data["session_id"] == _ulid(4)
 
 
 # ---------- Session eviction (bounded per-session state) ----------
@@ -510,14 +570,14 @@ def test_idle_session_evicted_together(tmp_path: Path) -> None:
     )
     client = TestClient(fastapi_app, raise_server_exceptions=False)
 
-    client.post("/chat", json={"session_id": "sess-idle", "message": "hi"})
-    assert "sess-idle" in _sessions
+    client.post("/chat", json={"session_id": _ulid(5), "message": "hi"})
+    assert _ulid(5) in _sessions
 
     clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
     # Any subsequent /chat call runs the eviction sweep before touching its own state.
-    client.post("/chat", json={"session_id": "sess-trigger", "message": "hi"})
+    client.post("/chat", json={"session_id": _ulid(6), "message": "hi"})
 
-    assert "sess-idle" not in _sessions, "the whole session record must be gone"
+    assert _ulid(5) not in _sessions, "the whole session record must be gone"
 
 
 def test_session_touched_within_ttl_survives(tmp_path: Path) -> None:
@@ -535,11 +595,11 @@ def test_session_touched_within_ttl_survives(tmp_path: Path) -> None:
     )
     client = TestClient(fastapi_app, raise_server_exceptions=False)
 
-    client.post("/chat", json={"session_id": "sess-fresh", "message": "hi"})
+    client.post("/chat", json={"session_id": _ulid(7), "message": "hi"})
     clock.tick(timedelta(minutes=30))
-    client.post("/chat", json={"session_id": "sess-trigger", "message": "hi"})
+    client.post("/chat", json={"session_id": _ulid(6), "message": "hi"})
 
-    assert "sess-fresh" in _sessions
+    assert _ulid(7) in _sessions
 
 
 def test_exceeding_max_sessions_evicts_lru_first(tmp_path: Path) -> None:
@@ -558,23 +618,23 @@ def test_exceeding_max_sessions_evicts_lru_first(tmp_path: Path) -> None:
     client = TestClient(fastapi_app, raise_server_exceptions=False)
 
     for i in range(_MAX_SESSIONS):
-        client.post("/chat", json={"session_id": f"sess-{i}", "message": "hi"})
+        client.post("/chat", json={"session_id": _ulid(1000 + i), "message": "hi"})
         clock.tick(timedelta(seconds=1))
     assert len(_sessions) == _MAX_SESSIONS
 
     # A brand-new session pushes the count to _MAX_SESSIONS + 1; the sweep at
     # its entry still saw exactly the cap, so no eviction happens yet.
-    client.post("/chat", json={"session_id": "sess-new", "message": "hi"})
+    client.post("/chat", json={"session_id": _ulid(8), "message": "hi"})
     clock.tick(timedelta(seconds=1))
 
     # Re-touching an existing session runs the sweep again, which now sees
     # _MAX_SESSIONS + 1 and evicts the LRU session (sess-0, the oldest
     # last_used_at) before touching its own (already-existing) state — so
     # this call doesn't grow the dict itself.
-    client.post("/chat", json={"session_id": "sess-new", "message": "hi again"})
+    client.post("/chat", json={"session_id": _ulid(8), "message": "hi again"})
 
-    assert "sess-0" not in _sessions, "least-recently-used session should be evicted first"
-    assert "sess-new" in _sessions
+    assert _ulid(1000) not in _sessions, "least-recently-used session should be evicted first"
+    assert _ulid(8) in _sessions
     assert len(_sessions) == _MAX_SESSIONS
 
 
@@ -644,17 +704,17 @@ def test_session_reused_after_eviction_gets_fresh_state(tmp_path: Path) -> None:
     )
     client = TestClient(fastapi_app, raise_server_exceptions=False)
 
-    client.post("/chat", json={"session_id": "sess-reuse", "message": "hi"})
-    original_meter = _sessions["sess-reuse"].meter
-    original_sim = _sessions["sess-reuse"].sim
+    client.post("/chat", json={"session_id": _ulid(9), "message": "hi"})
+    original_meter = _sessions[_ulid(9)].meter
+    original_sim = _sessions[_ulid(9)].sim
 
     clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
-    client.post("/chat", json={"session_id": "sess-trigger", "message": "hi"})
-    assert "sess-reuse" not in _sessions
+    client.post("/chat", json={"session_id": _ulid(6), "message": "hi"})
+    assert _ulid(9) not in _sessions
 
-    response = client.post("/chat", json={"session_id": "sess-reuse", "message": "hi again"})
+    response = client.post("/chat", json={"session_id": _ulid(9), "message": "hi again"})
     assert response.status_code == 200
 
-    new_state = _sessions["sess-reuse"]
+    new_state = _sessions[_ulid(9)]
     assert new_state.meter is not original_meter, "reused session must get a fresh meter"
     assert new_state.sim is not original_sim, "reused session must get a fresh sim adapter"
