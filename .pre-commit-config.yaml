@@ -3,7 +3,7 @@
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
         exclude: \.ambr$
@@ -17,15 +17,20 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.7.4
-    hooks:
-      - id: ruff-format
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-
   - repo: local
     hooks:
+      - id: ruff-format
+        name: ruff format (locked ruff)
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+
+      - id: ruff
+        name: ruff check (locked ruff)
+        entry: uv run ruff check --fix --exit-non-zero-on-fix
+        language: system
+        types_or: [python, pyi]
+
       - id: pyright
         name: pyright (changed files)
         entry: uv run pyright
