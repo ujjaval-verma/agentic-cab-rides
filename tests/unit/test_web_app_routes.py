@@ -2,8 +2,8 @@
 
 Route registration is verified; full SSE delivery is exercised by
 SessionEventBus + WebConfirmationChannel unit tests and the T32 manual flow.
-The pending_confirmation roundtrip is tested by setting up a channel directly
-and calling POST /confirmations.
+The pending_confirmation roundtrip is tested by minting a session, starting a
+request on its channel, and calling POST /sessions/{sid}/confirmations/{subject_id}.
 """
 
 from __future__ import annotations
@@ -17,8 +17,10 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from agentic_cab.core.ports import ConfirmationRequest
 from agentic_cab.web.app import (
     _MAX_SESSIONS,
     _SESSION_IDLE_TTL,
@@ -27,6 +29,7 @@ from agentic_cab.web.app import (
     _sessions,
     create_app,
 )
+from agentic_cab.web.channel import WebConfirmationChannel
 
 
 @pytest.fixture(autouse=True)
@@ -271,29 +274,30 @@ def test_get_index_serves_html(app: TestClient) -> None:
         assert "text/html" in response.headers["content-type"]
 
 
-@pytest.mark.asyncio
-async def test_post_confirmations_resolves_pending_future(tmp_path: Path) -> None:
-    """POST /confirmations/{subject_id} resolves a pending WebConfirmationChannel future."""
-    from datetime import UTC, datetime, timedelta
+# ---------- Session-scoped confirmations ----------
+#
+# These drive the app through httpx.AsyncClient + ASGITransport so the route and
+# the awaiting WebConfirmationChannel future share one event loop (no thread hop).
 
-    from agentic_cab.adapters.clock import SystemClock
-    from agentic_cab.adapters.state_store import SqliteStateStore
-    from agentic_cab.core.ports import ConfirmationRequest
 
-    fastapi_app = create_app(
-        data_dir=tmp_path / "data",
-        log_dir=tmp_path / "logs",
-        geocode_fixtures_dir=tmp_path / "fixtures",
+def _async_client(fastapi_app: FastAPI) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=fastapi_app),
+        base_url="http://testserver",
     )
-    client = TestClient(fastapi_app, raise_server_exceptions=True)
 
-    session_id = "test-session-conf"
-    store = SqliteStateStore(db_path=tmp_path / "data" / "state.db", check_same_thread=False)
-    store.apply_schema()
-    channel = _create_session(session_id, store=store, clock=SystemClock()).channel
 
-    req = ConfirmationRequest(
-        subject_id="draft-xyz",
+async def _amint(client: httpx.AsyncClient) -> str:
+    response = await client.post("/sessions")
+    assert response.status_code == 200
+    return response.json()["session_id"]
+
+
+def _confirmation_req(subject_id: str) -> ConfirmationRequest:
+    from datetime import UTC, datetime
+
+    return ConfirmationRequest(
+        subject_id=subject_id,
         subject_kind="draft",
         summary="Book UberX from A to B",
         fingerprint="a" * 64,
@@ -301,44 +305,213 @@ async def test_post_confirmations_resolves_pending_future(tmp_path: Path) -> Non
         expires_at=datetime.now(UTC) + timedelta(seconds=30),
     )
 
-    # Start the request() coroutine in the background.
-    result_holder: list = []
 
-    async def _await_request() -> None:
-        result = await channel.request(req)
-        result_holder.append(result)
-
-    task = asyncio.ensure_future(_await_request())
-    await asyncio.sleep(0.05)  # let the future register
-
-    # POST to the endpoint to resolve it.
-    response = client.post(
-        f"/confirmations/{req.subject_id}",
-        json={"approved": True, "approver": "test-runner"},
-    )
-    assert response.status_code == 200
-    assert response.json()["status"] == "resolved"
-
-    # The pending future should now be resolved.
-    await asyncio.wait_for(task, timeout=3.0)
-    assert result_holder[0].approved is True
-    assert result_holder[0].reason == "approved"
+async def _await_pending(channel: WebConfirmationChannel) -> None:
+    for _ in range(200):
+        if channel.has_pending():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("confirmation never became pending")
 
 
-def test_post_confirmations_returns_404_when_no_pending(tmp_path: Path) -> None:
-    """POST /confirmations/{subject_id} returns 404 if no pending future exists."""
-    fastapi_app = create_app(
+def _new_app(tmp_path: Path) -> FastAPI:
+    return create_app(
         data_dir=tmp_path / "data",
         log_dir=tmp_path / "logs",
         geocode_fixtures_dir=tmp_path / "fixtures",
     )
-    client = TestClient(fastapi_app, raise_server_exceptions=False)
 
-    response = client.post(
-        "/confirmations/nonexistent-id",
-        json={"approved": True, "approver": "test"},
-    )
-    assert response.status_code == 404
+
+async def test_session_scoped_confirmation_resolves_pending_future(tmp_path: Path) -> None:
+    """POST /sessions/{sid}/confirmations/{subject_id} resolves that session's future."""
+    async with _async_client(_new_app(tmp_path)) as client:
+        sid = await _amint(client)
+        channel = _sessions[sid].channel
+        task = asyncio.ensure_future(channel.request(_confirmation_req("draft-xyz")))
+        await _await_pending(channel)
+
+        response = await client.post(
+            f"/sessions/{sid}/confirmations/draft-xyz", json={"approved": True}
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "resolved"
+
+        result = await asyncio.wait_for(task, timeout=3.0)
+        assert result.approved is True
+        assert result.reason == "approved"
+
+
+async def test_session_scoped_confirmation_returns_404_when_no_pending(tmp_path: Path) -> None:
+    async with _async_client(_new_app(tmp_path)) as client:
+        sid = await _amint(client)
+        response = await client.post(
+            f"/sessions/{sid}/confirmations/nonexistent-id", json={"approved": True}
+        )
+        assert response.status_code == 404
+
+
+async def test_session_scoped_confirmation_requires_session_token(tmp_path: Path) -> None:
+    async with _async_client(_new_app(tmp_path)) as client:
+        sid = await _amint(client)
+        channel = _sessions[sid].channel
+        task = asyncio.ensure_future(channel.request(_confirmation_req("draft-tok")))
+        await _await_pending(channel)
+
+        client.cookies.clear()
+        response = await client.post(
+            f"/sessions/{sid}/confirmations/draft-tok", json={"approved": True}
+        )
+        assert response.status_code == 403
+        assert channel.has_pending(), "an unauthenticated POST must not touch the gate"
+
+        channel.resolve("draft-tok", approved=False)
+        await asyncio.wait_for(task, timeout=3.0)
+
+
+async def test_cross_session_approval_is_rejected(tmp_path: Path) -> None:
+    """Session A can neither address B's route nor reach B's pending request via its own."""
+    fastapi_app = _new_app(tmp_path)
+    async with _async_client(fastapi_app) as client_a, _async_client(fastapi_app) as client_b:
+        sid_a = await _amint(client_a)
+        sid_b = await _amint(client_b)
+        channel_b = _sessions[sid_b].channel
+        task = asyncio.ensure_future(channel_b.request(_confirmation_req("draft-of-b")))
+        await _await_pending(channel_b)
+
+        # A addresses B's session: no B token in A's jar → 403.
+        response = await client_a.post(
+            f"/sessions/{sid_b}/confirmations/draft-of-b", json={"approved": True}
+        )
+        assert response.status_code == 403
+
+        # A addresses its own session with B's subject id → not pending there → 404.
+        response = await client_a.post(
+            f"/sessions/{sid_a}/confirmations/draft-of-b", json={"approved": True}
+        )
+        assert response.status_code == 404
+
+        assert channel_b.has_pending(), "B's pending confirmation must be untouched"
+        assert not task.done()
+
+        # B resolves its own request normally.
+        response = await client_b.post(
+            f"/sessions/{sid_b}/confirmations/draft-of-b", json={"approved": True}
+        )
+        assert response.status_code == 200
+        result = await asyncio.wait_for(task, timeout=3.0)
+        assert result.approved is True
+        assert result.approver_id == _sessions[sid_b].principal_id
+
+
+async def test_body_supplied_approver_is_ignored(tmp_path: Path) -> None:
+    async with _async_client(_new_app(tmp_path)) as client:
+        sid = await _amint(client)
+        channel = _sessions[sid].channel
+        task = asyncio.ensure_future(channel.request(_confirmation_req("draft-mallory")))
+        await _await_pending(channel)
+
+        response = await client.post(
+            f"/sessions/{sid}/confirmations/draft-mallory",
+            json={"approved": True, "approver": "mallory", "approver_id": "mallory"},
+        )
+        assert response.status_code == 200
+
+        result = await asyncio.wait_for(task, timeout=3.0)
+        assert result.approver == "web-user"
+        assert result.approver_id == _sessions[sid].principal_id
+        assert result.channel == "web"
+        assert "mallory" not in result.model_dump_json()
+
+
+def test_old_unscoped_confirmation_route_is_gone(app: TestClient) -> None:
+    route_paths = [getattr(r, "path", None) for r in app.app.routes]  # type: ignore[attr-defined]
+    assert "/confirmations/{subject_id}" not in route_paths
+    assert "/sessions/{session_id}/confirmations/{subject_id}" in route_paths
+    response = app.post("/confirmations/anything", json={"approved": True})
+    assert response.status_code in (404, 405)
+
+
+async def test_full_confirm_flow_logs_principal_and_never_the_token(
+    tmp_path: Path, meter: object
+) -> None:
+    """End to end: confirm_booking awaits the session's web gate, the browser approves
+    over the session route with a forged approver, and the action log records the
+    server-side principal — and nowhere contains the session token (invariant 15)."""
+    from agentic_cab.adapters.action_log import JSONLActionLog
+    from agentic_cab.adapters.clock import SystemClock
+    from agentic_cab.adapters.state_store import SqliteStateStore
+    from agentic_cab.tools.confirm import ConfirmArgs, confirm_booking
+    from agentic_cab.tools.discover import DiscoverArgs, discover_options
+    from agentic_cab.tools.prepare import PrepareArgs, prepare_booking
+
+    async with _async_client(_new_app(tmp_path)) as client:
+        sid = await _amint(client)
+        token = client.cookies.get(f"cab_session_{sid}")
+        assert token
+        state = _sessions[sid]
+        store = SqliteStateStore(db_path=tmp_path / "data" / "state.db", check_same_thread=False)
+        log = JSONLActionLog(log_dir=tmp_path / "logs")
+        clock = SystemClock()
+
+        discovered = await discover_options(
+            DiscoverArgs(
+                pickup_address="A",
+                pickup_lat=37.7749,
+                pickup_lng=-122.4194,
+                dropoff_address="B",
+                dropoff_lat=37.7849,
+                dropoff_lng=-122.4094,
+            ),
+            provider=state.sim,
+            log=log,
+            clock=clock,
+            session_id=sid,
+            turn_id="T",
+        )
+        prepared = await prepare_booking(
+            PrepareArgs(option_id=discovered["options"][0]["option_id"]),
+            provider=state.sim,
+            log=log,
+            clock=clock,
+            session_id=sid,
+            turn_id="T",
+        )
+        draft_id = prepared["draft_id"]
+
+        task = asyncio.ensure_future(
+            confirm_booking(
+                ConfirmArgs(draft_id=draft_id),
+                provider=state.sim,
+                store=store,
+                log=log,
+                channel=state.channel,
+                clock=clock,
+                meter=meter,  # type: ignore[arg-type]
+                session_id=sid,
+                turn_id="T",
+            )
+        )
+        await _await_pending(state.channel)
+        response = await client.post(
+            f"/sessions/{sid}/confirmations/{draft_id}",
+            json={"approved": True, "approver": "mallory"},
+        )
+        assert response.status_code == 200
+        result = await asyncio.wait_for(task, timeout=5.0)
+        assert result["status"] == "confirmed"
+
+        rows = [r for r in log.read(sid) if r["action_id"] == result["action_id"]]
+        assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]
+        confirmation = next(r for r in rows if r["kind"] == "verified")["checks"]["confirmation"]
+        assert confirmation["approver"] == "web-user"
+        assert confirmation["approver_id"] == state.principal_id
+        assert confirmation["channel"] == "web"
+
+        log_files = list((tmp_path / "logs").rglob("*"))
+        assert log_files
+        for path in log_files:
+            if path.is_file():
+                assert token not in path.read_text(encoding="utf-8"), path
 
 
 def test_get_events_route_is_registered(tmp_path: Path) -> None:

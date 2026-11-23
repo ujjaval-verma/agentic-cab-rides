@@ -1,13 +1,19 @@
 """FastAPI application factory for the agentic-cab-rides web surface.
 
 Routes:
-  GET  /                       → index.html (chat + log pane)
-  GET  /static/{path}         → static files
-  POST /sessions              → mint a server-side session ULID
-  POST /chat                  → drive one agent turn; results stream via SSE
-  GET  /events?session_id=... → SSE stream of action-log + confirmation events
-  POST /confirmations/{id}    → resolve a pending WebConfirmationChannel future
-  GET  /sessions/{id}/log     → raw JSONL action-log for the session
+  GET  /                                   → index.html (chat + log pane)
+  GET  /static/{path}                     → static files
+  POST /sessions                          → mint a session ULID + its token cookie
+  POST /chat                              → drive one agent turn; results stream via SSE
+  GET  /events?session_id=...             → SSE stream of action-log + confirmation events
+  POST /sessions/{id}/confirmations/{sid} → resolve a pending confirmation in that session
+  GET  /sessions/{id}/log                 → raw JSONL action-log for the session
+
+Auth: POST /sessions sets an HttpOnly, SameSite=Strict cookie
+`cab_session_<session_id>` holding a 256-bit server-minted token. Every other
+session route (chat, events, confirmations, log) requires it; unknown, evicted,
+or mismatched sessions get an identical 403. The approver identity is the
+session's server-minted `principal_id`, never a request field.
 
 Layer: web/* may import from agent/, tools/, adapters/. Nothing in tools/ or
 adapters/ may import from here (invariant 1).
@@ -407,21 +413,32 @@ def create_app(
         _task.add_done_callback(lambda t: _log.debug("web.chat.task.done", exc=t.exception()))
         return JSONResponse({"status": "ok", "session_id": session_id})
 
-    @app.post("/confirmations/{subject_id}")
-    async def resolve_confirmation(subject_id: str, body: ConfirmationRequest) -> JSONResponse:
-        """Resolve a pending WebConfirmationChannel future from the browser."""
-        # Find the channel for the session that owns this subject_id.
-        for _sid, state in _sessions.items():
-            resolved = state.channel.resolve(subject_id, approved=body.approved)
-            if resolved:
-                _log.info(
-                    "web.confirmation.resolved",
-                    subject_id=subject_id,
-                    approved=body.approved,
-                )
-                return JSONResponse({"status": "resolved"})
+    @app.post("/sessions/{session_id}/confirmations/{subject_id}")
+    async def resolve_confirmation(
+        session_id: SessionId,
+        subject_id: str,
+        body: ConfirmationRequest,
+        request: Request,
+    ) -> JSONResponse:
+        """Resolve a pending confirmation in the caller's own session only.
 
-        raise HTTPException(status_code=404, detail=f"No pending confirmation for {subject_id!r}")
+        Invariant 2: the only channel reachable here is the one belonging to the
+        session whose token was presented — there is no path to another
+        session's pending request. The approver is the session's server-side
+        principal (set inside the channel); nothing in the body can override it.
+        """
+        state = _authorize(request, session_id, clock=_clock)
+        if not state.channel.resolve(subject_id, approved=body.approved):
+            raise HTTPException(
+                status_code=404, detail=f"No pending confirmation for {subject_id!r}"
+            )
+        _log.info(
+            "web.confirmation.resolved",
+            session_id=session_id,
+            subject_id=subject_id,
+            approved=body.approved,
+        )
+        return JSONResponse({"status": "resolved"})
 
     @app.get("/sessions/{session_id}/log")
     async def session_log(session_id: SessionId, request: Request) -> JSONResponse:
