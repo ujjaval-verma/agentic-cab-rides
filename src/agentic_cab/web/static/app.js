@@ -127,13 +127,19 @@ function hideModal() {
 async function resolveConfirmation(approved) {
   const subjectId = pendingSubjectId;
   hideModal();
-  if (!subjectId) return;
+  if (!subjectId || !sessionId) return;
 
+  // Session-scoped route; the HttpOnly session cookie authenticates the call and
+  // the server derives who approved — the body carries the decision only.
+  const url =
+    "/sessions/" + encodeURIComponent(sessionId) +
+    "/confirmations/" + encodeURIComponent(subjectId);
   try {
-    const resp = await fetch("/confirmations/" + encodeURIComponent(subjectId), {
+    const resp = await fetch(url, {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approved, approver: "web-user" }),
+      body: JSON.stringify({ approved }),
     });
     if (!resp.ok) {
       const text = await resp.text();
@@ -210,7 +216,9 @@ function connectEventStream() {
 async function startSession() {
   setFormEnabled(false);
   try {
-    const resp = await fetch("/sessions", { method: "POST" });
+    // The response sets the session's HttpOnly token cookie; same-origin fetch
+    // and EventSource then send it automatically on every session route.
+    const resp = await fetch("/sessions", { method: "POST", credentials: "same-origin" });
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     const data = await resp.json();
     sessionId = data.session_id;
@@ -239,6 +247,7 @@ chatForm.addEventListener("submit", async (e) => {
   try {
     const resp = await fetch("/chat", {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId, message: text }),
     });

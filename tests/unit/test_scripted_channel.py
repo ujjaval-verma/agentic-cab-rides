@@ -27,6 +27,8 @@ async def test_match_approve() -> None:
     assert res.approved is True
     assert res.reason == "approved"
     assert res.approver == "scripted"
+    assert res.approver_id == "scripted"
+    assert res.channel == "scripted"
 
 
 @pytest.mark.asyncio
@@ -48,6 +50,8 @@ async def test_match_decline() -> None:
     )
     assert res.approved is False
     assert res.reason == "declined"
+    assert res.approver_id is None
+    assert res.channel == "scripted"
 
 
 @pytest.mark.asyncio

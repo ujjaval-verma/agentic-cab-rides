@@ -3,8 +3,12 @@
 Lives in web/ rather than adapters/ because it depends on the SSE bus;
 placing it under adapters/ would create an upward layer edge.
 
-The browser posts to /confirmations/{subject_id} which calls resolve(); the agent's
-await on request() then unblocks with the user's decision.
+The browser posts its decision to the web app's confirmation route, which calls
+resolve(); the agent's await on request() then unblocks with the user's decision.
+
+The approver identity is owned by the channel: it is set server-side from the
+session's `principal_id` at construction. `resolve()` accepts only the y/n
+decision, so no client-supplied value can reach `ConfirmationResult.approver*`.
 
 Lifecycle:
 - request() creates a Future, stores it, publishes a pending_confirmation SSE event,
@@ -37,6 +41,8 @@ from agentic_cab.web.sse import SessionEventBus
 if TYPE_CHECKING:
     pass
 
+_WEB_APPROVER = "web-user"
+
 # Satisfy the runtime_checkable Protocol check.
 assert isinstance(ConfirmationChannel, type) or hasattr(ConfirmationChannel, "__protocol_attrs__")
 
@@ -56,11 +62,13 @@ class WebConfirmationChannel:
         bus: SessionEventBus,
         session_id: str,
         *,
+        principal_id: str,
         store: StateStore | None = None,
         clock: Clock | None = None,
     ) -> None:
         self._bus = bus
         self._session_id = session_id
+        self._principal_id = principal_id
         self._store = store
         self._clock = clock
         self._pending: dict[str, asyncio.Future[ConfirmationResult]] = {}
@@ -101,6 +109,8 @@ class WebConfirmationChannel:
                 reason="timeout",
                 approved_at=None,
                 approver=None,
+                approver_id=None,
+                channel="web",
             )
         finally:
             self._pending.pop(req.subject_id, None)
@@ -118,8 +128,11 @@ class WebConfirmationChannel:
         """
         return bool(self._pending)
 
-    def resolve(self: Self, subject_id: str, *, approved: bool, approver: str | None) -> bool:
+    def resolve(self: Self, subject_id: str, *, approved: bool) -> bool:
         """Resolve a pending confirmation request from the browser.
+
+        Takes only the decision: the approver identity comes from this channel's
+        server-issued `principal_id`, never from the caller.
 
         Returns True if a matching pending request was found and resolved,
         False if no pending request exists for subject_id (safe to call multiple times).
@@ -133,7 +146,9 @@ class WebConfirmationChannel:
                 approved=True,
                 reason="approved",
                 approved_at=datetime.now(UTC),
-                approver=approver or "web-user",
+                approver=_WEB_APPROVER,
+                approver_id=self._principal_id,
+                channel="web",
             )
         else:
             result = ConfirmationResult(
@@ -141,6 +156,8 @@ class WebConfirmationChannel:
                 reason="declined",
                 approved_at=None,
                 approver=None,
+                approver_id=None,
+                channel="web",
             )
         future.set_result(result)
         # Also clear durable state eagerly; the request() finally block is belt-and-suspenders.

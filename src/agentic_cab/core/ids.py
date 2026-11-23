@@ -60,6 +60,11 @@ def new_idempotency_key() -> str:
     return _new()
 
 
+def new_principal_id() -> str:
+    """Opaque server-issued approver identity. An identifier, not a credential."""
+    return _new()
+
+
 def _bucketed_now(now: datetime) -> str:
     bucket_minute = (now.minute // _NOW_BUCKET_MINUTES) * _NOW_BUCKET_MINUTES
     floored = now.replace(minute=bucket_minute, second=0, microsecond=0)

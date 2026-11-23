@@ -16,10 +16,12 @@ import pytest
 
 from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.adapters.confirmation.cli import CLIConfirmationChannel
+from agentic_cab.core.ids import new_principal_id
 from agentic_cab.core.ports import ConfirmationRequest
 
 _FROZEN_NOW = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
 _FAKE_FINGERPRINT = "abcdef123456789012345678"
+_PRINCIPAL_ID = new_principal_id()
 
 
 def _make_request() -> ConfirmationRequest:
@@ -55,6 +57,7 @@ class TestCLIConfirmationChannel:
 
         channel = CLIConfirmationChannel(
             clock=_make_clock(),
+            principal_id=_PRINCIPAL_ID,
             tty_path=str(fake_tty),
         )
         result = await channel.request(_make_request())
@@ -68,6 +71,57 @@ class TestCLIConfirmationChannel:
         assert result.approved_at == _FROZEN_NOW
 
     @pytest.mark.asyncio
+    async def test_approve_records_injected_principal_and_cli_channel(self, tmp_path: Path) -> None:
+        fake_tty = tmp_path / "fake_tty"
+        fake_tty.write_text("y\n")
+        channel = CLIConfirmationChannel(
+            clock=_make_clock(),
+            principal_id=_PRINCIPAL_ID,
+            tty_path=str(fake_tty),
+        )
+        result = await channel.request(_make_request())
+        assert result.approved is True
+        assert result.approver_id == _PRINCIPAL_ID
+        assert result.channel == "cli"
+
+    @pytest.mark.asyncio
+    async def test_decline_records_no_principal_and_cli_channel(self, tmp_path: Path) -> None:
+        fake_tty = tmp_path / "fake_tty"
+        fake_tty.write_text("n\n")
+        channel = CLIConfirmationChannel(
+            clock=_make_clock(),
+            principal_id=_PRINCIPAL_ID,
+            tty_path=str(fake_tty),
+        )
+        result = await channel.request(_make_request())
+        assert result.approved is False
+        assert result.approver_id is None
+        assert result.channel == "cli"
+
+    @pytest.mark.asyncio
+    async def test_never_reads_os_identity(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Invariant 8: the approver identity is the injected principal, never the OS user."""
+        import getpass
+        import os
+
+        def _forbidden(*_a: object, **_k: object) -> str:
+            raise AssertionError("CLI channel must not read OS identity")
+
+        monkeypatch.setattr(getpass, "getuser", _forbidden)
+        monkeypatch.setattr(os, "getlogin", _forbidden)
+        fake_tty = tmp_path / "fake_tty"
+        fake_tty.write_text("y\n")
+        channel = CLIConfirmationChannel(
+            clock=_make_clock(),
+            principal_id=_PRINCIPAL_ID,
+            tty_path=str(fake_tty),
+        )
+        result = await channel.request(_make_request())
+        assert result.approver_id == _PRINCIPAL_ID
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("tty_input", ["n\n", "\n", "maybe\n"])
     async def test_declines_on_non_y(self, tmp_path: Path, tty_input: str) -> None:
         """Any response that is not 'y' or 'yes' (case-insensitive) must decline."""
@@ -76,6 +130,7 @@ class TestCLIConfirmationChannel:
 
         channel = CLIConfirmationChannel(
             clock=_make_clock(),
+            principal_id=_PRINCIPAL_ID,
             tty_path=str(fake_tty),
         )
         result = await channel.request(_make_request())
@@ -90,6 +145,7 @@ class TestCLIConfirmationChannel:
         """Channel must raise OSError when tty_path cannot be opened — no silent fallback."""
         channel = CLIConfirmationChannel(
             clock=_make_clock(),
+            principal_id=_PRINCIPAL_ID,
             tty_path="/nonexistent/tty",
         )
         with pytest.raises(OSError, match=r"No such file or directory"):
@@ -109,6 +165,7 @@ class TestCLIConfirmationChannel:
 
         channel = CLIConfirmationChannel(
             clock=_make_clock(),
+            principal_id=_PRINCIPAL_ID,
             tty_path="/dev/tty",
         )
         result = await channel.request(_make_request())

@@ -9,6 +9,7 @@ from agentic_cab.core.ids import (
     new_action_id,
     new_draft_id,
     new_idempotency_key,
+    new_principal_id,
     new_session_id,
     new_turn_id,
     parse_session_id,
@@ -61,7 +62,14 @@ def test_committed_transcript_session_ids_validate() -> None:
 
 
 def test_ids_are_ulids():
-    for factory in (new_session_id, new_turn_id, new_action_id, new_draft_id, new_idempotency_key):
+    for factory in (
+        new_session_id,
+        new_turn_id,
+        new_action_id,
+        new_draft_id,
+        new_idempotency_key,
+        new_principal_id,
+    ):
         value = factory()
         assert isinstance(value, str)
         assert len(value) == 26  # ULID canonical length

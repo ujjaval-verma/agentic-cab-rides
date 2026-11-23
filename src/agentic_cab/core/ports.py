@@ -56,11 +56,24 @@ class ConfirmationRequest(BaseModel):
     expires_at: datetime
 
 
+ConfirmationChannelKind = Literal["cli", "web", "scripted"]
+
+
 class ConfirmationResult(BaseModel):
+    """Outcome of a gate decision, logged verbatim on the `verified` row.
+
+    `approver_id` is a server-issued principal identifier (never client-supplied);
+    it is None unless approved. `channel` names the gate surface that decided.
+    Both default to None so ad-hoc test channels stay valid; every real channel
+    fills `channel` and, on approval, `approver_id`.
+    """
+
     approved: bool
     reason: Literal["approved", "declined", "expired", "timeout"]
     approved_at: datetime | None
     approver: str | None
+    approver_id: str | None = None
+    channel: ConfirmationChannelKind | None = None
 
 
 @dataclass

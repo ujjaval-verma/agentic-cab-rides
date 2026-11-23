@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from agentic_cab.core.ids import new_principal_id
 from agentic_cab.core.ports import ConfirmationChannel, ConfirmationRequest
 from agentic_cab.web.channel import WebConfirmationChannel
 from agentic_cab.web.sse import SessionEventBus
@@ -27,10 +28,17 @@ def _make_req(
     )
 
 
+def _channel(bus: SessionEventBus, principal_id: str | None = None) -> WebConfirmationChannel:
+    return WebConfirmationChannel(
+        bus=bus, session_id=_SESSION, principal_id=principal_id or new_principal_id()
+    )
+
+
 @pytest.mark.asyncio
 async def test_request_blocks_until_resolve() -> None:
     bus = SessionEventBus()
-    channel = WebConfirmationChannel(bus=bus, session_id=_SESSION)
+    principal_id = new_principal_id()
+    channel = _channel(bus, principal_id)
     req = _make_req()
 
     # Fire request in background; it should block waiting for resolve().
@@ -39,19 +47,28 @@ async def test_request_blocks_until_resolve() -> None:
     assert not task.done()
 
     # Now resolve it.
-    resolved = channel.resolve(req.subject_id, approved=True, approver="test-user")
+    resolved = channel.resolve(req.subject_id, approved=True)
     assert resolved is True
 
     result = await asyncio.wait_for(task, timeout=2.0)
     assert result.approved is True
     assert result.reason == "approved"
-    assert result.approver == "test-user"
+    assert result.approver == "web-user"
+    assert result.approver_id == principal_id
+    assert result.channel == "web"
+
+
+def test_resolve_rejects_client_supplied_approver() -> None:
+    """Invariant 2: no approver value can be passed in from the request surface."""
+    channel = _channel(SessionEventBus())
+    with pytest.raises(TypeError):
+        channel.resolve("draft-x", approved=True, approver="mallory")  # type: ignore[call-arg]
 
 
 @pytest.mark.asyncio
 async def test_request_publishes_pending_confirmation_event() -> None:
     bus = SessionEventBus()
-    channel = WebConfirmationChannel(bus=bus, session_id=_SESSION)
+    channel = _channel(bus)
     req = _make_req(subject_id="draft-pub-test")
 
     # Subscribe BEFORE calling request so we don't miss the event.
@@ -82,31 +99,33 @@ async def test_request_publishes_pending_confirmation_event() -> None:
     assert "expires_at" in ev
 
     # Clean up
-    channel.resolve(req.subject_id, approved=False, approver=None)
+    channel.resolve(req.subject_id, approved=False)
     await asyncio.wait_for(request_task, timeout=2.0)
 
 
 @pytest.mark.asyncio
 async def test_request_returns_declined_on_resolve_false() -> None:
     bus = SessionEventBus()
-    channel = WebConfirmationChannel(bus=bus, session_id=_SESSION)
+    channel = _channel(bus)
     req = _make_req(subject_id="draft-decline")
 
     task = asyncio.ensure_future(channel.request(req))
     await asyncio.sleep(0)
 
-    channel.resolve(req.subject_id, approved=False, approver=None)
+    channel.resolve(req.subject_id, approved=False)
     result = await asyncio.wait_for(task, timeout=2.0)
 
     assert result.approved is False
     assert result.reason == "declined"
     assert result.approved_at is None
+    assert result.approver_id is None
+    assert result.channel == "web"
 
 
 @pytest.mark.asyncio
 async def test_request_returns_timeout_on_expiry() -> None:
     bus = SessionEventBus()
-    channel = WebConfirmationChannel(bus=bus, session_id=_SESSION)
+    channel = _channel(bus)
     # Set expires_at very close in the future so the wait_for fires immediately.
     req = _make_req(subject_id="draft-timeout", seconds_until_expiry=0.05)
 
@@ -115,10 +134,12 @@ async def test_request_returns_timeout_on_expiry() -> None:
     assert result.approved is False
     assert result.reason == "timeout"
     assert result.approved_at is None
+    assert result.approver_id is None
+    assert result.channel == "web"
 
 
 @pytest.mark.asyncio
 async def test_runtime_checkable_protocol_match() -> None:
     bus = SessionEventBus()
-    channel = WebConfirmationChannel(bus=bus, session_id=_SESSION)
+    channel = _channel(bus)
     assert isinstance(channel, ConfirmationChannel)

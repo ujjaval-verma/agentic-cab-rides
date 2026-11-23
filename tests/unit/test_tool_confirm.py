@@ -80,6 +80,30 @@ async def test_happy_path_emits_4_rows_in_order(harness, meter) -> None:
 
 
 @pytest.mark.asyncio
+async def test_verified_row_records_approver_id_and_channel(harness, meter) -> None:
+    """The gate's approver identity and channel land on the verified row (inv. 6 shape kept)."""
+    store, log, clock, sim = harness
+    draft_id = await _prepare(sim, log, clock)
+    ch = ScriptedConfirmationChannel(script=[{"match": "UberX", "action": "approve"}], clock=clock)
+    result = await confirm_booking(
+        ConfirmArgs(draft_id=draft_id),
+        provider=sim,
+        store=store,
+        log=log,
+        channel=ch,
+        clock=clock,
+        meter=meter,
+        session_id="S",
+        turn_id="T",
+    )
+    rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
+    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]
+    confirmation = next(r for r in rows if r["kind"] == "verified")["checks"]["confirmation"]
+    assert confirmation["approver_id"] == "scripted"
+    assert confirmation["channel"] == "scripted"
+
+
+@pytest.mark.asyncio
 async def test_fingerprint_mismatch_short_circuits(harness, meter) -> None:
     store, log, clock, sim = harness
     draft_id = await _prepare(sim, log, clock)

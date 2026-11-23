@@ -74,6 +74,23 @@ def test_log_file_is_appendonly_format(tmp_path: Path) -> None:
     assert json.loads(lines[0])["kind"] == "requested"
 
 
+def test_redact_leaves_approver_id_and_channel_unchanged() -> None:
+    """Server-minted principal ULIDs and the channel enum are not PII; redact() keeps them."""
+    from agentic_cab.core.ids import new_principal_id
+
+    for _ in range(50):
+        principal_id = new_principal_id()
+        confirmation = {
+            "approved": True,
+            "approver": "web-user",
+            "approver_id": principal_id,
+            "channel": "web",
+        }
+        assert redact({"checks": {"confirmation": confirmation}}) == {
+            "checks": {"confirmation": confirmation}
+        }
+
+
 def test_redact_strips_phone_and_name_in_address() -> None:
     result = redact(
         {

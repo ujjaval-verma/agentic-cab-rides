@@ -31,7 +31,7 @@ from agentic_cab.adapters.geocoding.nominatim import NominatimGeocoder
 from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
 from agentic_cab.agent.loop import ToolHandler, run_turn
-from agentic_cab.core.ids import new_session_id, new_turn_id
+from agentic_cab.core.ids import new_principal_id, new_session_id, new_turn_id
 from agentic_cab.core.paths import session_chat_path
 from agentic_cab.core.ports import (
     ActionLog,
@@ -319,7 +319,8 @@ async def run_repl(
     rng_seed = int.from_bytes(os.urandom(4), "big")
     sim = UberSimAdapter(store=store, clock=clock, rng_seed=rng_seed)
 
-    _channel = channel or CLIConfirmationChannel(clock=clock)
+    # Per-REPL approver principal: opaque, server-minted, never OS identity (inv. 8).
+    _channel = channel or CLIConfirmationChannel(clock=clock, principal_id=new_principal_id())
 
     geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
     geocoder = NominatimGeocoder(
