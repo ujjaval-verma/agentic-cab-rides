@@ -114,7 +114,7 @@ reset: ## Wipe data/, logs/, chat/ and re-apply schema
 
 replay: ## Pretty-print a session log: `make replay SESSION=<id>`
 	@test -n "$(SESSION)" || (echo "usage: make replay SESSION=<session_id>"; exit 1)
-	$(UV) run python scripts/replay.py $(SESSION)
+	$(UV) run python scripts/replay.py "$(SESSION)"
 
 status: ## One-screen orientation: branch, dirty, unpushed, recent commits, per-phase counts
 	echo "─── branch ───"

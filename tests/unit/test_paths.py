@@ -35,7 +35,6 @@ def test_symlink_escape_rejected(tmp_path: Path, builder) -> None:
         builder(base, _ULID)
 
 
-@pytest.mark.xfail(strict=True, reason="scripts/replay.py is converted in the replay CLI task")
 def test_no_adhoc_session_path_joins() -> None:
     root = Path(__file__).resolve().parents[2]
     allowed = root / "src" / "agentic_cab" / "core" / "paths.py"
