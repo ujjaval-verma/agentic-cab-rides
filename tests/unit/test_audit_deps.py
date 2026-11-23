@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
@@ -141,3 +142,16 @@ def test_argv_passed_to_tools() -> None:
     for flag in ("--no-deps", "--disable-pip", "--strict"):
         assert flag in audit
     assert audit[audit.index("-f") + 1] == "json"
+
+
+def test_makefile_audit_target_runs_script_with_flags() -> None:
+    text = (ROOT / "Makefile").read_text(encoding="utf-8")
+    phony = re.search(r"^\.PHONY:((?:.*\\\n)*.*)$", text, re.MULTILINE)
+    assert phony is not None
+    assert "audit" in phony.group(1).replace("\\", " ").split()
+    target = re.search(r"^audit:[^\n]*## \S[^\n]*\n((?:\t[^\n]*\n)+)", text, re.MULTILINE)
+    assert target is not None
+    assert "scripts/audit_deps.py $(AUDIT_FLAGS)" in target.group(1)
+    verify = re.search(r"^verify:([^\n#]*)", text, re.MULTILINE)
+    assert verify is not None
+    assert "audit" not in verify.group(1).split()
