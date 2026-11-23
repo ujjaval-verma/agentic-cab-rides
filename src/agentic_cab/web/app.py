@@ -3,6 +3,7 @@
 Routes:
   GET  /                       → index.html (chat + log pane)
   GET  /static/{path}         → static files
+  POST /sessions              → mint a server-side session ULID
   POST /chat                  → drive one agent turn; results stream via SSE
   GET  /events?session_id=... → SSE stream of action-log + confirmation events
   POST /confirmations/{id}    → resolve a pending WebConfirmationChannel future
@@ -43,7 +44,7 @@ from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
 from agentic_cab.agent.chat import _TOOL_DEFS as _AGENT_TOOL_DEFS
 from agentic_cab.agent.chat import build_handlers
 from agentic_cab.agent.loop import run_turn
-from agentic_cab.core.ids import new_turn_id
+from agentic_cab.core.ids import SessionId, new_session_id, new_turn_id
 from agentic_cab.core.ports import Clock
 from agentic_cab.web.channel import WebConfirmationChannel
 from agentic_cab.web.sse import SessionEventBus
@@ -56,7 +57,7 @@ _STATIC_DIR = Path(__file__).parent / "static"
 
 
 class ChatRequest(BaseModel):
-    session_id: str
+    session_id: SessionId
     message: str
 
 
@@ -237,7 +238,7 @@ def create_app(
         return FileResponse(str(index_path))
 
     @app.get("/events")
-    async def events(session_id: str) -> EventSourceResponse:
+    async def events(session_id: SessionId) -> EventSourceResponse:
         """SSE stream of action-log rows and pending_confirmation events."""
         _log.info("web.events.subscribe", session_id=session_id)
 
@@ -249,6 +250,11 @@ def create_app(
         # idle timers don't kill the stream when the agent is quiet. ping=0
         # disabled this and surfaced as spurious "connection lost" banners.
         return EventSourceResponse(_generator(), ping=15)
+
+    @app.post("/sessions")
+    async def create_session() -> JSONResponse:
+        """Mint a server-side session ULID for the browser."""
+        return JSONResponse({"session_id": new_session_id()})
 
     @app.post("/chat")
     async def chat(body: ChatRequest) -> JSONResponse:
@@ -355,7 +361,7 @@ def create_app(
         raise HTTPException(status_code=404, detail=f"No pending confirmation for {subject_id!r}")
 
     @app.get("/sessions/{session_id}/log")
-    async def session_log(session_id: str) -> JSONResponse:
+    async def session_log(session_id: SessionId) -> JSONResponse:
         """Return the raw action-log rows for this session."""
         action_log = JSONLActionLog(log_dir=_log_dir)
         rows = action_log.read(session_id)

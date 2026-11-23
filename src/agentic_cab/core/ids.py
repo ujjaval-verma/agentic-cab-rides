@@ -14,13 +14,26 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime
+from typing import Annotated
 
+from pydantic import StringConstraints, TypeAdapter
 from ulid import ULID
 
 from agentic_cab.core.fingerprint import canonical_json
 from agentic_cab.core.types import Intent, RideIntent
 
 _NOW_BUCKET_MINUTES = 10
+
+# Canonical ULID: 26 Crockford base32 chars (no I L O U), uppercase only, first char 0-7
+# so the 128-bit value cannot overflow.
+SESSION_ID_PATTERN = r"^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+SessionId = Annotated[str, StringConstraints(pattern=SESSION_ID_PATTERN)]
+_SESSION_ID_ADAPTER: TypeAdapter[str] = TypeAdapter(SessionId)
+
+
+def parse_session_id(raw: str) -> str:
+    """Validate `raw` as a canonical ULID session id; raise ValueError otherwise."""
+    return _SESSION_ID_ADAPTER.validate_python(raw)
 
 
 def _new() -> str:

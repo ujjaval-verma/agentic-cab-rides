@@ -45,13 +45,13 @@ ships two first-class surfaces (REPL and web) and one batch surface
 | Surface | Entry point | Process model | Confirmation channel | Per-session state |
 |---------|-------------|---------------|----------------------|-------------------|
 | **REPL** | `make repl` → `python -m agentic_cab repl` | One long-lived Python process. Stdin loop reads chat input; agent calls tools in-process. | `CLIConfirmationChannel` reads bare y/n from `/dev/tty` — a separate file handle from stdin, so chat text cannot inject approvals. | Adapter instance lives for the whole process; provider in-memory caches (`_option_cache`, `_intent_cache`) survive across turns naturally. |
-| **Web** | `make web` → `uvicorn agentic_cab.web.app:create_app --factory` | Single uvicorn worker, FastAPI app. One browser tab = one `session_id` cookie. SSE stream pushes assistant tokens and gate prompts; `POST /confirmations/{subject_id}` delivers the y/n. | `WebConfirmationChannel` blocks the tool call on an `asyncio.Future` resolved by the POST handler. | `UberSimAdapter` is memoized per `session_id` (PR #8) so option/intent caches survive within a session. They do not survive worker restart — see WRITEUP §2 "Provider option durability". |
+| **Web** | `make web` → `uvicorn agentic_cab.web.app:create_app --factory` | Single uvicorn worker, FastAPI app. One browser tab = one server-minted `session_id` (`POST /sessions`). SSE stream pushes assistant tokens and gate prompts; `POST /confirmations/{subject_id}` delivers the y/n. | `WebConfirmationChannel` blocks the tool call on an `asyncio.Future` resolved by the POST handler. | `UberSimAdapter` is memoized per `session_id` (PR #8) so option/intent caches survive within a session. They do not survive worker restart — see WRITEUP §2 "Provider option durability". |
 | **Scenarios** | `make transcripts` (or `pytest -m scenario`) | Per-scenario in-process run with a `FrozenClock` and a `ScriptedConfirmationChannel`. Each scenario is a fresh state DB and adapter under a `tmp_path`. | `ScriptedConfirmationChannel` reads decisions from the scenario YAML. | Isolated per run; not shared with REPL/web. |
 
 Shared by all three surfaces:
 
 - **State** — SQLite (`data/state.db` for interactive surfaces, tmp DB per scenario). WAL journaling; same schema (`adapters/schema.sql`) regardless of surface.
-- **Action log + chat history** — per-session JSONL under `logs/` (`<session_id>.jsonl`, `<session_id>.chat.jsonl`). REPL and web write to the same directory.
+- **Action log + chat history** — per-session JSONL under `logs/` (`<session_id>.jsonl`, `<session_id>.chat.jsonl`). REPL and web write to the same directory. `session_id` is validated as a canonical ULID at every input boundary (web request models, `scripts/replay.py`, `make replay`), and path builders in `core/paths.py` resolve the final path and refuse anything outside the log dir.
 - **Geocode cache** — file-system fixtures under `fixtures/geocode/` (one JSON per `sha1(query.strip().lower())`). Shared across surfaces and worktrees.
 - **Secrets** — `.env` symlinked from `~/.config/agentic-cab-rides/.env`; loaded at process start.
 
@@ -86,7 +86,7 @@ an invariant, read the file in the "Enforced in" column.
 | 8 | PII redaction at the log boundary | `adapters/action_log.py::redact` |
 | 9 | Determinism in scenarios | `adapters/clock.py::FrozenClock`, `core/constants.py::MODEL_ID`, seeded RNGs |
 | 10 | `Money(amount_cents, currency)`, never float | `core/types.py::Money` |
-| 11 | ULIDs for all IDs | `core/ids.py` |
+| 11 | ULIDs for all IDs | `core/ids.py` (generation and `SessionId` boundary validation), `core/paths.py` (path containment) |
 | 12 | No `--no-verify` | `.claude/settings.json` deny list, pre-push hook |
 | 13 | No `TODO`/`FIXME`/`XXX` in code | Ruff `FIX` rule, pre-commit |
 | 14 | No `print()` outside CLI/web/scripts | Ruff `T20` rule |
