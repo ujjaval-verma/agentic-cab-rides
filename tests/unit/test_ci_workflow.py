@@ -96,6 +96,16 @@ def test_dependency_audit_job_runs_make_audit_strict() -> None:
     assert any("make audit" in r and "--strict" in r for r in runs[sync + 1 :])
 
 
+def test_dependabot_covers_uv_and_actions_weekly() -> None:
+    config = yaml.safe_load((ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
+    assert config["version"] == 2
+    updates = config["updates"]
+    assert {u["package-ecosystem"] for u in updates} >= {"uv", "github-actions"}
+    for update in updates:
+        assert update["schedule"]["interval"] == "weekly"
+        assert update["directory"] == "/"
+
+
 def test_triggers_cover_push_to_main_and_pull_requests() -> None:
     doc = _load()
     triggers: dict[str, Any] = doc["on"] if "on" in doc else doc[True]
