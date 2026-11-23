@@ -1,0 +1,35 @@
+title = "cab-rides gitleaks config"
+
+[extend]
+useDefault = true
+
+# Idempotency keys (sha256 hex digests, historically ULIDs) recorded in
+# transcripts and follow-up notes look like high-entropy API keys. Only the
+# generic-api-key rule is relaxed, only in these files, and only when the
+# detected secret is exactly a 16-64 char hex digest or a 26-char ULID.
+[[allowlists]]
+description = "Idempotency keys (hex digest or ULID) in transcripts and follow-ups"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''^transcripts/[^/]+\.md$''',
+  '''^docs/FOLLOWUPS\.md$''',
+]
+regexTarget = "secret"
+regexes = [
+  '''^([0-9a-f]{16,64}|[0-9A-HJKMNP-TV-Z]{26})$''',
+]
+
+# Test fixtures assign synthetic keys such as "finalized-key-001" or a
+# ULID-shaped constant. Same rule, same restriction to the exact value shape.
+[[allowlists]]
+description = "Synthetic idempotency keys in test fixtures"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''^tests/.+\.py$''',
+]
+regexTarget = "secret"
+regexes = [
+  '''^([0-9A-Z]{24,26}|[a-z]+-key-[a-z0-9]+)$''',
+]

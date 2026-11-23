@@ -84,6 +84,7 @@ The repo has two kinds of markdown: docs that travel with the code (versioned, r
 | `docs/PHASES.md` | Static contract: Definition of Done + phases with acceptance bullets. No status field — git log is the tracker. |
 | `docs/WRITEUP.md` | The production-readiness writeup (marketplace swap + failure modes) |
 | `docs/FOLLOWUPS.md` | The only legal home for TODO-class items |
+| `.github/SECURITY.md` | Security policy: prototype status, no deployment, how to report |
 | `transcripts/*.md` | Generated, but committed — a demo artifact |
 
 ### Transient — gitignored, do not commit
