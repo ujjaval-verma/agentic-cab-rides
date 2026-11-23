@@ -89,6 +89,13 @@ def test_security_policy_lives_under_github_dir() -> None:
     assert not (ROOT / "SECURITY.md").exists()
 
 
+def test_dependency_audit_job_runs_make_audit_strict() -> None:
+    job = _load()["jobs"]["dependency-audit"]
+    runs = [s["run"] for s in job["steps"] if "run" in s]
+    sync = next(i for i, r in enumerate(runs) if "uv sync --frozen" in r)
+    assert any("make audit" in r and "--strict" in r for r in runs[sync + 1 :])
+
+
 def test_triggers_cover_push_to_main_and_pull_requests() -> None:
     doc = _load()
     triggers: dict[str, Any] = doc["on"] if "on" in doc else doc[True]
