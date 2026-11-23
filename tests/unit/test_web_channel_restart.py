@@ -10,6 +10,7 @@ import pytest
 
 from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.adapters.state_store import SqliteStateStore
+from agentic_cab.core.ids import new_principal_id
 from agentic_cab.core.ports import ConfirmationRequest
 from agentic_cab.web.channel import WebConfirmationChannel
 from agentic_cab.web.sse import SessionEventBus
@@ -40,7 +41,9 @@ async def test_request_writes_pending_row(tmp_path: Path) -> None:
     store = _store(tmp_path)
     clock = FrozenClock(start=datetime(2026, 5, 20, 12, 0, tzinfo=UTC))
     bus = SessionEventBus()
-    channel = WebConfirmationChannel(bus=bus, session_id=_SESSION, store=store, clock=clock)
+    channel = WebConfirmationChannel(
+        bus=bus, session_id=_SESSION, principal_id=new_principal_id(), store=store, clock=clock
+    )
 
     req = _req(subject_id="draft-write-test")
 
@@ -54,7 +57,7 @@ async def test_request_writes_pending_row(tmp_path: Path) -> None:
     assert "draft-write-test" in ids
 
     # Clean up: resolve and await.
-    channel.resolve(req.subject_id, approved=False, approver=None)
+    channel.resolve(req.subject_id, approved=False)
     await asyncio.wait_for(task, timeout=2.0)
 
 
@@ -64,14 +67,16 @@ async def test_resolve_clears_pending_row(tmp_path: Path) -> None:
     store = _store(tmp_path)
     clock = FrozenClock(start=datetime(2026, 5, 20, 12, 0, tzinfo=UTC))
     bus = SessionEventBus()
-    channel = WebConfirmationChannel(bus=bus, session_id=_SESSION, store=store, clock=clock)
+    channel = WebConfirmationChannel(
+        bus=bus, session_id=_SESSION, principal_id=new_principal_id(), store=store, clock=clock
+    )
 
     req = _req(subject_id="draft-resolve-test")
 
     task = asyncio.ensure_future(channel.request(req))
     await asyncio.sleep(0)
 
-    channel.resolve(req.subject_id, approved=True, approver="tester")
+    channel.resolve(req.subject_id, approved=True)
     await asyncio.wait_for(task, timeout=2.0)
 
     pending = store.list_pending_confirmations(now=datetime.now(UTC))
@@ -85,7 +90,9 @@ async def test_timeout_clears_pending_row(tmp_path: Path) -> None:
     store = _store(tmp_path)
     clock = FrozenClock(start=datetime(2026, 5, 20, 12, 0, tzinfo=UTC))
     bus = SessionEventBus()
-    channel = WebConfirmationChannel(bus=bus, session_id=_SESSION, store=store, clock=clock)
+    channel = WebConfirmationChannel(
+        bus=bus, session_id=_SESSION, principal_id=new_principal_id(), store=store, clock=clock
+    )
 
     req = _req(subject_id="draft-timeout-test", seconds=0.05)
 

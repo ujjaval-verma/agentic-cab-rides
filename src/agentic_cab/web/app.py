@@ -44,7 +44,7 @@ from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
 from agentic_cab.agent.chat import _TOOL_DEFS as _AGENT_TOOL_DEFS
 from agentic_cab.agent.chat import build_handlers
 from agentic_cab.agent.loop import run_turn
-from agentic_cab.core.ids import SessionId, new_session_id, new_turn_id
+from agentic_cab.core.ids import SessionId, new_principal_id, new_session_id, new_turn_id
 from agentic_cab.core.ports import Clock
 from agentic_cab.web.channel import WebConfirmationChannel
 from agentic_cab.web.sse import SessionEventBus
@@ -62,8 +62,9 @@ class ChatRequest(BaseModel):
 
 
 class ConfirmationRequest(BaseModel):
+    """Decision only. Extra fields (e.g. a client-sent `approver`) are ignored."""
+
     approved: bool
-    approver: str = "web-user"
 
 
 # ---------- Shared bus (module-level singleton per process) ----------
@@ -121,7 +122,13 @@ def _get_session(
 
     rng_seed = int.from_bytes(os.urandom(4), "big")
     state = _SessionState(
-        channel=WebConfirmationChannel(bus=_bus, session_id=session_id, store=store, clock=clock),
+        channel=WebConfirmationChannel(
+            bus=_bus,
+            session_id=session_id,
+            principal_id=new_principal_id(),
+            store=store,
+            clock=clock,
+        ),
         turn_id_ref=[new_turn_id()],
         history=[],
         sim=UberSimAdapter(store=store, clock=clock, rng_seed=rng_seed),
@@ -347,9 +354,7 @@ def create_app(
         """Resolve a pending WebConfirmationChannel future from the browser."""
         # Find the channel for the session that owns this subject_id.
         for _sid, state in _sessions.items():
-            resolved = state.channel.resolve(
-                subject_id, approved=body.approved, approver=body.approver
-            )
+            resolved = state.channel.resolve(subject_id, approved=body.approved)
             if resolved:
                 _log.info(
                     "web.confirmation.resolved",

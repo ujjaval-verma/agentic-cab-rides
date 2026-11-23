@@ -693,7 +693,7 @@ async def test_pinned_session_with_pending_confirmation_survives_eviction(
     assert len(_sessions) <= _MAX_SESSIONS + 1  # +1 for the pinned session itself
 
     # Clean up: resolve so the awaited task doesn't dangle past the test.
-    state.channel.resolve("draft-pinned", approved=False, approver=None)
+    state.channel.resolve("draft-pinned", approved=False)
     await asyncio.wait_for(task, timeout=2.0)
 
 
