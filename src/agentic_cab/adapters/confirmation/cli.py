@@ -28,12 +28,17 @@ class CLIConfirmationChannel:
 
     Args:
         clock: Provides the current timestamp for `approved_at`.
+        principal_id: Opaque server-issued approver identity recorded as `approver_id`
+                      on approval. Never derived from OS identity (invariant 8).
         tty_path: Path to the tty device to read from. Defaults to ``/dev/tty``.
                   Override in tests to a regular file pre-seeded with the desired input.
     """
 
-    def __init__(self: Self, clock: Clock, tty_path: str = "/dev/tty") -> None:
+    def __init__(
+        self: Self, clock: Clock, *, principal_id: str, tty_path: str = "/dev/tty"
+    ) -> None:
         self._clock = clock
+        self._principal_id = principal_id
         self._tty_path = tty_path
 
     async def request(self: Self, req: ConfirmationRequest) -> ConfirmationResult:
@@ -71,10 +76,14 @@ class CLIConfirmationChannel:
                 reason="approved",
                 approved_at=self._clock.now(),
                 approver="cli-tty",
+                approver_id=self._principal_id,
+                channel="cli",
             )
         return ConfirmationResult(
             approved=False,
             reason="declined",
             approved_at=None,
             approver=None,
+            approver_id=None,
+            channel="cli",
         )
