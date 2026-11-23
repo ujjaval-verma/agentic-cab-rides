@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hmac
 import json
 import os
 import secrets
@@ -29,7 +30,7 @@ from typing import Any
 import httpx
 import structlog
 from anthropic import Anthropic
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -151,18 +152,26 @@ def _create_session(
     return state
 
 
-def _get_session(
-    session_id: str,
-    *,
-    store: SqliteStateStore,
-    clock: Clock,
-) -> _SessionState:
-    """Get-or-create the per-session state record, touching `last_used_at`."""
+_FORBIDDEN = "forbidden"
+
+
+def _authorize(request: Request, session_id: str, *, clock: Clock) -> _SessionState:
+    """Look up the caller's session (never creating one) and touch it, or 403.
+
+    Unknown/evicted session, missing cookie, and wrong cookie all produce the
+    same 403 so the response never reveals which session ids exist. Evicted
+    sessions are never revived — the client must POST /sessions again.
+    """
+    presented = request.cookies.get(_session_cookie_name(session_id))
     state = _sessions.get(session_id)
-    if state is not None:
-        state.last_used_at = clock.now()
-        return state
-    return _create_session(session_id, store=store, clock=clock)
+    if (
+        state is None
+        or presented is None
+        or not hmac.compare_digest(presented.encode(), state.token.encode())
+    ):
+        raise HTTPException(status_code=403, detail=_FORBIDDEN)
+    state.last_used_at = clock.now()
+    return state
 
 
 def _evict_stale_sessions(clock: Clock) -> None:
@@ -271,8 +280,13 @@ def create_app(
         return FileResponse(str(index_path))
 
     @app.get("/events")
-    async def events(session_id: SessionId) -> EventSourceResponse:
-        """SSE stream of action-log rows and pending_confirmation events."""
+    async def events(session_id: SessionId, request: Request) -> EventSourceResponse:
+        """SSE stream of action-log rows and pending_confirmation events.
+
+        Authorized before any stream opens; EventSource sends the same-origin
+        session cookie automatically, so the token never rides in the URL.
+        """
+        _authorize(request, session_id, clock=_clock)
         _log.info("web.events.subscribe", session_id=session_id)
 
         async def _generator() -> AsyncGenerator[dict[str, str], None]:
@@ -308,26 +322,26 @@ def create_app(
         return response
 
     @app.post("/chat")
-    async def chat(body: ChatRequest) -> JSONResponse:
+    async def chat(body: ChatRequest, request: Request) -> JSONResponse:
         """Drive one agent turn and stream tool outcomes via SSE.
 
         Returns 200 immediately; actual results arrive on the SSE channel.
         The turn runs in a background task so the response returns promptly.
+        Sessions are never created here — only POST /sessions mints them.
         """
         session_id = body.session_id
-        _log.info("web.chat", session_id=session_id)
-
         clock = _clock
 
-        # Bound session memory before this session's own state is touched.
+        # Bound session memory before this session's own state is touched; an
+        # evicted session is then rejected by _authorize rather than revived.
         _evict_stale_sessions(clock)
+        state = _authorize(request, session_id, clock=clock)
+        _log.info("web.chat", session_id=session_id)
 
-        # Build per-session infrastructure (idempotent on second call for same session).
         store = SqliteStateStore(db_path=_data_dir / "state.db", check_same_thread=False)
         store.apply_schema()
 
         action_log = JSONLActionLog(log_dir=_log_dir)
-        state = _get_session(session_id, store=store, clock=clock)
         sim = state.sim
         channel = state.channel
         meter = state.meter
@@ -410,8 +424,9 @@ def create_app(
         raise HTTPException(status_code=404, detail=f"No pending confirmation for {subject_id!r}")
 
     @app.get("/sessions/{session_id}/log")
-    async def session_log(session_id: SessionId) -> JSONResponse:
+    async def session_log(session_id: SessionId, request: Request) -> JSONResponse:
         """Return the raw action-log rows for this session."""
+        _authorize(request, session_id, clock=_clock)
         action_log = JSONLActionLog(log_dir=_log_dir)
         rows = action_log.read(session_id)
         return JSONResponse({"session_id": session_id, "rows": rows})
