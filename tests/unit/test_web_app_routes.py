@@ -102,6 +102,56 @@ def test_post_sessions_mints_valid_ulid(app: TestClient) -> None:
     assert parse_session_id(response.json()["session_id"])
 
 
+def _session_cookie_header(response: object, sid: str) -> str:
+    headers = response.headers.get_list("set-cookie")  # type: ignore[attr-defined]
+    matching = [h for h in headers if h.startswith(f"cab_session_{sid}=")]
+    assert len(matching) == 1, headers
+    return matching[0]
+
+
+def test_post_sessions_sets_httponly_samesite_strict_session_cookie(app: TestClient) -> None:
+    response = app.post("/sessions")
+    sid = response.json()["session_id"]
+    header = _session_cookie_header(response, sid)
+    attrs = {part.strip().lower() for part in header.split(";")[1:]}
+    assert "httponly" in attrs
+    assert "samesite=strict" in attrs
+    assert "path=/" in attrs
+    assert not any(a.startswith(("max-age", "expires")) for a in attrs)
+
+
+def test_post_sessions_body_carries_only_session_id(app: TestClient) -> None:
+    response = app.post("/sessions")
+    sid = response.json()["session_id"]
+    assert list(response.json()) == ["session_id"]
+    token = app.cookies.get(f"cab_session_{sid}")
+    assert token
+    assert token not in response.text
+
+
+def test_post_sessions_mints_distinct_unguessable_tokens(app: TestClient) -> None:
+    sid_a = app.post("/sessions").json()["session_id"]
+    sid_b = app.post("/sessions").json()["session_id"]
+    token_a = app.cookies.get(f"cab_session_{sid_a}")
+    token_b = app.cookies.get(f"cab_session_{sid_b}")
+    assert token_a
+    assert token_b
+    assert token_a != token_b
+    assert len(token_a) >= 43
+    assert len(token_b) >= 43
+
+
+def test_post_sessions_registers_state_with_token_and_principal(app: TestClient) -> None:
+    from agentic_cab.core.ids import parse_session_id
+
+    sid = app.post("/sessions").json()["session_id"]
+    state = _sessions[sid]
+    assert state.token == app.cookies.get(f"cab_session_{sid}")
+    assert parse_session_id(state.principal_id)
+    assert state.principal_id != sid
+    assert state.token not in repr(state), "token must never appear in repr/logs"
+
+
 def test_app_js_uses_server_minted_session_id() -> None:
     js = (Path(__file__).resolve().parents[2] / "src/agentic_cab/web/static/app.js").read_text(
         encoding="utf-8"

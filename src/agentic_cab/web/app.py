@@ -19,8 +19,9 @@ import asyncio
 import contextlib
 import json
 import os
+import secrets
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -98,34 +99,43 @@ class _SessionState:
     sim: UberSimAdapter
     meter: InMemoryCostMeter
     last_used_at: datetime
+    # Opaque server-issued approver identity (a ULID). Safe to log: an identifier,
+    # not a credential. The channel records it as `approver_id` on approval.
+    principal_id: str
+    # Session bearer secret, delivered only via an HttpOnly cookie. Never logged,
+    # never returned in a body, never in repr (invariant 15).
+    token: str = field(repr=False)
 
 
 _sessions: dict[str, _SessionState] = {}
 
+_TOKEN_BYTES = 32  # 256 bits → 43 urlsafe-base64 chars
 
-def _get_session(
+
+def _session_cookie_name(session_id: str) -> str:
+    """One cookie per session so two open tabs never overwrite each other's token."""
+    return f"cab_session_{session_id}"
+
+
+def _create_session(
     session_id: str,
     *,
     store: SqliteStateStore,
     clock: Clock,
 ) -> _SessionState:
-    """Get-or-create the full per-session state record, touching `last_used_at`.
+    """Create and register the full per-session state record.
 
-    Replaces the former `_get_channel` / `_get_sim` / `_get_meter` trio — one
-    accessor owns creation of all five members so a session's state is never
-    partially initialized or partially evicted.
+    One constructor owns all members so a session's state is never partially
+    initialized or partially evicted. Mints the session's bearer token and its
+    approver principal; both are server-issued, never client-supplied.
     """
-    state = _sessions.get(session_id)
-    if state is not None:
-        state.last_used_at = clock.now()
-        return state
-
+    principal_id = new_principal_id()
     rng_seed = int.from_bytes(os.urandom(4), "big")
     state = _SessionState(
         channel=WebConfirmationChannel(
             bus=_bus,
             session_id=session_id,
-            principal_id=new_principal_id(),
+            principal_id=principal_id,
             store=store,
             clock=clock,
         ),
@@ -134,9 +144,25 @@ def _get_session(
         sim=UberSimAdapter(store=store, clock=clock, rng_seed=rng_seed),
         meter=InMemoryCostMeter(),
         last_used_at=clock.now(),
+        principal_id=principal_id,
+        token=secrets.token_urlsafe(_TOKEN_BYTES),
     )
     _sessions[session_id] = state
     return state
+
+
+def _get_session(
+    session_id: str,
+    *,
+    store: SqliteStateStore,
+    clock: Clock,
+) -> _SessionState:
+    """Get-or-create the per-session state record, touching `last_used_at`."""
+    state = _sessions.get(session_id)
+    if state is not None:
+        state.last_used_at = clock.now()
+        return state
+    return _create_session(session_id, store=store, clock=clock)
 
 
 def _evict_stale_sessions(clock: Clock) -> None:
@@ -260,8 +286,26 @@ def create_app(
 
     @app.post("/sessions")
     async def create_session() -> JSONResponse:
-        """Mint a server-side session ULID for the browser."""
-        return JSONResponse({"session_id": new_session_id()})
+        """Mint a server-side session ULID, its state, and its bearer-token cookie.
+
+        The token travels only in an HttpOnly, SameSite=Strict cookie scoped to
+        this session id; the body carries `session_id` alone.
+        """
+        _evict_stale_sessions(_clock)
+        store = SqliteStateStore(db_path=_data_dir / "state.db", check_same_thread=False)
+        store.apply_schema()
+        session_id = new_session_id()
+        state = _create_session(session_id, store=store, clock=_clock)
+        _log.info("web.session.created", session_id=session_id)
+        response = JSONResponse({"session_id": session_id})
+        response.set_cookie(
+            key=_session_cookie_name(session_id),
+            value=state.token,
+            path="/",
+            httponly=True,
+            samesite="strict",
+        )
+        return response
 
     @app.post("/chat")
     async def chat(body: ChatRequest) -> JSONResponse:
