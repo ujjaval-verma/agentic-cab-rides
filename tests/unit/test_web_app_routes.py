@@ -253,6 +253,21 @@ def test_app_js_uses_server_minted_session_id() -> None:
     assert '"/sessions"' in js
 
 
+def test_app_js_posts_confirmations_to_session_route_without_approver() -> None:
+    import re
+
+    js = (Path(__file__).resolve().parents[2] / "src/agentic_cab/web/static/app.js").read_text(
+        encoding="utf-8"
+    )
+    assert "approver" not in js, "the browser must never send an approver"
+    assert '"/confirmations/"' in js
+    # Every "/confirmations/" path is built under the "/sessions/" prefix.
+    for match in re.finditer(r'"/confirmations/"', js):
+        preceding = js[max(0, match.start() - 120) : match.start()]
+        assert '"/sessions/"' in preceding, preceding
+    assert 'credentials: "same-origin"' in js
+
+
 @pytest.fixture
 def app(tmp_path: Path) -> TestClient:
     """Create a TestClient with isolated filesystem dirs."""
