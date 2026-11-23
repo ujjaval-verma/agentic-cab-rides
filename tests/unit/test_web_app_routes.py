@@ -102,6 +102,14 @@ def test_post_sessions_mints_valid_ulid(app: TestClient) -> None:
     assert parse_session_id(response.json()["session_id"])
 
 
+def test_app_js_uses_server_minted_session_id() -> None:
+    js = (Path(__file__).resolve().parents[2] / "src/agentic_cab/web/static/app.js").read_text(
+        encoding="utf-8"
+    )
+    assert "randomUUID" not in js
+    assert '"/sessions"' in js
+
+
 @pytest.fixture
 def app(tmp_path: Path) -> TestClient:
     """Create a TestClient with isolated filesystem dirs."""

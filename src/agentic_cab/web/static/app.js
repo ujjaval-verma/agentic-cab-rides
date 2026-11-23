@@ -8,7 +8,8 @@
 "use strict";
 
 // ---- Session ID ----
-const sessionId = crypto.randomUUID();
+// Minted by the server (POST /sessions) so it is always a canonical ULID.
+let sessionId = null;
 
 // ---- DOM refs ----
 const chatMessages   = document.getElementById("chat-messages");
@@ -65,7 +66,11 @@ function setConnStatus(state) {
 let pendingSubjectId = null;
 
 // ---- Session display ----
-sessionInfo.textContent = "session: " + sessionId;
+sessionInfo.textContent = "session: starting…";
+
+function setFormEnabled(enabled) {
+  for (const el of chatForm.elements) el.disabled = !enabled;
+}
 
 // ---- Helpers ----
 
@@ -200,12 +205,31 @@ function connectEventStream() {
   };
 }
 
-connectEventStream();
+// ---- Session bootstrap: server mints the ULID, then stream + form come alive ----
+
+async function startSession() {
+  setFormEnabled(false);
+  try {
+    const resp = await fetch("/sessions", { method: "POST" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    sessionId = data.session_id;
+  } catch (err) {
+    addChatMessage("[system] could not start a session: " + String(err), "error");
+    return;
+  }
+  sessionInfo.textContent = "session: " + sessionId;
+  connectEventStream();
+  setFormEnabled(true);
+}
+
+startSession();
 
 // ---- Chat form submission ----
 
 chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!sessionId) return;
   const text = messageInput.value.trim();
   if (!text) return;
 
