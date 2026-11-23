@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any, Self, cast
 
+from agentic_cab.core.paths import session_log_path
+
 # Tightened phone matcher: must look like an actual phone number, not an ISO
 # date (`2026-05-19`) or a digit run inside a ULID / hex idempotency key.
 # Accepts three shapes:
@@ -75,7 +77,7 @@ class JSONLActionLog:
         self._dir.mkdir(parents=True, exist_ok=True)
 
     def _path(self: Self, session_id: str) -> Path:
-        return self._dir / f"{session_id}.jsonl"
+        return session_log_path(self._dir, session_id)
 
     def emit(self: Self, row: dict[str, Any]) -> None:
         sid = row.get("session_id")

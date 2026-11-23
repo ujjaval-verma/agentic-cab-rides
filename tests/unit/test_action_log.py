@@ -1,7 +1,31 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from agentic_cab.adapters.action_log import JSONLActionLog, redact
+from agentic_cab.core.paths import UnsafePathError
+
+_ULID = "01KS5HMK9QJZ8PCJ92B9VM7BRA"
+
+
+def test_log_rejects_escaping_session_ids(tmp_path: Path) -> None:
+    base = tmp_path / "logs"
+    log = JSONLActionLog(log_dir=base)
+    absolute = str(tmp_path / "abs")
+    for bad in ("../escape", absolute):
+        with pytest.raises(UnsafePathError):
+            log.emit({"session_id": bad, "kind": "requested"})
+        with pytest.raises(UnsafePathError):
+            log.read(bad)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["logs"]
+    assert list(base.iterdir()) == []
+
+
+def test_log_valid_ulid_round_trips(tmp_path: Path) -> None:
+    log = JSONLActionLog(log_dir=tmp_path)
+    log.emit({"session_id": _ULID, "kind": "requested"})
+    assert log.read(_ULID) == [{"session_id": _ULID, "kind": "requested"}]
 
 
 def test_log_appends_and_reads(tmp_path: Path) -> None:
