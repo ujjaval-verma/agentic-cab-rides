@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -20,9 +20,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from agentic_cab.adapters.clock import FrozenClock
 from agentic_cab.core.ports import ConfirmationRequest
 from agentic_cab.web.app import (
     _MAX_SESSIONS,
+    _SESSION_COOKIE_MAX_AGE,
     _SESSION_IDLE_TTL,
     _create_session,
     _evict_stale_sessions,
@@ -123,7 +125,46 @@ def test_post_sessions_sets_httponly_samesite_strict_session_cookie(app: TestCli
     assert "httponly" in attrs
     assert "samesite=strict" in attrs
     assert "path=/" in attrs
-    assert not any(a.startswith(("max-age", "expires")) for a in attrs)
+    # Bounded lifetime so cookies from reloaded tabs cannot pile up for the whole
+    # browser session and overflow the Cookie header.
+    assert f"max-age={int(_SESSION_COOKIE_MAX_AGE.total_seconds())}" in attrs
+
+
+def _make_clocked_client(tmp_path: Path) -> tuple[TestClient, FrozenClock]:
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    client = TestClient(
+        create_app(
+            data_dir=tmp_path / "data",
+            log_dir=tmp_path / "logs",
+            geocode_fixtures_dir=tmp_path / "fixtures",
+            clock=clock,
+        )
+    )
+    return client, clock
+
+
+def test_post_sessions_expires_cookies_of_sessions_no_longer_live(tmp_path: Path) -> None:
+    client, clock = _make_clocked_client(tmp_path)
+    stale_sid = _mint(client)
+    clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
+
+    response = client.post("/sessions")  # evicts stale_sid, then sweeps its cookie
+    assert stale_sid not in _sessions
+    header = _session_cookie_header(response, stale_sid)
+    attrs = {part.strip().lower() for part in header.split(";")[1:]}
+    assert "max-age=0" in attrs
+    assert "path=/" in attrs
+    assert client.cookies.get(f"cab_session_{stale_sid}") is None
+    assert client.cookies.get(f"cab_session_{response.json()['session_id']}")
+
+
+def test_post_sessions_keeps_cookies_of_live_sessions(tmp_path: Path) -> None:
+    client, _clock = _make_clocked_client(tmp_path)
+    live_sid = _mint(client)  # another open tab
+    response = client.post("/sessions")
+    headers = response.headers.get_list("set-cookie")
+    assert not any(h.startswith(f"cab_session_{live_sid}=") for h in headers), headers
+    assert client.cookies.get(f"cab_session_{live_sid}")
 
 
 def test_post_sessions_body_carries_only_session_id(app: TestClient) -> None:
@@ -216,9 +257,13 @@ def test_session_route_for_evicted_session_is_forbidden(tmp_path: Path, route: s
         )
     )
     sid = _mint(client)
+    stale_token = client.cookies.get(f"cab_session_{sid}")
+    assert stale_token
     clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
-    _mint(client)  # the mint runs the eviction sweep
+    _mint(client)  # the mint runs the eviction sweep (and expires the stale cookie)
     assert sid not in _sessions
+    # Present the once-valid token anyway, as a client that ignored the expiry would.
+    client.cookies.set(f"cab_session_{sid}", stale_token)
     assert _call(client, route, sid).status_code == 403
     assert sid not in _sessions, "an evicted session id is never revived"
 
@@ -1042,12 +1087,15 @@ def test_evicted_session_id_is_rejected_with_403(tmp_path: Path) -> None:
 
     sid = _mint(client)
     assert client.post("/chat", json={"session_id": sid, "message": "hi"}).status_code == 200
+    stale_token = client.cookies.get(f"cab_session_{sid}")
+    assert stale_token
 
     clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
     _mint(client)
     assert sid not in _sessions
 
-    # The browser still holds the old cookie, but the session is gone for good.
+    # Even presenting the old, once-valid token, the session is gone for good.
+    client.cookies.set(f"cab_session_{sid}", stale_token)
     response = client.post("/chat", json={"session_id": sid, "message": "hi again"})
     assert response.status_code == 403
     assert sid not in _sessions

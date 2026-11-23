@@ -9,8 +9,9 @@ Routes:
   POST /sessions/{id}/confirmations/{sid} → resolve a pending confirmation in that session
   GET  /sessions/{id}/log                 → raw JSONL action-log for the session
 
-Auth: POST /sessions sets an HttpOnly, SameSite=Strict cookie
-`cab_session_<session_id>` holding a 256-bit server-minted token. Every other
+Auth: POST /sessions sets an HttpOnly, SameSite=Strict, Max-Age-bounded cookie
+`cab_session_<session_id>` holding a 256-bit server-minted token (and expires
+the cookies of sessions already evicted). Every other
 session route (chat, events, confirmations, log) requires it; unknown, evicted,
 or mismatched sessions get an identical 403. The approver identity is the
 session's server-minted `principal_id`, never a request field.
@@ -36,7 +37,7 @@ from typing import Any
 import httpx
 import structlog
 from anthropic import Anthropic
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -87,6 +88,14 @@ _bus = SessionEventBus()
 # stale option cache, a subtler bug than the leak itself.
 _SESSION_IDLE_TTL = timedelta(hours=1)
 _MAX_SESSIONS = 64
+# Absolute browser-side lifetime of a `cab_session_<id>` cookie. Not the idle
+# TTL: the server-side TTL slides on every authorized request, but the cookie is
+# only set once at mint, so a 1-hour cookie would 403 a session still in active
+# use (the client has no re-mint path). A working day is long enough for any
+# real session and short enough that a long-lived browser does not keep cookies
+# forever; stale cookies within the window are expired by the POST /sessions
+# sweep (see `_expire_dead_session_cookies`).
+_SESSION_COOKIE_MAX_AGE = timedelta(hours=8)
 
 
 @dataclass
@@ -119,9 +128,31 @@ _sessions: dict[str, _SessionState] = {}
 _TOKEN_BYTES = 32  # 256 bits → 43 urlsafe-base64 chars
 
 
+_SESSION_COOKIE_PREFIX = "cab_session_"
+# Shared by set and delete: a browser only drops a cookie when the deletion
+# matches the name and path it was set with; the flags stay identical too.
+_SESSION_COOKIE_ATTRS: dict[str, Any] = {"path": "/", "httponly": True, "samesite": "strict"}
+
+
 def _session_cookie_name(session_id: str) -> str:
     """One cookie per session so two open tabs never overwrite each other's token."""
-    return f"cab_session_{session_id}"
+    return f"{_SESSION_COOKIE_PREFIX}{session_id}"
+
+
+def _expire_dead_session_cookies(request: Request, response: Response) -> None:
+    """Tell the browser to drop cookies for sessions the server no longer holds.
+
+    HttpOnly cookies are invisible to page JS, so the client cannot clean up
+    after itself; without this, every reload adds a cookie that rides on every
+    request until the header outgrows the server's limit. Cookies of live
+    sessions (other open tabs) are left alone. Only names under our prefix are
+    touched; the value is never read.
+    """
+    for name in request.cookies:
+        if name.startswith(_SESSION_COOKIE_PREFIX) and (
+            name.removeprefix(_SESSION_COOKIE_PREFIX) not in _sessions
+        ):
+            response.delete_cookie(key=name, **_SESSION_COOKIE_ATTRS)
 
 
 def _create_session(
@@ -305,11 +336,13 @@ def create_app(
         return EventSourceResponse(_generator(), ping=15)
 
     @app.post("/sessions")
-    async def create_session() -> JSONResponse:
+    async def create_session(request: Request) -> JSONResponse:
         """Mint a server-side session ULID, its state, and its bearer-token cookie.
 
         The token travels only in an HttpOnly, SameSite=Strict cookie scoped to
-        this session id; the body carries `session_id` alone.
+        this session id and bounded by `_SESSION_COOKIE_MAX_AGE`; the body
+        carries `session_id` alone. Cookies of sessions already evicted are
+        expired in the same response.
         """
         _evict_stale_sessions(_clock)
         store = SqliteStateStore(db_path=_data_dir / "state.db", check_same_thread=False)
@@ -318,12 +351,12 @@ def create_app(
         state = _create_session(session_id, store=store, clock=_clock)
         _log.info("web.session.created", session_id=session_id)
         response = JSONResponse({"session_id": session_id})
+        _expire_dead_session_cookies(request, response)
         response.set_cookie(
             key=_session_cookie_name(session_id),
             value=state.token,
-            path="/",
-            httponly=True,
-            samesite="strict",
+            max_age=int(_SESSION_COOKIE_MAX_AGE.total_seconds()),
+            **_SESSION_COOKIE_ATTRS,
         )
         return response
 

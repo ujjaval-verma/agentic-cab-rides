@@ -60,9 +60,14 @@ Shared by all three surfaces:
 `POST /sessions` mints three server-side values: the `session_id` (ULID,
 returned in the body), a **token** (`secrets.token_urlsafe(32)`, 256 bits),
 and a **principal** (`principal_id`, a ULID). The token is set only as an
-`HttpOnly; SameSite=Strict; Path=/` browser-session cookie named
+`HttpOnly; SameSite=Strict; Path=/` cookie named
 `cab_session_<session_id>` — one per session so tabs never clobber each
-other — and is never returned in a body, logged, or put in a URL (a cookie
+other — with `Max-Age` of 8 hours. The cookie is set once and does not slide,
+so it is deliberately longer than the 1-hour idle TTL (which does slide) rather
+than equal to it. Each `POST /sessions` also expires any `cab_session_*`
+cookie the request carries whose session is no longer held server-side, so
+page reloads cannot pile up dead cookies until the `Cookie` header overflows.
+The token is never returned in a body, logged, or put in a URL (a cookie
 rather than a header because `EventSource` cannot set headers, and a query
 string would leak into access logs). `SameSite=Strict` blocks cross-site POSTs
 to the confirmation route. `Secure` is not set because `make web` serves plain
