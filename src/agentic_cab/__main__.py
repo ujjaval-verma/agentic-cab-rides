@@ -15,6 +15,7 @@ import yaml
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.agent.chat import run_repl
+from agentic_cab.core.paths import session_chat_path
 from agentic_cab.render.transcript import render
 from agentic_cab.scenarios.invariants import evaluate
 from agentic_cab.scenarios.runner import run_scenario
@@ -84,7 +85,7 @@ def render_transcripts(
         scn = yaml.safe_load(scn_path.read_text())
         action_log_adapter = JSONLActionLog(log_dir=log_dir)
         rows = action_log_adapter.read(session_id)
-        chat_path = log_dir / f"{session_id}.chat.jsonl"
+        chat_path = session_chat_path(log_dir, session_id)
         chat = (
             [json.loads(line) for line in chat_path.read_text().splitlines() if line.strip()]
             if chat_path.exists()

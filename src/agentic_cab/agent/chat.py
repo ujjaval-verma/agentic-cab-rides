@@ -32,6 +32,7 @@ from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
 from agentic_cab.agent.loop import ToolHandler, run_turn
 from agentic_cab.core.ids import new_session_id, new_turn_id
+from agentic_cab.core.paths import session_chat_path
 from agentic_cab.core.ports import (
     ActionLog,
     BookingProvider,
@@ -348,7 +349,7 @@ async def run_repl(
     )
 
     client = Anthropic()
-    chat_log_path = _log_dir / f"{session_id}.chat.jsonl"
+    chat_log_path = session_chat_path(_log_dir, session_id)
 
     _log.info("repl.start", session_id=session_id)
 

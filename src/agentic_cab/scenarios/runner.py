@@ -23,6 +23,7 @@ from agentic_cab.adapters.uber_sim.state_machine import DriverAvailability
 from agentic_cab.adapters.uber_sim.surge import SurgeCurve
 from agentic_cab.agent.loop import ToolHandler, run_turn
 from agentic_cab.core.ids import new_session_id, new_turn_id
+from agentic_cab.core.paths import session_chat_path
 from agentic_cab.tools.cancel import CancelArgs, cancel_booking
 from agentic_cab.tools.confirm import ConfirmArgs, confirm_booking
 from agentic_cab.tools.discover import DiscoverArgs, discover_options
@@ -220,6 +221,6 @@ async def run_scenario(
         await http_client.aclose()
 
     # Persist chat for transcript renderer (one JSON object per line)
-    chat_path = log_dir / f"{session_id}.chat.jsonl"
+    chat_path = session_chat_path(log_dir, session_id)
     chat_path.write_text("\n".join(json.dumps(m, default=str) for m in history) + "\n")
     return session_id
