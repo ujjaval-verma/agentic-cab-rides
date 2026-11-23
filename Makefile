@@ -8,7 +8,7 @@ SHELL := /usr/bin/env bash
 UV ?= uv
 
 .PHONY: help install hooks link-env repl web transcripts transcripts-ci \
-        test test-fast verify lint typecheck fmt fmt-check \
+        test test-fast verify audit lint typecheck fmt fmt-check \
         clean reset replay status demo ship ci-status
 
 ENV_SRC := $(HOME)/.config/agentic-cab-rides/.env
@@ -82,6 +82,13 @@ test-fast: ## Unit + contract tests only (no scenarios, no slow)
 	$(UV) run pytest -m "not scenario and not slow"
 
 verify: fmt-check lint typecheck test-fast ## Full gate (used by pre-push)
+
+# Extra flags for scripts/audit_deps.py. CI passes AUDIT_FLAGS=--strict so an
+# audit that cannot reach the advisory service fails instead of warning.
+AUDIT_FLAGS ?=
+
+audit: ## pip-audit over uv.lock (warns if offline, fails on a vulnerability; AUDIT_FLAGS=--strict fails offline too)
+	$(UV) run python scripts/audit_deps.py $(AUDIT_FLAGS)
 
 lint: ## ruff check
 	$(UV) run ruff check src tests

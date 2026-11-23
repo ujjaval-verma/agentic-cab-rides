@@ -37,6 +37,27 @@ jobs:
       - name: Scenario invariants (no LLM, fixtures only)
         run: make transcripts-ci
 
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install
+        run: uv sync --frozen
+
+      - name: Audit locked dependencies (fails on any known vulnerability)
+        run: make audit AUDIT_FLAGS=--strict
+
   secret-scan:
     runs-on: ubuntu-latest
     timeout-minutes: 5
