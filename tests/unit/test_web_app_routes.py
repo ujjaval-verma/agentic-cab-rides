@@ -440,6 +440,14 @@ def test_star_bind_host_is_refused(
         _app_bound_to(tmp_path, monkeypatch, star, source)
 
 
+def test_architecture_doc_names_host_and_origin_checks() -> None:
+    doc = (Path(__file__).resolve().parents[2] / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "TrustedHostMiddleware" in doc  # noqa: S101 pytest assertion
+    assert "AGENTIC_CAB_WEB_HOST" in doc  # noqa: S101 pytest assertion
+    assert "SameOriginMiddleware" in doc  # noqa: S101 pytest assertion
+    assert "Origin" in doc  # noqa: S101 pytest assertion
+
+
 def test_get_index_serves_html(app: TestClient) -> None:
     """GET / returns 200 with HTML content (or 404 if static not built yet)."""
     response = app.get("/")
