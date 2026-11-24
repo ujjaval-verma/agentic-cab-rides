@@ -48,6 +48,22 @@ def _isolated_sessions() -> Iterator[None]:
     _sessions.clear()
 
 
+# Loopback base URL for every web test client. Starlette's default Host
+# (`testserver`) is not on the production allowlist and must stay off it.
+_LOOPBACK_BASE_URL = "http://127.0.0.1:8000"
+
+
+def _client(fastapi_app: FastAPI, **kw: object) -> TestClient:
+    return TestClient(fastapi_app, base_url=_LOOPBACK_BASE_URL, **kw)  # type: ignore[arg-type]
+
+
+def _async_client(fastapi_app: FastAPI) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=fastapi_app),
+        base_url=_LOOPBACK_BASE_URL,
+    )
+
+
 _ULID = "01KS5HMK9QJZ8PCJ92B9VM7BRA"
 
 
@@ -132,7 +148,7 @@ def test_post_sessions_sets_httponly_samesite_strict_session_cookie(app: TestCli
 
 def _make_clocked_client(tmp_path: Path) -> tuple[TestClient, FrozenClock]:
     clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
-    client = TestClient(
+    client = _client(
         create_app(
             data_dir=tmp_path / "data",
             log_dir=tmp_path / "logs",
@@ -248,7 +264,7 @@ def test_session_route_for_evicted_session_is_forbidden(tmp_path: Path, route: s
     from agentic_cab.adapters.clock import FrozenClock
 
     clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
-    client = TestClient(
+    client = _client(
         create_app(
             data_dir=tmp_path / "data",
             log_dir=tmp_path / "logs",
@@ -275,8 +291,8 @@ def test_session_a_cookie_cannot_reach_session_b(tmp_path: Path, route: str) -> 
         log_dir=tmp_path / "logs",
         geocode_fixtures_dir=tmp_path / "fixtures",
     )
-    client_a = TestClient(fastapi_app)
-    client_b = TestClient(fastapi_app)
+    client_a = _client(fastapi_app)
+    client_b = _client(fastapi_app)
     sid_a = _mint(client_a)
     sid_b = _mint(client_b)
 
@@ -321,7 +337,13 @@ def app(tmp_path: Path) -> TestClient:
         log_dir=tmp_path / "logs",
         geocode_fixtures_dir=tmp_path / "fixtures",
     )
-    return TestClient(fastapi_app, raise_server_exceptions=True)
+    return _client(fastapi_app, raise_server_exceptions=True)
+
+
+def test_test_client_targets_loopback_host(tmp_path: Path) -> None:
+    """Every web test client talks to a loopback host, the production default allowlist."""
+    assert _client(_new_app(tmp_path)).base_url.host == "127.0.0.1"  # noqa: S101 pytest assertion
+    assert _async_client(_new_app(tmp_path)).base_url.host == "127.0.0.1"  # noqa: S101 pytest assertion
 
 
 def test_get_index_serves_html(app: TestClient) -> None:
@@ -338,13 +360,6 @@ def test_get_index_serves_html(app: TestClient) -> None:
 #
 # These drive the app through httpx.AsyncClient + ASGITransport so the route and
 # the awaiting WebConfirmationChannel future share one event loop (no thread hop).
-
-
-def _async_client(fastapi_app: FastAPI) -> httpx.AsyncClient:
-    return httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=fastapi_app),
-        base_url="http://testserver",
-    )
 
 
 async def _amint(client: httpx.AsyncClient) -> str:
@@ -607,7 +622,7 @@ def test_get_session_log_returns_empty_for_fresh_session(tmp_path: Path) -> None
         log_dir=tmp_path / "logs",
         geocode_fixtures_dir=tmp_path / "fixtures",
     )
-    client = TestClient(fastapi_app, raise_server_exceptions=True)
+    client = _client(fastapi_app, raise_server_exceptions=True)
 
     sid = _mint(client)
     response = client.get(f"/sessions/{sid}/log")
@@ -661,7 +676,7 @@ def test_startup_flushes_pending_confirmations(tmp_path: Path) -> None:
         geocode_fixtures_dir=tmp_path / "fixtures",
     )
     # Entering the TestClient context runs lifespan startup.
-    with TestClient(fastapi_app, raise_server_exceptions=True):
+    with _client(fastapi_app, raise_server_exceptions=True):
         pass
 
     # The pending row is still in the DB (startup hook publishes but does NOT pop).
@@ -727,7 +742,7 @@ def test_startup_hook_publishes_to_session_id_not_subject_id(tmp_path: Path) -> 
             log_dir=tmp_path / "logs",
             geocode_fixtures_dir=tmp_path / "fixtures",
         )
-        with TestClient(fastapi_app, raise_server_exceptions=True):
+        with _client(fastapi_app, raise_server_exceptions=True):
             # Lifespan startup runs on __enter__.
             pass
     finally:
@@ -850,7 +865,7 @@ def test_post_chat_uses_one_meter_for_run_turn_and_both_gated_tools(tmp_path: Pa
         patch("agentic_cab.web.app.run_turn", side_effect=_spy_run_turn),
         patch("agentic_cab.agent.chat.confirm_booking", side_effect=_spy_confirm_booking),
         patch("agentic_cab.agent.chat.cancel_booking", side_effect=_spy_cancel_booking),
-        TestClient(fastapi_app, raise_server_exceptions=True) as client,
+        _client(fastapi_app, raise_server_exceptions=True) as client,
     ):
         sid = _mint(client)
         response = client.post(
@@ -908,7 +923,7 @@ def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
         log_dir=tmp_path / "logs",
         geocode_fixtures_dir=tmp_path / "fixtures",
     )
-    client = TestClient(fastapi_app, raise_server_exceptions=False)
+    client = _client(fastapi_app, raise_server_exceptions=False)
 
     sid = _mint(client)
     response = client.post(
@@ -944,7 +959,7 @@ def test_idle_session_evicted_together(tmp_path: Path) -> None:
         geocode_fixtures_dir=tmp_path / "fixtures",
         clock=clock,
     )
-    client = TestClient(fastapi_app, raise_server_exceptions=False)
+    client = _client(fastapi_app, raise_server_exceptions=False)
 
     idle_sid = _mint(client)
     client.post("/chat", json={"session_id": idle_sid, "message": "hi"})
@@ -970,7 +985,7 @@ def test_session_touched_within_ttl_survives(tmp_path: Path) -> None:
         geocode_fixtures_dir=tmp_path / "fixtures",
         clock=clock,
     )
-    client = TestClient(fastapi_app, raise_server_exceptions=False)
+    client = _client(fastapi_app, raise_server_exceptions=False)
 
     kept_sid = _mint(client)
     client.post("/chat", json={"session_id": kept_sid, "message": "hi"})
@@ -994,7 +1009,7 @@ def test_exceeding_max_sessions_evicts_lru_first(tmp_path: Path) -> None:
         geocode_fixtures_dir=tmp_path / "fixtures",
         clock=clock,
     )
-    client = TestClient(fastapi_app, raise_server_exceptions=False)
+    client = _client(fastapi_app, raise_server_exceptions=False)
 
     minted = []
     for _ in range(_MAX_SESSIONS):
@@ -1083,7 +1098,7 @@ def test_evicted_session_id_is_rejected_with_403(tmp_path: Path) -> None:
         geocode_fixtures_dir=tmp_path / "fixtures",
         clock=clock,
     )
-    client = TestClient(fastapi_app, raise_server_exceptions=False)
+    client = _client(fastapi_app, raise_server_exceptions=False)
 
     sid = _mint(client)
     assert client.post("/chat", json={"session_id": sid, "message": "hi"}).status_code == 200  # noqa: S101 pytest assertion
