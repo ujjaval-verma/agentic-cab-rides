@@ -45,7 +45,7 @@ ships two first-class surfaces (REPL and web) and one batch surface
 | Surface | Entry point | Process model | Confirmation channel | Per-session state |
 |---------|-------------|---------------|----------------------|-------------------|
 | **REPL** | `make repl` → `python -m agentic_cab repl` | One long-lived Python process. Stdin loop reads chat input; agent calls tools in-process. | `CLIConfirmationChannel` reads bare y/n from `/dev/tty` — a separate file handle from stdin, so chat text cannot inject approvals. | Adapter instance lives for the whole process; provider in-memory caches (`_option_cache`, `_intent_cache`) survive across turns naturally. |
-| **Web** | `make web` → `uvicorn agentic_cab.web.app:create_app --factory` | Single uvicorn worker, FastAPI app. One browser tab = one server-minted `session_id` (`POST /sessions`). SSE stream pushes assistant tokens and gate prompts; `POST /sessions/{session_id}/confirmations/{subject_id}` delivers the y/n. Requests with a non-loopback `Host` get 400 (`TrustedHostMiddleware`); state-changing requests with a foreign `Origin` get 403 (`SameOriginMiddleware`). See "Web session authentication" below. | `WebConfirmationChannel` blocks the tool call on an `asyncio.Future` resolved by the POST handler — only the caller's own session channel is reachable. | `UberSimAdapter` is memoized per `session_id` (PR #8) so option/intent caches survive within a session. They do not survive worker restart — see WRITEUP §2 "Provider option durability". |
+| **Web** | `make web` → `uvicorn agentic_cab.web.app:create_app --factory` | Single uvicorn worker, FastAPI app. One browser tab = one server-minted `session_id` (`POST /sessions`). SSE stream pushes assistant tokens and gate prompts, fanned out per-subscriber so every tab of a session sees them (see "Web event stream and error contract"); `POST /sessions/{session_id}/confirmations/{subject_id}` delivers the y/n. Requests with a non-loopback `Host` get 400 (`TrustedHostMiddleware`); state-changing requests with a foreign `Origin` get 403 (`SameOriginMiddleware`). See "Web session authentication" below. | `WebConfirmationChannel` blocks the tool call on an `asyncio.Future` resolved by the POST handler — only the caller's own session channel is reachable. | `UberSimAdapter` is memoized per `session_id` (PR #8) so option/intent caches survive within a session. They do not survive worker restart — see WRITEUP §2 "Provider option durability". |
 | **Scenarios** | `make transcripts` (or `pytest -m scenario`) | Per-scenario in-process run with a `FrozenClock` and a `ScriptedConfirmationChannel`. Each scenario is a fresh state DB and adapter under a `tmp_path`. | `ScriptedConfirmationChannel` reads decisions from the scenario YAML. | Isolated per run; not shared with REPL/web. |
 
 Shared by all three surfaces:
@@ -115,6 +115,48 @@ an identifier (who approved) and is recorded as `approver_id` on the
 `verified` row. The confirmation body carries only `approved`; the approver is
 set inside `WebConfirmationChannel`, whose `resolve()` has no approver
 parameter at all.
+
+### Web event stream and error contract
+
+`SessionEventBus` (`web/sse.py`) gives each `/events` stream its own
+per-subscriber queue, and `publish` fans every row out to all subscribers of
+the session, so two tabs on one session both receive every event, including
+`pending_confirmation`. Bounds: at most 256 rows per subscriber queue and 8
+subscribers per session. A subscriber whose queue overflows is disconnected
+(its queue drained, its stream ended, `web.sse.subscriber_dropped` with
+`reason="overflow"`) instead of silently losing rows; opening a ninth
+subscriber supersedes the oldest (`reason="superseded"`), which clears zombie
+connections. The browser's `EventSource` reconnects on its own. Bus methods are
+synchronous on the single event loop; `publish` iterates a snapshot and
+`close` is idempotent.
+
+A bus entry exists only while a session has a subscriber. `publish` with no
+subscribers is a no-op and creates nothing; the last stream to disconnect
+(sse-starlette cancels the generator, whose `with bus.open(...)` block closes
+the subscription) removes the entry; and session eviction calls
+`_bus.close_session(sid)` for both the idle and the LRU rule, ending any open
+stream (the reconnect then gets 403). Bus keys are therefore always a subset
+of live sessions, and requests for unknown session ids never grow memory.
+
+Pending replay keeps the gate reachable across reconnects:
+`WebConfirmationChannel.pending_events()` returns copies of the prompts still
+awaiting a decision, and each new stream replays them before live rows, with
+no `await` between opening the subscription and taking the snapshot, so a
+prompt is never missed or sent twice. Only the session's own channel is read.
+When a prompt is decided (approve, decline or timeout) the channel publishes
+`confirmation_resolved`, and `app.js` hides the modal in every tab showing that
+`subject_id`. Both are delivery-only: `resolve()` still pops the future exactly
+once, and the approver is unchanged.
+
+Errors never carry internal detail to the browser. A failed chat turn
+publishes `{"kind": "error", "message": "internal error", "correlation_id":
+<ULID>}`; any unhandled route exception returns 500
+`{"detail": "internal error", "correlation_id": <ULID>}`; the confirmation
+404 detail is the constant `"no pending confirmation"`. The exception and
+traceback go to structlog only (`web.chat.error`, `web.unhandled_error`) under
+the same `correlation_id`, which the UI shows as `(ref <id>)` so a user can
+point an operator at the log line. Correlation ids come from
+`new_correlation_id()` and are injected through `create_app(correlation_ids=...)`.
 
 Not deployed today: no container, no orchestrator, no horizontal scale. The web surface assumes a single worker (in-memory adapter memoization is per-process; SSE expects sticky sessions). Production direction — a worker pool with shared-store option durability, secrets-manager-backed credentials, and a polling `track_booking` loop — is sketched in [`docs/WRITEUP.md`](WRITEUP.md) §2 and the priority list in §3.
 

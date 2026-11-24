@@ -459,6 +459,14 @@ def test_architecture_doc_names_host_and_origin_checks() -> None:
     assert "Origin" in doc  # noqa: S101 pytest assertion
 
 
+def test_architecture_doc_describes_sse_fanout_and_error_contract() -> None:
+    doc = (Path(__file__).resolve().parents[2] / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+    assert "per-subscriber" in doc  # noqa: S101 pytest assertion
+    assert "correlation_id" in doc  # noqa: S101 pytest assertion
+    assert "close_session" in doc  # noqa: S101 pytest assertion
+    assert "confirmation_resolved" in doc  # noqa: S101 pytest assertion
+
+
 def test_get_index_serves_html(app: TestClient) -> None:
     """GET / returns 200 with HTML content (or 404 if static not built yet)."""
     response = app.get("/")
