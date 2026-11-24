@@ -16,6 +16,9 @@ session route (chat, events, confirmations, log) requires it; unknown, evicted,
 or mismatched sessions get an identical 403. The approver identity is the
 session's server-minted `principal_id`, never a request field.
 
+Host: `TrustedHostMiddleware` refuses (400) any request whose `Host` is not
+loopback, so a DNS-rebinding page cannot reach any route.
+
 Layer: web/* may import from agent/, tools/, adapters/. Nothing in tools/ or
 adapters/ may import from here (invariant 1).
 """
@@ -42,6 +45,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.clock import SystemClock
@@ -61,6 +65,11 @@ from agentic_cab.web.sse import SessionEventBus
 _log = structlog.get_logger(__name__)
 
 _STATIC_DIR = Path(__file__).parent / "static"
+
+# Host header allowlist. A DNS-rebinding page reaches this server under its own
+# hostname, so anything other than loopback (or the configured bind host) is
+# refused with 400 before any route runs.
+_DEFAULT_ALLOWED_HOSTS: tuple[str, ...] = ("127.0.0.1", "localhost")
 
 # ---------- Request / Response models ----------
 
@@ -302,6 +311,11 @@ def create_app(
         yield  # app runs here
 
     app = FastAPI(title="Agentic Cab Rides", lifespan=_lifespan)
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=list(_DEFAULT_ALLOWED_HOSTS),
+        www_redirect=False,
+    )
 
     # Mount static files (CSS, JS) — served under /static/
     if _STATIC_DIR.exists():

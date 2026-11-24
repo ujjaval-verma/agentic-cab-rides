@@ -346,6 +346,32 @@ def test_test_client_targets_loopback_host(tmp_path: Path) -> None:
     assert _async_client(_new_app(tmp_path)).base_url.host == "127.0.0.1"  # noqa: S101 pytest assertion
 
 
+# ---------- Host allowlist (DNS-rebinding defence) ----------
+
+_HOST_CHECKED_REQUESTS: list[tuple[str, str, dict[str, object] | None]] = [
+    ("GET", "/", None),
+    ("POST", "/sessions", None),
+    ("POST", "/chat", {"session_id": _ULID, "message": "hi"}),
+    ("POST", f"/sessions/{_ULID}/confirmations/draft-x", {"approved": True}),
+]
+
+
+@pytest.mark.parametrize("host", ["evil.example", "testserver", "evil.example:8000"])
+@pytest.mark.parametrize(("method", "path", "body"), _HOST_CHECKED_REQUESTS)
+def test_foreign_host_is_rejected_with_400(
+    app: TestClient, host: str, method: str, path: str, body: dict[str, object] | None
+) -> None:
+    response = app.request(method, path, json=body, headers={"host": host})
+    assert response.status_code == 400  # noqa: S101 pytest assertion
+    assert not _sessions, "a foreign-Host request must never reach a route"  # noqa: S101 pytest assertion
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "localhost:8000", "127.0.0.1:8000"])
+def test_loopback_hosts_are_accepted(app: TestClient, host: str) -> None:
+    assert app.get("/", headers={"host": host}).status_code == 200  # noqa: S101 pytest assertion
+    assert app.post("/sessions", headers={"host": host}).status_code == 200  # noqa: S101 pytest assertion
+
+
 def test_get_index_serves_html(app: TestClient) -> None:
     """GET / returns 200 with HTML content (or 404 if static not built yet)."""
     response = app.get("/")
