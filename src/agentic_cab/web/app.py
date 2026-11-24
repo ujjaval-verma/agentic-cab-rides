@@ -35,7 +35,7 @@ import hmac
 import json
 import os
 import secrets
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -61,7 +61,13 @@ from agentic_cab.adapters.uber_sim.provider import UberSimAdapter
 from agentic_cab.agent.chat import _TOOL_DEFS as _AGENT_TOOL_DEFS
 from agentic_cab.agent.chat import build_handlers
 from agentic_cab.agent.loop import run_turn
-from agentic_cab.core.ids import SessionId, new_principal_id, new_session_id, new_turn_id
+from agentic_cab.core.ids import (
+    SessionId,
+    new_correlation_id,
+    new_principal_id,
+    new_session_id,
+    new_turn_id,
+)
 from agentic_cab.core.ports import Clock
 from agentic_cab.web.channel import WebConfirmationChannel
 from agentic_cab.web.origin import SameOriginMiddleware
@@ -228,6 +234,8 @@ def _create_session(
 
 
 _FORBIDDEN = "forbidden"
+# The only text a failure ever shows the browser; detail stays in structlog.
+_INTERNAL_ERROR = "internal error"
 
 
 def _authorize(request: Request, session_id: str, *, clock: Clock) -> _SessionState:
@@ -326,6 +334,7 @@ def create_app(
     geocode_fixtures_dir: Path | None = None,
     clock: Clock | None = None,
     bind_host: str | None = None,
+    correlation_ids: Callable[[], str] = new_correlation_id,
 ) -> FastAPI:
     """Create and return the FastAPI application.
 
@@ -334,7 +343,8 @@ def create_app(
     inject a `FrozenClock` to drive session-eviction timing without sleeping
     (CLAUDE.md invariant 9). `bind_host` (else `AGENTIC_CAB_WEB_HOST`) joins
     loopback on the Host allowlist; all-interfaces addresses add nothing and
-    `"*"` raises `ValueError`.
+    `"*"` raises `ValueError`. `correlation_ids` mints the ULID attached to
+    every generic error the browser sees (injectable for determinism).
     """
     _hosts = _allowed_hosts(bind_host)
     _data_dir = data_dir or Path("data")
@@ -515,9 +525,15 @@ def create_app(
                 state.history = new_history
                 # Publish the final agent reply as an SSE event.
                 _bus.publish(session_id, {"kind": "agent_reply", "text": text})
-            except Exception as exc:
-                _log.exception("web.chat.error", session_id=session_id, exc=str(exc))
-                _bus.publish(session_id, {"kind": "error", "message": str(exc)})
+            except Exception:
+                # Detail (traceback via exc_info) goes to structlog only; the
+                # browser gets a fixed message and the id to quote to an operator.
+                cid = correlation_ids()
+                _log.exception("web.chat.error", session_id=session_id, correlation_id=cid)
+                _bus.publish(
+                    session_id,
+                    {"kind": "error", "message": _INTERNAL_ERROR, "correlation_id": cid},
+                )
 
         # Keep a reference so the task isn't garbage-collected before it completes.
         _task = asyncio.create_task(_run_turn())

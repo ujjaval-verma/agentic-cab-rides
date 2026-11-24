@@ -65,6 +65,11 @@ def new_principal_id() -> str:
     return _new()
 
 
+def new_correlation_id() -> str:
+    """Opaque id tying a generic user-facing error to its detailed log line."""
+    return _new()
+
+
 def _bucketed_now(now: datetime) -> str:
     bucket_minute = (now.minute // _NOW_BUCKET_MINUTES) * _NOW_BUCKET_MINUTES
     floored = now.replace(minute=bucket_minute, second=0, microsecond=0)

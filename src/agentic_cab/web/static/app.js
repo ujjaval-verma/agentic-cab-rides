@@ -190,7 +190,9 @@ function connectEventStream() {
       addChatMessage(row.text || "", "agent");
       addLogEntry(row);
     } else if (row.kind === "error") {
-      addChatMessage("[error] " + (row.message || "unknown error"), "error");
+      // Generic message plus an opaque ref the user can quote to an operator.
+      const ref = typeof row.correlation_id === "string" ? " (ref " + row.correlation_id + ")" : "";
+      addChatMessage("[error] " + (row.message || "unknown error") + ref, "error");
       addLogEntry(row);
     } else {
       addLogEntry(row);

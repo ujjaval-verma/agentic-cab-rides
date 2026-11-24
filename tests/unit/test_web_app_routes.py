@@ -1372,6 +1372,51 @@ def test_app_js_hides_modal_on_confirmation_resolved() -> None:
     assert "hideModal()" in branch  # noqa: S101 pytest assertion
 
 
+# ---------- Generic errors with a correlation id ----------
+
+_INTERNAL_DETAIL = "internal-detail-/srv/x"
+
+
+async def test_chat_turn_failure_publishes_generic_error_with_correlation_id(
+    tmp_path: Path, bus: SessionEventBus
+) -> None:
+    from structlog.testing import capture_logs
+
+    fastapi_app = _app_with(tmp_path, correlation_ids=lambda: _ulid(99))
+    with (
+        capture_logs() as logs,
+        patch("agentic_cab.web.app.Anthropic"),
+        patch("agentic_cab.web.app.run_turn", side_effect=RuntimeError(_INTERNAL_DETAIL)),
+    ):
+        async with _async_client(fastapi_app) as client:
+            sid = await _amint(client)
+            with bus.open(sid) as sub:
+                response = await client.post("/chat", json={"session_id": sid, "message": "hi"})
+                assert response.status_code == 200  # noqa: S101 pytest assertion
+                row = await asyncio.wait_for(anext(sub), timeout=3.0)
+
+    assert row == {  # noqa: S101 pytest assertion
+        "kind": "error",
+        "message": "internal error",
+        "correlation_id": _ulid(99),
+    }
+    assert "internal-detail" not in json.dumps(row)  # noqa: S101 pytest assertion
+    errors = [e for e in logs if e["event"] == "web.chat.error"]
+    assert len(errors) == 1  # noqa: S101 pytest assertion
+    assert errors[0]["correlation_id"] == _ulid(99)  # noqa: S101 pytest assertion
+    assert errors[0]["session_id"] == sid  # noqa: S101 pytest assertion
+    assert errors[0].get("exc_info") is True  # noqa: S101 pytest assertion
+
+
+def test_app_js_renders_error_correlation_id() -> None:
+    js = (Path(__file__).resolve().parents[2] / "src/agentic_cab/web/static/app.js").read_text(
+        encoding="utf-8"
+    )
+    branch = js[js.index('row.kind === "error"') :][:400]
+    assert "correlation_id" in branch  # noqa: S101 pytest assertion
+    assert "(ref " in branch  # noqa: S101 pytest assertion
+
+
 def test_unknown_session_ids_do_not_grow_bus_memory(app: TestClient, bus: SessionEventBus) -> None:
     unknown = [_ulid(1000 + i) for i in range(50)]
     for sid in unknown:

@@ -7,6 +7,7 @@ import pytest
 from agentic_cab.core.ids import (
     cancel_idempotency_key,
     new_action_id,
+    new_correlation_id,
     new_draft_id,
     new_idempotency_key,
     new_principal_id,
@@ -21,6 +22,12 @@ _VALID_ULID = "01KS5HMK9QJZ8PCJ92B9VM7BRA"
 @pytest.mark.parametrize("raw", [new_session_id(), _VALID_ULID])
 def test_session_id_accepts_ulid(raw: str) -> None:
     assert parse_session_id(raw) == raw  # noqa: S101 pytest assertion
+
+
+def test_new_correlation_id_is_ulid() -> None:
+    cid = new_correlation_id()
+    assert parse_session_id(cid) == cid  # noqa: S101 pytest assertion
+    assert new_correlation_id() != cid  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize(
