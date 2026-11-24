@@ -95,6 +95,7 @@ def _validate_draft(
 
 def _compute_intent_context(
     draft: Draft,
+    *,
     store: StateStore,
     nonce: str | None,
     clock: Clock,
@@ -164,6 +165,7 @@ def _compute_intent_context(
 
 def _handle_claim_shortcircuit(
     claim: Any,
+    *,
     store: StateStore,
     log: ActionLog,
     clock: Clock,
@@ -355,12 +357,12 @@ async def confirm_booking(
     # 3a-3d: compute intent hash, check for duplicate, derive generation.
     ih, generation, _dedup_rejection = _compute_intent_context(
         draft,
-        store,
-        args.intent_override_nonce,
-        clock,
-        requote_drift_cents,
-        _emit_verified,
-        checks,
+        store=store,
+        nonce=args.intent_override_nonce,
+        clock=clock,
+        requote_drift_cents=requote_drift_cents,
+        emit_verified=_emit_verified,
+        base_checks=checks,
     )
     if _dedup_rejection is not None:
         return _emit_outcome(*_dedup_rejection)
@@ -374,16 +376,16 @@ async def confirm_booking(
     # Concurrent or restarted caller: short-circuit without calling the gate or provider.
     _claim_result = _handle_claim_shortcircuit(
         claim,
-        store,
-        log,
-        clock,
-        provider,
-        key,
-        args.draft_id,
-        session_id,
-        action_id,
-        requote_drift_cents,
-        _emit_verified,
+        store=store,
+        log=log,
+        clock=clock,
+        provider=provider,
+        key=key,
+        draft_id=args.draft_id,
+        session_id=session_id,
+        action_id=action_id,
+        requote_drift_cents=requote_drift_cents,
+        emit_verified=_emit_verified,
         intent_hash_hex=ih,
     )
     if _claim_result is not None:

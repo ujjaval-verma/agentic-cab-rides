@@ -175,6 +175,7 @@ _: type[ActionLog] = _MemActionLog  # type: ignore[assignment]
 
 
 async def _run_happy_path_sequence(
+    *,
     store: SqliteStateStore,
     log: _MemActionLog,
     clock: FrozenClock,
