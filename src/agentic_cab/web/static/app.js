@@ -182,6 +182,10 @@ function connectEventStream() {
     if (row.kind === "pending_confirmation") {
       addLogEntry(row);
       showModal(row);
+    } else if (row.kind === "confirmation_resolved") {
+      // Decided elsewhere (another tab, or timed out): drop the stale modal.
+      if (row.subject_id === pendingSubjectId) hideModal();
+      addLogEntry(row);
     } else if (row.kind === "agent_reply") {
       addChatMessage(row.text || "", "agent");
       addLogEntry(row);

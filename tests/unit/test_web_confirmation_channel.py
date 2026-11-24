@@ -138,6 +138,67 @@ async def test_request_returns_timeout_on_expiry() -> None:
     assert result.channel == "web"  # noqa: S101 pytest assertion
 
 
+async def _await_pending(channel: WebConfirmationChannel) -> None:
+    for _ in range(200):
+        if channel.has_pending():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("confirmation never became pending")
+
+
+async def test_two_subscribers_both_see_pending_confirmation_and_one_approval_resolves() -> None:
+    bus = SessionEventBus()
+    principal_id = new_principal_id()
+    channel = _channel(bus, principal_id)
+    req = _make_req(subject_id="draft-two-tabs")
+
+    with bus.open(_SESSION) as tab_a, bus.open(_SESSION) as tab_b:
+        task = asyncio.ensure_future(channel.request(req))
+        await _await_pending(channel)
+
+        for tab in (tab_a, tab_b):
+            ev = await asyncio.wait_for(anext(tab), timeout=2.0)
+            assert ev["kind"] == "pending_confirmation"  # noqa: S101 pytest assertion
+            assert ev["subject_id"] == "draft-two-tabs"  # noqa: S101 pytest assertion
+
+        assert channel.resolve(req.subject_id, approved=True) is True  # noqa: S101 pytest assertion
+        assert channel.resolve(req.subject_id, approved=True) is False  # noqa: S101 pytest assertion
+
+        result = await asyncio.wait_for(task, timeout=2.0)
+        assert result.approved is True  # noqa: S101 pytest assertion
+        assert result.approver_id == principal_id  # noqa: S101 pytest assertion
+
+        for tab in (tab_a, tab_b):
+            ev = await asyncio.wait_for(anext(tab), timeout=2.0)
+            assert ev == {"kind": "confirmation_resolved", "subject_id": "draft-two-tabs"}  # noqa: S101 pytest assertion
+
+
+async def test_pending_events_cleared_on_resolve_and_timeout() -> None:
+    bus = SessionEventBus()
+    channel = _channel(bus)
+    assert channel.pending_events() == []  # noqa: S101 pytest assertion
+
+    req = _make_req(subject_id="draft-replay")
+    task = asyncio.ensure_future(channel.request(req))
+    await _await_pending(channel)
+
+    events = channel.pending_events()
+    assert [e["subject_id"] for e in events] == ["draft-replay"]  # noqa: S101 pytest assertion
+    assert events[0]["kind"] == "pending_confirmation"  # noqa: S101 pytest assertion
+    events[0]["subject_id"] = "tampered"  # a copy: the channel's record is unaffected
+    assert channel.pending_events()[0]["subject_id"] == "draft-replay"  # noqa: S101 pytest assertion
+
+    assert channel.resolve(req.subject_id, approved=False) is True  # noqa: S101 pytest assertion
+    assert channel.pending_events() == []  # noqa: S101 pytest assertion
+    await asyncio.wait_for(task, timeout=2.0)
+
+    timed_out = _make_req(subject_id="draft-replay-timeout", seconds_until_expiry=0.05)
+    result = await asyncio.wait_for(channel.request(timed_out), timeout=3.0)
+    assert result.reason == "timeout"  # noqa: S101 pytest assertion
+    assert channel.pending_events() == []  # noqa: S101 pytest assertion
+    assert not channel.has_pending()  # noqa: S101 pytest assertion
+
+
 @pytest.mark.asyncio
 async def test_runtime_checkable_protocol_match() -> None:
     bus = SessionEventBus()

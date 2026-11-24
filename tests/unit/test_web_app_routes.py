@@ -1311,6 +1311,67 @@ async def test_lru_eviction_closes_its_bus_subscriptions(
     assert await _ended(sub)  # noqa: S101 pytest assertion
 
 
+async def test_event_stream_replays_pending_confirmation_to_late_subscriber(
+    tmp_path: Path, bus: SessionEventBus
+) -> None:
+    async with _async_client(_new_app(tmp_path)) as client:
+        sid = await _amint(client)
+        channel = _sessions[sid].channel
+        task = asyncio.ensure_future(channel.request(_confirmation_req("draft-late")))
+        await _await_pending(channel)  # published while no stream was attached
+
+        stream = _event_stream(bus, channel, sid)
+        item = await asyncio.wait_for(anext(stream), timeout=3.0)
+        row = json.loads(item["data"])
+        assert row["kind"] == "pending_confirmation"  # noqa: S101 pytest assertion
+        assert row["subject_id"] == "draft-late"  # noqa: S101 pytest assertion
+
+        # The replayed prompt is decidable: the gate is still reachable.
+        assert channel.resolve("draft-late", approved=False) is True  # noqa: S101 pytest assertion
+        result = await asyncio.wait_for(task, timeout=3.0)
+        assert result.reason == "declined"  # noqa: S101 pytest assertion
+        resolved = json.loads((await asyncio.wait_for(anext(stream), timeout=3.0))["data"])
+        assert resolved == {"kind": "confirmation_resolved", "subject_id": "draft-late"}  # noqa: S101 pytest assertion
+        await stream.aclose()
+        assert bus.session_count() == 0  # noqa: S101 pytest assertion
+
+
+async def test_event_stream_never_replays_another_sessions_prompt(
+    tmp_path: Path, bus: SessionEventBus
+) -> None:
+    fastapi_app = _new_app(tmp_path)
+    async with _async_client(fastapi_app) as client_a, _async_client(fastapi_app) as client_b:
+        sid_a = await _amint(client_a)
+        sid_b = await _amint(client_b)
+        channel_b = _sessions[sid_b].channel
+        task = asyncio.ensure_future(channel_b.request(_confirmation_req("draft-of-b")))
+        await _await_pending(channel_b)
+
+        stream_a = _event_stream(bus, _sessions[sid_a].channel, sid_a)
+        first = asyncio.ensure_future(anext(stream_a))
+        await _await_subscribers(bus, sid_a, 1)
+        await asyncio.sleep(0.05)
+        assert not first.done(), "A's stream must not replay B's prompt"  # noqa: S101 pytest assertion
+
+        bus.publish(sid_a, {"kind": "marker"})
+        row = json.loads((await asyncio.wait_for(first, timeout=3.0))["data"])
+        assert row == {"kind": "marker"}  # noqa: S101 pytest assertion
+        await stream_a.aclose()
+
+        channel_b.resolve("draft-of-b", approved=False)
+        await asyncio.wait_for(task, timeout=3.0)
+
+
+def test_app_js_hides_modal_on_confirmation_resolved() -> None:
+    js = (Path(__file__).resolve().parents[2] / "src/agentic_cab/web/static/app.js").read_text(
+        encoding="utf-8"
+    )
+    assert '"confirmation_resolved"' in js  # noqa: S101 pytest assertion
+    branch = js[js.index('"confirmation_resolved"') :][:300]
+    assert "pendingSubjectId" in branch  # noqa: S101 pytest assertion
+    assert "hideModal()" in branch  # noqa: S101 pytest assertion
+
+
 def test_unknown_session_ids_do_not_grow_bus_memory(app: TestClient, bus: SessionEventBus) -> None:
     unknown = [_ulid(1000 + i) for i in range(50)]
     for sid in unknown:

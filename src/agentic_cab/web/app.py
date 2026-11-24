@@ -302,8 +302,16 @@ async def _event_stream(
     the `with` block when it ends — including when sse-starlette cancels it on
     client disconnect — so the bus entry goes away with the last stream.
     Callers must have authorized `session_id` before calling.
+
+    Prompts still pending on this session's own channel are replayed first, so
+    one published during a reconnect gap still reaches the human. `open` and the
+    `pending_events()` snapshot run with no await between them: a prompt is
+    either in the snapshot or published to this subscription after it, never
+    missed and never sent twice.
     """
     with bus.open(session_id) as sub:
+        for event in channel.pending_events():
+            yield {"data": json.dumps(event, default=str)}
         async for row in sub:
             yield {"data": json.dumps(row, default=str)}
 

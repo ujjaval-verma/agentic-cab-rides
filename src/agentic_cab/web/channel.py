@@ -18,7 +18,11 @@ Lifecycle:
 - resolve() pops the future by subject_id and sets its result. Returns False if no
   matching pending request exists (idempotent — safe to call twice).
 - The future is always cleaned up via try/finally so a closed tab (timeout) never
-  leaks a pending entry.
+  leaks a pending entry. The same finally publishes `confirmation_resolved` so
+  every open tab of the session hides the decided prompt.
+- pending_events() returns copies of the still-pending prompts; the `/events`
+  stream replays them to a newly attached subscriber. Delivery only: it never
+  touches the decision path.
 
 Invariant 2: the agent never sees confirmed=True without this channel resolving it.
 """
@@ -65,6 +69,10 @@ class WebConfirmationChannel:
         self._store = store
         self._clock = clock
         self._pending: dict[str, asyncio.Future[ConfirmationResult]] = {}
+        # The pending_confirmation event published for each pending subject_id,
+        # kept only so a stream that attaches later can be shown the prompt.
+        # Delivery-only: the decision path reads `_pending`, never this.
+        self._events: dict[str, dict[str, Any]] = {}
 
     async def request(self: Self, req: ConfirmationRequest) -> ConfirmationResult:
         loop = asyncio.get_running_loop()
@@ -89,6 +97,7 @@ class WebConfirmationChannel:
             "fingerprint": req.fingerprint,
             "expires_at": req.expires_at.isoformat(),
         }
+        self._events[req.subject_id] = event
         self._bus.publish(self._session_id, event)
 
         now = datetime.now(UTC)
@@ -107,9 +116,25 @@ class WebConfirmationChannel:
             )
         finally:
             self._pending.pop(req.subject_id, None)
+            self._events.pop(req.subject_id, None)
             # Clear durable state regardless of how the future resolved.
             if self._store is not None:
                 self._store.pop_pending_confirmation(req.subject_id)
+            # Tell every open tab the prompt is decided (approve, decline or
+            # timeout) so none keeps showing a stale modal.
+            self._bus.publish(
+                self._session_id,
+                {"kind": "confirmation_resolved", "subject_id": req.subject_id},
+            )
+
+    def pending_events(self: Self) -> list[dict[str, Any]]:
+        """Copies of the pending_confirmation events still awaiting a decision.
+
+        The `/events` stream replays these to a newly attached subscriber so a
+        prompt published during a reconnect gap still reaches the human. Only
+        this session's channel is read, so a prompt never reaches another session.
+        """
+        return [dict(event) for event in self._events.values()]
 
     def has_pending(self: Self) -> bool:
         """True if this channel still holds an unresolved pending confirmation.
@@ -131,6 +156,7 @@ class WebConfirmationChannel:
         False if no pending request exists for subject_id (safe to call multiple times).
         """
         future = self._pending.pop(subject_id, None)
+        self._events.pop(subject_id, None)
         if future is None or future.done():
             return False
 
