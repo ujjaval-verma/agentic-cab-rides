@@ -236,6 +236,7 @@ def _create_session(
 _FORBIDDEN = "forbidden"
 # The only text a failure ever shows the browser; detail stays in structlog.
 _INTERNAL_ERROR = "internal error"
+_NO_PENDING_CONFIRMATION = "no pending confirmation"
 
 
 def _authorize(request: Request, session_id: str, *, clock: Clock) -> _SessionState:
@@ -394,6 +395,28 @@ def create_app(
         allowed_hosts=_hosts,
         www_redirect=False,
     )
+
+    async def _unhandled_error(request: Request, exc: Exception) -> JSONResponse:
+        """Generic 500 for any exception a route did not handle.
+
+        The browser gets a fixed message and a correlation id; the exception
+        (with traceback) goes to structlog only. Starlette re-raises after this
+        handler responds, so the server's own error logging still sees it.
+        """
+        cid = correlation_ids()
+        _log.error(
+            "web.unhandled_error",
+            correlation_id=cid,
+            method=request.method,
+            path=request.url.path,
+            exc_info=exc,
+        )
+        return JSONResponse(
+            {"detail": _INTERNAL_ERROR, "correlation_id": cid},
+            status_code=500,
+        )
+
+    app.add_exception_handler(Exception, _unhandled_error)
 
     # Mount static files (CSS, JS) — served under /static/
     if _STATIC_DIR.exists():
@@ -556,9 +579,8 @@ def create_app(
         """
         state = _authorize(request, session_id, clock=_clock)
         if not state.channel.resolve(subject_id, approved=body.approved):
-            raise HTTPException(
-                status_code=404, detail=f"No pending confirmation for {subject_id!r}"
-            )
+            # Constant detail: never reflect the client-supplied subject_id.
+            raise HTTPException(status_code=404, detail=_NO_PENDING_CONFIRMATION)
         _log.info(
             "web.confirmation.resolved",
             session_id=session_id,

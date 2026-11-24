@@ -1417,6 +1417,45 @@ def test_app_js_renders_error_correlation_id() -> None:
     assert "(ref " in branch  # noqa: S101 pytest assertion
 
 
+def test_unhandled_route_error_returns_generic_500_with_correlation_id(tmp_path: Path) -> None:
+    from structlog.testing import capture_logs
+
+    client = _client(
+        _app_with(tmp_path, correlation_ids=lambda: _ulid(99)), raise_server_exceptions=False
+    )
+    sid = _mint(client)
+    with (
+        capture_logs() as logs,
+        patch(
+            "agentic_cab.adapters.action_log.JSONLActionLog.read",
+            side_effect=RuntimeError(_INTERNAL_DETAIL),
+        ),
+    ):
+        response = client.get(f"/sessions/{sid}/log")
+
+    assert response.status_code == 500  # noqa: S101 pytest assertion
+    assert response.json() == {"detail": "internal error", "correlation_id": _ulid(99)}  # noqa: S101 pytest assertion
+    assert "internal-detail" not in response.text  # noqa: S101 pytest assertion
+    errors = [e for e in logs if e["event"] == "web.unhandled_error"]
+    assert len(errors) == 1  # noqa: S101 pytest assertion
+    assert errors[0]["correlation_id"] == _ulid(99)  # noqa: S101 pytest assertion
+    assert errors[0]["method"] == "GET"  # noqa: S101 pytest assertion
+    assert errors[0]["path"] == f"/sessions/{sid}/log"  # noqa: S101 pytest assertion
+    assert isinstance(errors[0]["exc_info"], RuntimeError)  # noqa: S101 pytest assertion
+
+
+async def test_confirmation_404_does_not_echo_subject_id(tmp_path: Path) -> None:
+    subject = "draft-reflected-subject-zz"
+    async with _async_client(_new_app(tmp_path)) as client:
+        sid = await _amint(client)
+        response = await client.post(
+            f"/sessions/{sid}/confirmations/{subject}", json={"approved": True}
+        )
+    assert response.status_code == 404  # noqa: S101 pytest assertion
+    assert response.json() == {"detail": "no pending confirmation"}  # noqa: S101 pytest assertion
+    assert subject not in response.text  # noqa: S101 pytest assertion
+
+
 def test_unknown_session_ids_do_not_grow_bus_memory(app: TestClient, bus: SessionEventBus) -> None:
     unknown = [_ulid(1000 + i) for i in range(50)]
     for sid in unknown:
