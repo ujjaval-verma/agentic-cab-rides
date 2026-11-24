@@ -45,7 +45,7 @@ ships two first-class surfaces (REPL and web) and one batch surface
 | Surface | Entry point | Process model | Confirmation channel | Per-session state |
 |---------|-------------|---------------|----------------------|-------------------|
 | **REPL** | `make repl` → `python -m agentic_cab repl` | One long-lived Python process. Stdin loop reads chat input; agent calls tools in-process. | `CLIConfirmationChannel` reads bare y/n from `/dev/tty` — a separate file handle from stdin, so chat text cannot inject approvals. | Adapter instance lives for the whole process; provider in-memory caches (`_option_cache`, `_intent_cache`) survive across turns naturally. |
-| **Web** | `make web` → `uvicorn agentic_cab.web.app:create_app --factory` | Single uvicorn worker, FastAPI app. One browser tab = one server-minted `session_id` (`POST /sessions`). SSE stream pushes assistant tokens and gate prompts; `POST /sessions/{session_id}/confirmations/{subject_id}` delivers the y/n. See "Web session authentication" below. | `WebConfirmationChannel` blocks the tool call on an `asyncio.Future` resolved by the POST handler — only the caller's own session channel is reachable. | `UberSimAdapter` is memoized per `session_id` (PR #8) so option/intent caches survive within a session. They do not survive worker restart — see WRITEUP §2 "Provider option durability". |
+| **Web** | `make web` → `uvicorn agentic_cab.web.app:create_app --factory` | Single uvicorn worker, FastAPI app. One browser tab = one server-minted `session_id` (`POST /sessions`). SSE stream pushes assistant tokens and gate prompts; `POST /sessions/{session_id}/confirmations/{subject_id}` delivers the y/n. Requests with a non-loopback `Host` get 400 (`TrustedHostMiddleware`); state-changing requests with a foreign `Origin` get 403 (`SameOriginMiddleware`). See "Web session authentication" below. | `WebConfirmationChannel` blocks the tool call on an `asyncio.Future` resolved by the POST handler — only the caller's own session channel is reachable. | `UberSimAdapter` is memoized per `session_id` (PR #8) so option/intent caches survive within a session. They do not survive worker restart — see WRITEUP §2 "Provider option durability". |
 | **Scenarios** | `make transcripts` (or `pytest -m scenario`) | Per-scenario in-process run with a `FrozenClock` and a `ScriptedConfirmationChannel`. Each scenario is a fresh state DB and adapter under a `tmp_path`. | `ScriptedConfirmationChannel` reads decisions from the scenario YAML. | Isolated per run; not shared with REPL/web. |
 
 Shared by all three surfaces:
@@ -72,6 +72,35 @@ rather than a header because `EventSource` cannot set headers, and a query
 string would leak into access logs). `SameSite=Strict` blocks cross-site POSTs
 to the confirmation route. `Secure` is not set because `make web` serves plain
 http on localhost.
+
+`SameSite=Strict` is not enough on its own: `localhost:3000` and
+`localhost:8000` are the *same site*, so a page served from another port still
+gets the cookie attached, and a DNS-rebinding page reaches the server under a
+hostname it controls. Two middlewares in front of every route close both gaps:
+
+- **Host allowlist.** `TrustedHostMiddleware` (`www_redirect=False`) accepts
+  only `Host` values `127.0.0.1`, `localhost`, and the configured bind host;
+  anything else gets 400. The bind host is the `bind_host` argument to
+  `create_app` (`python -m agentic_cab web --host X` passes it), else the
+  `AGENTIC_CAB_WEB_HOST` environment variable, which `make web` / `make demo`
+  set from `WEB_HOST` because `uvicorn --factory` cannot pass arguments.
+  All-interfaces bind addresses add nothing, and `"*"` raises `ValueError`, so
+  configuration can never switch the check off.
+- **Same-origin check.** `SameOriginMiddleware` (`web/origin.py`, plain ASGI so
+  the `/events` SSE stream is untouched) refuses with 403 any `POST`, `PUT`,
+  `PATCH` or `DELETE` whose `Origin` header is present and is not the server's
+  own origin, defined as `f"{scheme}://{Host}"` compared case-insensitively.
+  `Origin: null`, another port and another scheme are all refused; a request
+  with no `Origin` passes (non-browser clients send none; browsers always send
+  it on POST). A refusal is logged as `web.origin.rejected` with method and
+  path only. It covers `POST /sessions`, `POST /chat` and the confirmation
+  route, and any state-changing route added later.
+
+Order: the Host check is outermost and runs first, so a request with both a
+foreign `Host` and a foreign `Origin` gets 400. The Origin check depends on
+that order — once `Host` is confined to the allowlist, an `Origin` equal to it
+is on an allowed host with the port and scheme the browser actually used. A
+refused confirmation POST never reaches `WebConfirmationChannel.resolve`.
 
 Every session route requires the cookie, checked with `hmac.compare_digest`:
 `POST /chat`, `GET /events`, `POST /sessions/{id}/confirmations/{subject_id}`,

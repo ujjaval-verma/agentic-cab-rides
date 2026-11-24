@@ -62,8 +62,13 @@ link-env: ## Symlink ./.env -> ~/.config/agentic-cab-rides/.env (shared across w
 repl: ## Interactive CLI agent (CLIConfirmationChannel via /dev/tty)
 	$(UV) run python -m agentic_cab repl
 
+# Bind address for `make web` / `make demo`. WEB_HOST is also exported as
+# AGENTIC_CAB_WEB_HOST so the Host allowlist admits it (`--factory` cannot pass args).
+WEB_HOST ?= 127.0.0.1
+WEB_PORT ?= 8000
+
 web: ## FastAPI + browser UI at http://localhost:8000 (WebConfirmationChannel)
-	$(UV) run uvicorn agentic_cab.web.app:create_app --factory --host 127.0.0.1 --port 8000 --reload
+	AGENTIC_CAB_WEB_HOST=$(WEB_HOST) $(UV) run uvicorn agentic_cab.web.app:create_app --factory --host $(WEB_HOST) --port $(WEB_PORT) --reload
 
 transcripts: ## Regenerate all 6 transcripts from scenarios/
 	$(UV) run python -m agentic_cab render-transcripts
@@ -146,4 +151,4 @@ demo: ## Start web UI and open browser — manual smoke test  # manual smoke
 	@echo "  ╚══════════════════════════════════════════════════════════╝"
 	@echo ""
 	$(UV) run python -m webbrowser http://127.0.0.1:8000 &
-	$(UV) run uvicorn agentic_cab.web.app:create_app --factory --host 127.0.0.1 --port 8000
+	AGENTIC_CAB_WEB_HOST=$(WEB_HOST) $(UV) run uvicorn agentic_cab.web.app:create_app --factory --host $(WEB_HOST) --port $(WEB_PORT)

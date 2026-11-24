@@ -129,7 +129,7 @@ def web(
     port: Annotated[int, typer.Option("--port")] = 8000,
 ) -> None:
     """FastAPI + browser UI (WebConfirmationChannel). Prefer `make web`."""
-    uvicorn.run(create_app(), host=host, port=port, reload=False)
+    uvicorn.run(create_app(bind_host=host), host=host, port=port, reload=False)
 
 
 if __name__ == "__main__":

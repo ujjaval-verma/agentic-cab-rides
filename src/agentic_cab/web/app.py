@@ -16,6 +16,13 @@ session route (chat, events, confirmations, log) requires it; unknown, evicted,
 or mismatched sessions get an identical 403. The approver identity is the
 session's server-minted `principal_id`, never a request field.
 
+Host: `TrustedHostMiddleware` refuses (400) any request whose `Host` is not
+loopback, so a DNS-rebinding page cannot reach any route.
+
+Origin: `SameOriginMiddleware` (web/origin.py) refuses (403) any POST/PUT/
+PATCH/DELETE whose `Origin` is present and not this server's own origin, so a
+page on another localhost port cannot drive /chat or approve a confirmation.
+
 Layer: web/* may import from agent/, tools/, adapters/. Nothing in tools/ or
 adapters/ may import from here (invariant 1).
 """
@@ -42,6 +49,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.clock import SystemClock
@@ -56,11 +64,41 @@ from agentic_cab.agent.loop import run_turn
 from agentic_cab.core.ids import SessionId, new_principal_id, new_session_id, new_turn_id
 from agentic_cab.core.ports import Clock
 from agentic_cab.web.channel import WebConfirmationChannel
+from agentic_cab.web.origin import SameOriginMiddleware
 from agentic_cab.web.sse import SessionEventBus
 
 _log = structlog.get_logger(__name__)
 
 _STATIC_DIR = Path(__file__).parent / "static"
+
+# Host header allowlist. A DNS-rebinding page reaches this server under its own
+# hostname, so anything other than loopback (or the configured bind host) is
+# refused with 400 before any route runs.
+_DEFAULT_ALLOWED_HOSTS: tuple[str, ...] = ("127.0.0.1", "localhost")
+# Fallback for the bind host when `create_app` is built by `uvicorn --factory`,
+# which cannot pass arguments to the factory.
+_BIND_HOST_ENV = "AGENTIC_CAB_WEB_HOST"
+# All-interfaces bind addresses name no host a browser would send, so they add
+# nothing to the allowlist (and never widen it).
+_ALL_INTERFACES_BIND_HOSTS = frozenset({"0.0.0.0", "::", ""})  # noqa: S104 matched to exclude, never bound
+
+
+def _allowed_hosts(bind_host: str | None) -> list[str]:
+    """Loopback plus the configured bind host (argument first, then env var).
+
+    `"*"` would switch the Host check off, so it is refused outright.
+    """
+    host = bind_host if bind_host is not None else os.environ.get(_BIND_HOST_ENV)
+    allowed = list(_DEFAULT_ALLOWED_HOSTS)
+    if host is None:
+        return allowed
+    host = host.strip()
+    if "*" in host:
+        raise ValueError(f"wildcard bind host {host!r} would disable the Host check")
+    if host not in _ALL_INTERFACES_BIND_HOSTS and host not in allowed:
+        allowed.append(host)
+    return allowed
+
 
 # ---------- Request / Response models ----------
 
@@ -257,14 +295,18 @@ def create_app(
     log_dir: Path | None = None,
     geocode_fixtures_dir: Path | None = None,
     clock: Clock | None = None,
+    bind_host: str | None = None,
 ) -> FastAPI:
     """Create and return the FastAPI application.
 
     All paths are injectable so tests can isolate filesystem state. `clock` is
     injectable too — production wiring defaults to `SystemClock`, and tests
     inject a `FrozenClock` to drive session-eviction timing without sleeping
-    (CLAUDE.md invariant 9).
+    (CLAUDE.md invariant 9). `bind_host` (else `AGENTIC_CAB_WEB_HOST`) joins
+    loopback on the Host allowlist; all-interfaces addresses add nothing and
+    `"*"` raises `ValueError`.
     """
+    _hosts = _allowed_hosts(bind_host)
     _data_dir = data_dir or Path("data")
     _log_dir = log_dir or Path("logs")
     _geocode_fixtures_dir = geocode_fixtures_dir or Path("fixtures/geocode")
@@ -302,6 +344,15 @@ def create_app(
         yield  # app runs here
 
     app = FastAPI(title="Agentic Cab Rides", lifespan=_lifespan)
+    # Order matters: the last middleware added is the outermost. The Host check
+    # must run first (a foreign Host gets 400) because the Origin check trusts
+    # `Host` to define the server's own origin.
+    app.add_middleware(SameOriginMiddleware)
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=_hosts,
+        www_redirect=False,
+    )
 
     # Mount static files (CSS, JS) — served under /static/
     if _STATIC_DIR.exists():
