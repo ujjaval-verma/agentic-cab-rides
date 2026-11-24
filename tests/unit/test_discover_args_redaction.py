@@ -16,16 +16,16 @@ from agentic_cab.core.types import AddressRef
 from agentic_cab.tools.discover import DiscoverArgs, discover_options
 from agentic_cab.tools.geocode import GeocodeArgs, geocode_address
 
-SECRET_PICKUP = "742 Evergreen Terrace, Springfield"
-SECRET_DROPOFF = "31 Spooner Street, Quahog"
-SECRET_QUERY = "742 Evergreen Terrace, Springfield"
+RAW_PICKUP = "742 Evergreen Terrace, Springfield"
+RAW_DROPOFF = "31 Spooner Street, Quahog"
+RAW_QUERY = "742 Evergreen Terrace, Springfield"
 
 
 def test_redact_strips_pickup_address_and_dropoff_address_strings() -> None:
     raw = {
         "args": {
-            "pickup_address": SECRET_PICKUP,
-            "dropoff_address": SECRET_DROPOFF,
+            "pickup_address": RAW_PICKUP,
+            "dropoff_address": RAW_DROPOFF,
             "pickup_lat": 1.0,
             "pickup_lng": 2.0,
             "dropoff_lat": 3.0,
@@ -35,8 +35,8 @@ def test_redact_strips_pickup_address_and_dropoff_address_strings() -> None:
     }
     out = redact(raw)
     serialized = json.dumps(out)
-    assert SECRET_PICKUP not in serialized, "pickup_address leaked"
-    assert SECRET_DROPOFF not in serialized, "dropoff_address leaked"
+    assert RAW_PICKUP not in serialized, "pickup_address leaked"
+    assert RAW_DROPOFF not in serialized, "dropoff_address leaked"
     # lat/lng are not PII — they remain.
     assert out["args"]["pickup_lat"] == 1.0
     assert out["args"]["dropoff_lat"] == 3.0
@@ -52,10 +52,10 @@ async def test_discover_options_log_does_not_contain_raw_addresses(
     clock = FrozenClock(start=datetime(2026, 5, 19, 12, 0, tzinfo=UTC))
     sim = UberSimAdapter(store=store, clock=clock, rng_seed=1)
     args = DiscoverArgs(
-        pickup_address=SECRET_PICKUP,
+        pickup_address=RAW_PICKUP,
         pickup_lat=37.7749,
         pickup_lng=-122.4194,
-        dropoff_address=SECRET_DROPOFF,
+        dropoff_address=RAW_DROPOFF,
         dropoff_lat=37.7849,
         dropoff_lng=-122.4094,
     )
@@ -69,8 +69,8 @@ async def test_discover_options_log_does_not_contain_raw_addresses(
     )
     log_file = tmp_path / "logs" / "S.jsonl"
     contents = log_file.read_text()
-    assert SECRET_PICKUP not in contents, "pickup_address leaked into JSONL log"
-    assert SECRET_DROPOFF not in contents, "dropoff_address leaked into JSONL log"
+    assert RAW_PICKUP not in contents, "pickup_address leaked into JSONL log"
+    assert RAW_DROPOFF not in contents, "dropoff_address leaked into JSONL log"
 
 
 # ---------------------------------------------------------------------------
@@ -91,10 +91,10 @@ class _StubGeocoder:
 
 
 def test_redact_strips_geocode_query_string() -> None:
-    raw = {"args": {"query": SECRET_QUERY}}
+    raw = {"args": {"query": RAW_QUERY}}
     out = redact(raw)
     serialized = json.dumps(out)
-    assert SECRET_QUERY not in serialized, "query leaked in redact() output"
+    assert RAW_QUERY not in serialized, "query leaked in redact() output"
     assert out["args"]["query"] == "[redacted-address]"
 
 
@@ -105,7 +105,7 @@ async def test_geocode_address_log_does_not_contain_raw_query(
     log = JSONLActionLog(log_dir=tmp_path / "logs")
     clock = FrozenClock(start=datetime(2026, 5, 20, 12, 0, tzinfo=UTC))
     geocoder = _StubGeocoder()
-    args = GeocodeArgs(query=SECRET_QUERY)
+    args = GeocodeArgs(query=RAW_QUERY)
 
     await geocode_address(
         args,
@@ -118,4 +118,4 @@ async def test_geocode_address_log_does_not_contain_raw_query(
 
     log_file = tmp_path / "logs" / "G.jsonl"
     contents = log_file.read_text()
-    assert SECRET_QUERY not in contents, "geocode query leaked into JSONL log"
+    assert RAW_QUERY not in contents, "geocode query leaked into JSONL log"

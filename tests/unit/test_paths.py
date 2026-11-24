@@ -14,7 +14,7 @@ def test_valid_ulid_paths(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("builder", [session_log_path, session_chat_path])
-@pytest.mark.parametrize("bad", ["/tmp/x", "../escape", "a/../../b", "a/b"])
+@pytest.mark.parametrize("bad", ["/abs/x", "../escape", "a/../../b", "a/b"])
 def test_escaping_ids_rejected(tmp_path: Path, builder, bad: str) -> None:
     with pytest.raises(UnsafePathError):
         builder(tmp_path, bad)
