@@ -81,7 +81,7 @@ class UberSimAdapter:
     ) -> None:
         self._store = store
         self._clock = clock
-        self._rng = random.Random(rng_seed)
+        self._rng = random.Random(rng_seed)  # noqa: S311 simulated provider data via injected seed, not crypto (invariant 9)
         self._surge_curve = surge_curve
         self._availability = availability or DriverAvailability()
         self._option_cache: dict[str, Option] = {}

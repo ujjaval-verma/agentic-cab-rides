@@ -69,6 +69,7 @@ select = [
     "RET",              # return statements
     "PIE",              # misc
     "FIX",              # forbid TODO/FIXME/XXX in code (track in docs/FOLLOWUPS.md)
+    "S",                # bandit (security)
 ]
 ignore = [
     "ANN401",   # allow Any in narrowly-typed escape hatches (provider_metadata)

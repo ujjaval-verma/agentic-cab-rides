@@ -50,7 +50,7 @@ class MockAppointmentProvider:
 
     def __init__(self: Self, clock: Clock, rng_seed: int = 0) -> None:
         self._clock = clock
-        self._rng = random.Random(rng_seed)
+        self._rng = random.Random(rng_seed)  # noqa: S311 simulated provider data via injected seed, not crypto (invariant 9)
         # option_id → Option
         self._option_cache: dict[str, Option] = {}
         # draft_id → Draft
@@ -70,7 +70,7 @@ class MockAppointmentProvider:
         seed_str = (
             f"{intent.subject}|{intent.earliest_at.isoformat()}|{intent.latest_at.isoformat()}"
         )
-        rng = random.Random(hash(seed_str) & 0xFFFFFFFF)
+        rng = random.Random(hash(seed_str) & 0xFFFFFFFF)  # noqa: S311 simulated provider data via injected seed, not crypto (invariant 9)
 
         now = self._clock.now()
         # Spread slots across the earliest_at..latest_at window

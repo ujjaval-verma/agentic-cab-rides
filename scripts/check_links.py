@@ -31,7 +31,7 @@ def iter_markdown_files() -> list[Path]:
     """
     try:
         result = subprocess.run(
-            ["git", "ls-files", "-z", "*.md"],
+            ["git", "ls-files", "-z", "*.md"],  # noqa: S607 git resolved from PATH by design for repo hooks
             cwd=REPO_ROOT,
             capture_output=True,
             check=True,
