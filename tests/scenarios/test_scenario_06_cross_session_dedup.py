@@ -36,7 +36,7 @@ async def test_06_cross_session_dedup(tmp_path: Path) -> None:
     spec = yaml.safe_load(_SCENARIO_PATH.read_text())
     results = evaluate(rows, spec["invariants"])
     failures = [(kind, params) for kind, passed, params in results if not passed]
-    assert not failures, f"invariant failures: {failures}"
+    assert not failures, f"invariant failures: {failures}"  # noqa: S101 pytest assertion
 
     # Hard sanity: exactly two non-replayed executed rows for confirm_booking.
     confirm_executes = [
@@ -46,7 +46,7 @@ async def test_06_cross_session_dedup(tmp_path: Path) -> None:
         and r.get("tool") == "confirm_booking"
         and not r.get("replayed", False)
     ]
-    assert len(confirm_executes) == 2, (
+    assert len(confirm_executes) == 2, (  # noqa: S101 pytest assertion
         f"expected 2 non-replayed confirm_booking executed rows, got {len(confirm_executes)}"
     )
 
@@ -58,4 +58,4 @@ async def test_06_cross_session_dedup(tmp_path: Path) -> None:
         and r.get("tool") == "confirm_booking"
         and r.get("status") == "duplicate_intent"
     ]
-    assert len(dups) == 1, f"expected exactly 1 duplicate_intent outcome, got {len(dups)}"
+    assert len(dups) == 1, f"expected exactly 1 duplicate_intent outcome, got {len(dups)}"  # noqa: S101 pytest assertion

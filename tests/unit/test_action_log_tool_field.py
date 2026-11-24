@@ -130,14 +130,14 @@ async def test_every_row_kind_carries_tool_field_confirm(tmp_path: Path, meter) 
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "confirmed"
+    assert result["status"] == "confirmed"  # noqa: S101 pytest assertion
 
     action_id = result["action_id"]
     rows = [r for r in log.read("S") if r["action_id"] == action_id]
-    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]
+    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]  # noqa: S101 pytest assertion
 
     for row in rows:
-        assert row.get("tool") == "confirm_booking"
+        assert row.get("tool") == "confirm_booking"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -154,10 +154,10 @@ async def test_every_row_kind_carries_tool_field_track(tmp_path: Path) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert result["booking_id"] == "BID-TRACK"
+    assert result["booking_id"] == "BID-TRACK"  # noqa: S101 pytest assertion
 
     rows = log.read("S")
-    assert [r["kind"] for r in rows] == ["requested", "outcome"]
+    assert [r["kind"] for r in rows] == ["requested", "outcome"]  # noqa: S101 pytest assertion
 
     for row in rows:
-        assert row.get("tool") == "track_booking"
+        assert row.get("tool") == "track_booking"  # noqa: S101 pytest assertion

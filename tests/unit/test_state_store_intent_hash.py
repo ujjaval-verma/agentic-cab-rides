@@ -77,7 +77,7 @@ def _booking(
 
 def test_find_active_returns_none_when_no_match(tmp_path: Path) -> None:
     s = _store(tmp_path)
-    assert s.find_active_booking_by_intent_hash("ih-abc") is None
+    assert s.find_active_booking_by_intent_hash("ih-abc") is None  # noqa: S101 pytest assertion
 
 
 def test_find_active_returns_match_after_set(tmp_path: Path) -> None:
@@ -86,8 +86,8 @@ def test_find_active_returns_match_after_set(tmp_path: Path) -> None:
     s.put_booking(_booking("bk-1", "draft-1", status="confirmed"))
     s.set_booking_intent_hash("bk-1", "ih-abc")
     found = s.find_active_booking_by_intent_hash("ih-abc")
-    assert found is not None
-    assert found.booking_id == "bk-1"
+    assert found is not None  # noqa: S101 pytest assertion
+    assert found.booking_id == "bk-1"  # noqa: S101 pytest assertion
 
 
 def test_find_active_skips_terminal(tmp_path: Path) -> None:
@@ -95,7 +95,7 @@ def test_find_active_skips_terminal(tmp_path: Path) -> None:
     _draft_row(s, "draft-1")
     s.put_booking(_booking("bk-1", "draft-1", status="completed"))
     s.set_booking_intent_hash("bk-1", "ih-abc")
-    assert s.find_active_booking_by_intent_hash("ih-abc") is None
+    assert s.find_active_booking_by_intent_hash("ih-abc") is None  # noqa: S101 pytest assertion
 
 
 def test_find_active_skips_null_intent_hash(tmp_path: Path) -> None:
@@ -103,12 +103,12 @@ def test_find_active_skips_null_intent_hash(tmp_path: Path) -> None:
     _draft_row(s, "draft-1")
     s.put_booking(_booking("bk-1", "draft-1", status="confirmed"))
     # intent_hash never set
-    assert s.find_active_booking_by_intent_hash("ih-abc") is None
+    assert s.find_active_booking_by_intent_hash("ih-abc") is None  # noqa: S101 pytest assertion
 
 
 def test_count_terminal_returns_zero_when_no_match(tmp_path: Path) -> None:
     s = _store(tmp_path)
-    assert s.count_terminal_bookings_by_intent_hash("ih-abc") == 0
+    assert s.count_terminal_bookings_by_intent_hash("ih-abc") == 0  # noqa: S101 pytest assertion
 
 
 def test_count_terminal_counts_only_terminal(tmp_path: Path) -> None:
@@ -121,7 +121,7 @@ def test_count_terminal_counts_only_terminal(tmp_path: Path) -> None:
     s.put_booking(_booking("bk-3", "draft-3", status="confirmed"))
     for b in ("bk-1", "bk-2", "bk-3"):
         s.set_booking_intent_hash(b, "ih-abc")
-    assert s.count_terminal_bookings_by_intent_hash("ih-abc") == 2
+    assert s.count_terminal_bookings_by_intent_hash("ih-abc") == 2  # noqa: S101 pytest assertion
 
 
 def test_set_booking_intent_hash_is_idempotent_overwrite(tmp_path: Path) -> None:
@@ -130,7 +130,7 @@ def test_set_booking_intent_hash_is_idempotent_overwrite(tmp_path: Path) -> None
     s.put_booking(_booking("bk-1", "draft-1"))
     s.set_booking_intent_hash("bk-1", "ih-aaa")
     s.set_booking_intent_hash("bk-1", "ih-bbb")
-    assert s.find_active_booking_by_intent_hash("ih-aaa") is None
+    assert s.find_active_booking_by_intent_hash("ih-aaa") is None  # noqa: S101 pytest assertion
     found = s.find_active_booking_by_intent_hash("ih-bbb")
-    assert found is not None
-    assert found.booking_id == "bk-1"
+    assert found is not None  # noqa: S101 pytest assertion
+    assert found.booking_id == "bk-1"  # noqa: S101 pytest assertion

@@ -162,7 +162,7 @@ def _scripted_client() -> MagicMock:
 
 def _outcome_row(rows: list[dict[str, Any]], tool: str) -> dict[str, Any]:
     matches = [r for r in rows if r["kind"] == "outcome" and r.get("tool") == tool]
-    assert len(matches) == 1, f"expected exactly one {tool} outcome row, got {len(matches)}"
+    assert len(matches) == 1, f"expected exactly one {tool} outcome row, got {len(matches)}"  # noqa: S101 pytest assertion
     return matches[0]
 
 
@@ -187,19 +187,19 @@ async def test_cost_recorded_by_run_turn_lands_on_the_gated_outcome_rows(tmp_pat
     rows = JSONLActionLog(log_dir=tmp_path / "logs").read(session_id)
 
     confirm_outcome = _outcome_row(rows, "confirm_booking")
-    assert confirm_outcome["status"] == "confirmed"
-    assert confirm_outcome["cost_microcents_since_last_action"] == _EXPECTED_CONFIRM_MICROCENTS
+    assert confirm_outcome["status"] == "confirmed"  # noqa: S101 pytest assertion
+    assert confirm_outcome["cost_microcents_since_last_action"] == _EXPECTED_CONFIRM_MICROCENTS  # noqa: S101 pytest assertion
     confirm_calls = confirm_outcome["llm_calls_since_last_action"]
-    assert len(confirm_calls) == 3
-    assert [c["input_tokens"] for c in confirm_calls] == [100, 200, 300]
-    assert [c["output_tokens"] for c in confirm_calls] == [10, 20, 30]
-    assert all("latency_ms" not in c for c in confirm_calls)
+    assert len(confirm_calls) == 3  # noqa: S101 pytest assertion
+    assert [c["input_tokens"] for c in confirm_calls] == [100, 200, 300]  # noqa: S101 pytest assertion
+    assert [c["output_tokens"] for c in confirm_calls] == [10, 20, 30]  # noqa: S101 pytest assertion
+    assert all("latency_ms" not in c for c in confirm_calls)  # noqa: S101 pytest assertion
 
     cancel_outcome = _outcome_row(rows, "cancel_booking")
-    assert cancel_outcome["status"] == "cancelled"
-    assert cancel_outcome["cost_microcents_since_last_action"] == _EXPECTED_CANCEL_MICROCENTS
+    assert cancel_outcome["status"] == "cancelled"  # noqa: S101 pytest assertion
+    assert cancel_outcome["cost_microcents_since_last_action"] == _EXPECTED_CANCEL_MICROCENTS  # noqa: S101 pytest assertion
     cancel_calls = cancel_outcome["llm_calls_since_last_action"]
-    assert len(cancel_calls) == 1
-    assert cancel_calls[0]["input_tokens"] == 400
-    assert cancel_calls[0]["output_tokens"] == 40
-    assert "latency_ms" not in cancel_calls[0]
+    assert len(cancel_calls) == 1  # noqa: S101 pytest assertion
+    assert cancel_calls[0]["input_tokens"] == 400  # noqa: S101 pytest assertion
+    assert cancel_calls[0]["output_tokens"] == 40  # noqa: S101 pytest assertion
+    assert "latency_ms" not in cancel_calls[0]  # noqa: S101 pytest assertion

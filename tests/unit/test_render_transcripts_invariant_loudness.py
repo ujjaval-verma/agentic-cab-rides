@@ -52,8 +52,8 @@ def test_invariant_results_always_printed(monkeypatch: pytest.MonkeyPatch, tmp_p
     monkeypatch.setattr("agentic_cab.__main__.render", lambda **_kw: "stub")
 
     result = CliRunner().invoke(app, ["render-transcripts", "--no-assert-invariants"])
-    assert result.exit_code == 0, result.output
-    assert "PASS no_double_booking" in result.output
+    assert result.exit_code == 0, result.output  # noqa: S101 pytest assertion
+    assert "PASS no_double_booking" in result.output  # noqa: S101 pytest assertion
 
 
 def test_default_exits_nonzero_on_invariant_fail(
@@ -78,8 +78,8 @@ def test_default_exits_nonzero_on_invariant_fail(
     monkeypatch.setattr("agentic_cab.__main__.render", lambda **_kw: "stub")
 
     result = CliRunner().invoke(app, ["render-transcripts"])
-    assert result.exit_code == 1, result.output
-    assert "FAIL no_double_booking" in result.output
+    assert result.exit_code == 1, result.output  # noqa: S101 pytest assertion
+    assert "FAIL no_double_booking" in result.output  # noqa: S101 pytest assertion
 
 
 def test_no_assert_invariants_lets_failures_pass(
@@ -104,5 +104,5 @@ def test_no_assert_invariants_lets_failures_pass(
     monkeypatch.setattr("agentic_cab.__main__.render", lambda **_kw: "stub")
 
     result = CliRunner().invoke(app, ["render-transcripts", "--no-assert-invariants"])
-    assert result.exit_code == 0, result.output
-    assert "FAIL no_double_booking" in result.output
+    assert result.exit_code == 0, result.output  # noqa: S101 pytest assertion
+    assert "FAIL no_double_booking" in result.output  # noqa: S101 pytest assertion

@@ -20,7 +20,7 @@ _VALID_ULID = "01KS5HMK9QJZ8PCJ92B9VM7BRA"
 
 @pytest.mark.parametrize("raw", [new_session_id(), _VALID_ULID])
 def test_session_id_accepts_ulid(raw: str) -> None:
-    assert parse_session_id(raw) == raw
+    assert parse_session_id(raw) == raw  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize(
@@ -58,7 +58,7 @@ def test_committed_transcript_session_ids_validate() -> None:
         for sid in re.findall(r'"session_id": "([^"]+)"', md.read_text(encoding="utf-8")):
             parse_session_id(sid)
             found += 1
-    assert found > 0
+    assert found > 0  # noqa: S101 pytest assertion
 
 
 def test_ids_are_ulids():
@@ -71,14 +71,14 @@ def test_ids_are_ulids():
         new_principal_id,
     ):
         value = factory()
-        assert isinstance(value, str)
-        assert len(value) == 26  # ULID canonical length
+        assert isinstance(value, str)  # noqa: S101 pytest assertion
+        assert len(value) == 26  # ULID canonical length  # noqa: S101 pytest assertion
 
 
 def test_ids_are_sortable_by_creation():
     a = new_session_id()
     b = new_session_id()
-    assert a < b  # ULIDs are time-monotonic at millisecond resolution
+    assert a < b  # ULIDs are time-monotonic at millisecond resolution  # noqa: S101 pytest assertion
 
 
 # --- cancel_idempotency_key helpers ---
@@ -87,24 +87,24 @@ def test_ids_are_sortable_by_creation():
 def test_cancel_idempotency_key_is_deterministic() -> None:
     key_a = cancel_idempotency_key("booking-123", 500, "confirmed")
     key_b = cancel_idempotency_key("booking-123", 500, "confirmed")
-    assert key_a == key_b
-    assert isinstance(key_a, str)
-    assert len(key_a) == 64  # sha256 hex digest
+    assert key_a == key_b  # noqa: S101 pytest assertion
+    assert isinstance(key_a, str)  # noqa: S101 pytest assertion
+    assert len(key_a) == 64  # sha256 hex digest  # noqa: S101 pytest assertion
 
 
 def test_cancel_idempotency_key_changes_with_fee() -> None:
     key_a = cancel_idempotency_key("booking-123", 500, "confirmed")
     key_b = cancel_idempotency_key("booking-123", 1000, "confirmed")
-    assert key_a != key_b
+    assert key_a != key_b  # noqa: S101 pytest assertion
 
 
 def test_cancel_idempotency_key_changes_with_status() -> None:
     key_a = cancel_idempotency_key("booking-123", 500, "confirmed")
     key_b = cancel_idempotency_key("booking-123", 500, "in_progress")
-    assert key_a != key_b
+    assert key_a != key_b  # noqa: S101 pytest assertion
 
 
 def test_cancel_idempotency_key_changes_with_booking_id() -> None:
     key_a = cancel_idempotency_key("booking-aaa", 500, "confirmed")
     key_b = cancel_idempotency_key("booking-bbb", 500, "confirmed")
-    assert key_a != key_b
+    assert key_a != key_b  # noqa: S101 pytest assertion

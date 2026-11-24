@@ -57,7 +57,7 @@ async def test_concurrent_writes_succeed_under_lock(tmp_path: Path) -> None:
     result_a = store.get_draft("draft-A")
     result_b = store.get_draft("draft-B")
 
-    assert result_a is not None
-    assert result_a.draft_id == "draft-A"
-    assert result_b is not None
-    assert result_b.draft_id == "draft-B"
+    assert result_a is not None  # noqa: S101 pytest assertion
+    assert result_a.draft_id == "draft-A"  # noqa: S101 pytest assertion
+    assert result_b is not None  # noqa: S101 pytest assertion
+    assert result_b.draft_id == "draft-B"  # noqa: S101 pytest assertion

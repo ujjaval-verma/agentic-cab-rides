@@ -59,8 +59,8 @@ def store(tmp_path: Path) -> SqliteStateStore:
 def test_claim_returns_new_for_fresh_key(store: SqliteStateStore) -> None:
     """A key never seen before must return status='new'."""
     result = store.claim_or_recall("fresh-key-001", scope="confirm")
-    assert result.status == "new"
-    assert result.booking_id is None
+    assert result.status == "new"  # noqa: S101 pytest assertion
+    assert result.booking_id is None  # noqa: S101 pytest assertion
 
 
 def test_finalized_claim_returns_recalled(store: SqliteStateStore) -> None:
@@ -71,13 +71,13 @@ def test_finalized_claim_returns_recalled(store: SqliteStateStore) -> None:
 
     key = "finalized-key-001"
     first = store.claim_or_recall(key, scope="confirm")
-    assert first.status == "new"
+    assert first.status == "new"  # noqa: S101 pytest assertion
 
     store.finalize_idempotency(key, booking=booking)
 
     second = store.claim_or_recall(key, scope="confirm")
-    assert second.status == "recalled"
-    assert second.booking_id == "B-ip-1"
+    assert second.status == "recalled"  # noqa: S101 pytest assertion
+    assert second.booking_id == "B-ip-1"  # noqa: S101 pytest assertion
 
 
 def test_claimed_but_not_finalized_returns_in_progress(store: SqliteStateStore) -> None:
@@ -86,11 +86,11 @@ def test_claimed_but_not_finalized_returns_in_progress(store: SqliteStateStore) 
 
     # Claim once — simulates the first caller inserting the row before provider.confirm.
     first = store.claim_or_recall(key, scope="confirm")
-    assert first.status == "new"
+    assert first.status == "new"  # noqa: S101 pytest assertion
 
     # Do NOT call finalize_idempotency — simulate a crash between claim and finalize.
 
     # Second caller (same process or restarted process) hits the same key.
     second = store.claim_or_recall(key, scope="confirm")
-    assert second.status == "in_progress"
-    assert second.booking_id is None
+    assert second.status == "in_progress"  # noqa: S101 pytest assertion
+    assert second.booking_id is None  # noqa: S101 pytest assertion

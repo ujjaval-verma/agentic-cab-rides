@@ -31,10 +31,10 @@ def test_summary_title_name_redacted_on_emit(log: JSONLActionLog, tmp_path: Path
         }
     )
     rows = log.read("S-redact-1")
-    assert len(rows) == 1
+    assert len(rows) == 1  # noqa: S101 pytest assertion
     stored_title = rows[0]["summary_title"]
-    assert "Sarah Smith" not in stored_title
-    assert "[redacted-name]" in stored_title
+    assert "Sarah Smith" not in stored_title  # noqa: S101 pytest assertion
+    assert "[redacted-name]" in stored_title  # noqa: S101 pytest assertion
 
 
 def test_summary_title_benign_unchanged(log: JSONLActionLog) -> None:
@@ -49,7 +49,7 @@ def test_summary_title_benign_unchanged(log: JSONLActionLog) -> None:
         }
     )
     rows = log.read("S-redact-2")
-    assert rows[0]["summary_title"] == "UberX — ~5 min"
+    assert rows[0]["summary_title"] == "UberX — ~5 min"  # noqa: S101 pytest assertion
 
 
 def test_summary_title_phone_redacted(log: JSONLActionLog) -> None:
@@ -64,8 +64,8 @@ def test_summary_title_phone_redacted(log: JSONLActionLog) -> None:
         }
     )
     rows = log.read("S-redact-3")
-    assert "+1 555-123-4567" not in rows[0]["summary_title"]
-    assert "[redacted-phone]" in rows[0]["summary_title"]
+    assert "+1 555-123-4567" not in rows[0]["summary_title"]  # noqa: S101 pytest assertion
+    assert "[redacted-phone]" in rows[0]["summary_title"]  # noqa: S101 pytest assertion
 
 
 def test_redact_function_handles_summary_title_directly() -> None:
@@ -75,8 +75,8 @@ def test_redact_function_handles_summary_title_directly() -> None:
         "summary_title": "Driver John Van Der Berg - XYZ999",
     }
     result = redact(payload)
-    assert "John Van" not in result["summary_title"]
-    assert "[redacted-name]" in result["summary_title"]
+    assert "John Van" not in result["summary_title"]  # noqa: S101 pytest assertion
+    assert "[redacted-name]" in result["summary_title"]  # noqa: S101 pytest assertion
 
 
 def test_non_summary_title_string_unaffected() -> None:
@@ -88,7 +88,7 @@ def test_non_summary_title_string_unaffected() -> None:
     }
     result = redact(payload)
     # 'note' is not summary_title — name regex not applied; only phone regex
-    assert result["note"] == "This is a note from John Smith"
+    assert result["note"] == "This is a note from John Smith"  # noqa: S101 pytest assertion
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ def test_non_summary_title_string_unaffected() -> None:
     ],
 )
 def test_phone_regex_redacts_realistic_shapes(phone: str) -> None:
-    assert _PHONE.search(phone) is not None, f"expected match for {phone!r}"
+    assert _PHONE.search(phone) is not None, f"expected match for {phone!r}"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize(
@@ -138,4 +138,4 @@ def test_phone_regex_redacts_realistic_shapes(phone: str) -> None:
     ],
 )
 def test_phone_regex_does_not_match_log_payload_shapes(benign: str) -> None:
-    assert _PHONE.search(benign) is None, f"unexpected match for {benign!r}"
+    assert _PHONE.search(benign) is None, f"unexpected match for {benign!r}"  # noqa: S101 pytest assertion

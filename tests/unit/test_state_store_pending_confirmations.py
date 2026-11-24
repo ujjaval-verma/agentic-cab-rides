@@ -41,10 +41,10 @@ def test_put_then_list_returns_request(store: SqliteStateStore) -> None:
         expires_at=req.expires_at,
     )
     results = store.list_pending_confirmations(now=datetime.now(UTC))
-    assert len(results) == 1
-    assert results[0].session_id == "sess-1"
-    assert results[0].request.subject_id == "s1"
-    assert results[0].request.summary == req.summary
+    assert len(results) == 1  # noqa: S101 pytest assertion
+    assert results[0].session_id == "sess-1"  # noqa: S101 pytest assertion
+    assert results[0].request.subject_id == "s1"  # noqa: S101 pytest assertion
+    assert results[0].request.summary == req.summary  # noqa: S101 pytest assertion
 
 
 def test_pop_returns_request_and_removes_it(store: SqliteStateStore) -> None:
@@ -57,12 +57,12 @@ def test_pop_returns_request_and_removes_it(store: SqliteStateStore) -> None:
     )
 
     popped = store.pop_pending_confirmation("s2")
-    assert popped is not None
-    assert popped.subject_id == "s2"
+    assert popped is not None  # noqa: S101 pytest assertion
+    assert popped.subject_id == "s2"  # noqa: S101 pytest assertion
 
     # Row must be gone now.
     after = store.list_pending_confirmations(now=datetime.now(UTC))
-    assert all(r.request.subject_id != "s2" for r in after)
+    assert all(r.request.subject_id != "s2" for r in after)  # noqa: S101 pytest assertion
 
 
 def test_list_filters_expired_entries(store: SqliteStateStore) -> None:
@@ -86,10 +86,10 @@ def test_list_filters_expired_entries(store: SqliteStateStore) -> None:
 
     results = store.list_pending_confirmations(now=now)
     ids = {r.request.subject_id for r in results}
-    assert "s-active" in ids
-    assert "s-expired" not in ids
+    assert "s-active" in ids  # noqa: S101 pytest assertion
+    assert "s-expired" not in ids  # noqa: S101 pytest assertion
 
 
 def test_pop_unknown_subject_returns_none(store: SqliteStateStore) -> None:
     result = store.pop_pending_confirmation("nonexistent-id")
-    assert result is None
+    assert result is None  # noqa: S101 pytest assertion

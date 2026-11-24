@@ -9,8 +9,8 @@ _ULID = "01KS5HMK9QJZ8PCJ92B9VM7BRA"
 
 
 def test_valid_ulid_paths(tmp_path: Path) -> None:
-    assert session_log_path(tmp_path, _ULID) == tmp_path.resolve() / f"{_ULID}.jsonl"
-    assert session_chat_path(tmp_path, _ULID) == tmp_path.resolve() / f"{_ULID}.chat.jsonl"
+    assert session_log_path(tmp_path, _ULID) == tmp_path.resolve() / f"{_ULID}.jsonl"  # noqa: S101 pytest assertion
+    assert session_chat_path(tmp_path, _ULID) == tmp_path.resolve() / f"{_ULID}.chat.jsonl"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("builder", [session_log_path, session_chat_path])
@@ -45,8 +45,8 @@ def test_no_adhoc_session_path_joins() -> None:
         for path in (root / folder).rglob("*.py")
         if path != allowed and pattern.search(path.read_text(encoding="utf-8"))
     ]
-    assert offenders == []
+    assert offenders == []  # noqa: S101 pytest assertion
 
 
 def test_unsafe_path_error_is_value_error() -> None:
-    assert issubclass(UnsafePathError, ValueError)
+    assert issubclass(UnsafePathError, ValueError)  # noqa: S101 pytest assertion

@@ -182,9 +182,9 @@ async def test_track_booking_uses_frozen_clock(tmp_path: Path) -> None:
     )
 
     rows = log.read("S-TRACK")
-    assert len(rows) == 2
+    assert len(rows) == 2  # noqa: S101 pytest assertion
     for row in rows:
-        assert row["ts"] == _FROZEN_TS, f"Expected ts == {_FROZEN_TS!r}, got {row['ts']!r}"
+        assert row["ts"] == _FROZEN_TS, f"Expected ts == {_FROZEN_TS!r}, got {row['ts']!r}"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -204,9 +204,9 @@ async def test_geocode_address_uses_frozen_clock(tmp_path: Path) -> None:
     )
 
     rows = log.read("S-GEO")
-    assert len(rows) == 2
+    assert len(rows) == 2  # noqa: S101 pytest assertion
     for row in rows:
-        assert row["ts"] == _FROZEN_TS, f"Expected ts == {_FROZEN_TS!r}, got {row['ts']!r}"
+        assert row["ts"] == _FROZEN_TS, f"Expected ts == {_FROZEN_TS!r}, got {row['ts']!r}"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -227,6 +227,6 @@ async def test_list_active_bookings_uses_frozen_clock(tmp_path: Path) -> None:
     )
 
     rows = log.read("S-LIST")
-    assert len(rows) == 2
+    assert len(rows) == 2  # noqa: S101 pytest assertion
     for row in rows:
-        assert row["ts"] == _FROZEN_TS, f"Expected ts == {_FROZEN_TS!r}, got {row['ts']!r}"
+        assert row["ts"] == _FROZEN_TS, f"Expected ts == {_FROZEN_TS!r}, got {row['ts']!r}"  # noqa: S101 pytest assertion

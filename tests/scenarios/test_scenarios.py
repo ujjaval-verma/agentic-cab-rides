@@ -41,18 +41,18 @@ _PATHS = _scenario_paths()
 @pytest.mark.parametrize("scenario_path", _PATHS, ids=_scenario_ids(_PATHS))
 def test_scenario_has_required_top_level_keys(scenario_path: Path) -> None:
     scn = yaml.safe_load(scenario_path.read_text())
-    assert isinstance(scn, dict), f"{scenario_path.name}: YAML root must be a mapping"
+    assert isinstance(scn, dict), f"{scenario_path.name}: YAML root must be a mapping"  # noqa: S101 pytest assertion
     missing = [k for k in _REQUIRED_TOP_LEVEL_KEYS if k not in scn]
-    assert not missing, f"{scenario_path.name} missing required keys: {missing}"
+    assert not missing, f"{scenario_path.name} missing required keys: {missing}"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("scenario_path", _PATHS, ids=_scenario_ids(_PATHS))
 def test_scenario_user_turns_is_nonempty_string_list(scenario_path: Path) -> None:
     scn = yaml.safe_load(scenario_path.read_text())
     user_turns = scn.get("user_turns")
-    assert isinstance(user_turns, list), f"{scenario_path.name}: user_turns must be a list"
-    assert user_turns, f"{scenario_path.name}: user_turns must be non-empty"
-    assert all(isinstance(t, str) for t in user_turns), (
+    assert isinstance(user_turns, list), f"{scenario_path.name}: user_turns must be a list"  # noqa: S101 pytest assertion
+    assert user_turns, f"{scenario_path.name}: user_turns must be non-empty"  # noqa: S101 pytest assertion
+    assert all(isinstance(t, str) for t in user_turns), (  # noqa: S101 pytest assertion
         f"{scenario_path.name}: every user_turns entry must be a string"
     )
 
@@ -61,8 +61,8 @@ def test_scenario_user_turns_is_nonempty_string_list(scenario_path: Path) -> Non
 def test_scenario_confirmation_has_channel(scenario_path: Path) -> None:
     scn = yaml.safe_load(scenario_path.read_text())
     conf = scn.get("confirmation")
-    assert isinstance(conf, dict), f"{scenario_path.name}: confirmation must be a mapping"
-    assert "channel" in conf, f"{scenario_path.name}: confirmation.channel is required"
+    assert isinstance(conf, dict), f"{scenario_path.name}: confirmation must be a mapping"  # noqa: S101 pytest assertion
+    assert "channel" in conf, f"{scenario_path.name}: confirmation.channel is required"  # noqa: S101 pytest assertion
 
 
 def _unknown_invariant_kinds(scn: dict) -> list[str]:
@@ -75,7 +75,7 @@ def _unknown_invariant_kinds(scn: dict) -> list[str]:
 def test_scenario_invariant_kinds_are_known(scenario_path: Path) -> None:
     scn = yaml.safe_load(scenario_path.read_text())
     unknown = _unknown_invariant_kinds(scn)
-    assert not unknown, (
+    assert not unknown, (  # noqa: S101 pytest assertion
         f"{scenario_path.name} references unknown invariant kinds: {unknown}. "
         f"Known kinds: {sorted(CHECKERS)}"
     )
@@ -83,7 +83,7 @@ def test_scenario_invariant_kinds_are_known(scenario_path: Path) -> None:
 
 def test_scenarios_dir_is_nonempty() -> None:
     """Sanity check — without this the parametrized tests run zero cases silently."""
-    assert _PATHS, "no scenarios found under scenarios/"
+    assert _PATHS, "no scenarios found under scenarios/"  # noqa: S101 pytest assertion
 
 
 def test_validator_catches_unknown_invariant_kind(
@@ -105,4 +105,4 @@ def test_validator_catches_unknown_invariant_kind(
 
     scn = yaml.safe_load(bad_path.read_text())
     unknown = _unknown_invariant_kinds(scn)
-    assert unknown == ["no_such_checker"]
+    assert unknown == ["no_such_checker"]  # noqa: S101 pytest assertion

@@ -109,7 +109,7 @@ def _make_geocoder(
 def test_isinstance_geocoder_port(tmp_path: Path) -> None:
     http = _make_http_mock(_SINGLE_RESULT)
     g = _make_geocoder(tmp_path, http)
-    assert isinstance(g, GeocoderPort)
+    assert isinstance(g, GeocoderPort)  # noqa: S101 pytest assertion
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ def test_cache_hit_avoids_http_call(tmp_path: Path) -> None:
     result = asyncio.run(g.geocode("Market & Powell, San Francisco"))
 
     http.get.assert_not_called()
-    assert result == cached
+    assert result == cached  # noqa: S101 pytest assertion
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +149,7 @@ def test_cache_miss_triggers_exactly_one_http_call(tmp_path: Path) -> None:
 
     asyncio.run(g.geocode("Market & Powell, San Francisco"))
 
-    assert http.get.call_count == 1
+    assert http.get.call_count == 1  # noqa: S101 pytest assertion
 
 
 def test_user_agent_header_is_set(tmp_path: Path) -> None:
@@ -167,7 +167,7 @@ def test_user_agent_header_is_set(tmp_path: Path) -> None:
     if not headers:
         # headers may be a keyword argument
         headers = call_kwargs.kwargs.get("headers", {})
-    assert headers.get("User-Agent") == _USER_AGENT
+    assert headers.get("User-Agent") == _USER_AGENT  # noqa: S101 pytest assertion
 
 
 # ---------------------------------------------------------------------------
@@ -181,11 +181,11 @@ def test_single_result_maps_to_high_confidence_address_ref(tmp_path: Path) -> No
 
     result = asyncio.run(g.geocode("Market & Powell, San Francisco"))
 
-    assert result.formatted == _SINGLE_RESULT[0]["display_name"]
-    assert result.lat == pytest.approx(37.7836)
-    assert result.lng == pytest.approx(-122.4088)
-    assert result.confidence >= 0.5, "single high-importance result should be high-confidence"
-    assert result.provider_metadata == {"alternates": []}
+    assert result.formatted == _SINGLE_RESULT[0]["display_name"]  # noqa: S101 pytest assertion
+    assert result.lat == pytest.approx(37.7836)  # noqa: S101 pytest assertion
+    assert result.lng == pytest.approx(-122.4088)  # noqa: S101 pytest assertion
+    assert result.confidence >= 0.5, "single high-importance result should be high-confidence"  # noqa: S101 pytest assertion
+    assert result.provider_metadata == {"alternates": []}  # noqa: S101 pytest assertion
 
 
 def test_multi_result_maps_to_low_confidence_with_alternates(tmp_path: Path) -> None:
@@ -195,12 +195,12 @@ def test_multi_result_maps_to_low_confidence_with_alternates(tmp_path: Path) -> 
     result = asyncio.run(g.geocode("123 Main St"))
 
     # Top result is chosen as the primary
-    assert result.formatted == _MULTI_RESULT[0]["display_name"]
+    assert result.formatted == _MULTI_RESULT[0]["display_name"]  # noqa: S101 pytest assertion
     # Low-confidence structural signal
-    assert result.confidence < 0.5
+    assert result.confidence < 0.5  # noqa: S101 pytest assertion
     alternates = result.provider_metadata.get("alternates")
-    assert isinstance(alternates, list)
-    assert len(alternates) >= 2
+    assert isinstance(alternates, list)  # noqa: S101 pytest assertion
+    assert len(alternates) >= 2  # noqa: S101 pytest assertion
 
 
 def test_multi_result_high_importance_returns_empty_alternates(tmp_path: Path) -> None:
@@ -214,8 +214,8 @@ def test_multi_result_high_importance_returns_empty_alternates(tmp_path: Path) -
 
     result = asyncio.run(g.geocode("Golden Gate"))
 
-    assert result.confidence >= 0.5, "top importance 0.85 should yield high-confidence"
-    assert result.provider_metadata == {"alternates": []}, (
+    assert result.confidence >= 0.5, "top importance 0.85 should yield high-confidence"  # noqa: S101 pytest assertion
+    assert result.provider_metadata == {"alternates": []}, (  # noqa: S101 pytest assertion
         "high-confidence result must always have alternates=[] "
         f"regardless of runner-up count; got {result.provider_metadata}"
     )
@@ -263,12 +263,12 @@ def test_throttle_sleep_called_after_network_call(tmp_path: Path) -> None:
             await g.geocode("Market & Powell, San Francisco")
             # The sleep should have been called with ~1.0
             mock_sleep.assert_called_once()
-            assert mock_sleep.call_args[0][0] == pytest.approx(1.0)
+            assert mock_sleep.call_args[0][0] == pytest.approx(1.0)  # noqa: S101 pytest assertion
 
         # http_get must appear before sleep
         http_idx = call_order.index("http_get")
         sleep_idx = next(i for i, v in enumerate(call_order) if v.startswith("sleep"))
-        assert http_idx < sleep_idx, f"Expected http before sleep; got {call_order}"
+        assert http_idx < sleep_idx, f"Expected http before sleep; got {call_order}"  # noqa: S101 pytest assertion
 
     asyncio.run(run())
 
@@ -294,6 +294,6 @@ def test_second_call_within_one_second_waits(tmp_path: Path) -> None:
             # First call — no delay before, sleep(1) after
             await g.geocode("query alpha unique")
             first_sleep_count = len(sleep_calls)
-            assert first_sleep_count >= 1
+            assert first_sleep_count >= 1  # noqa: S101 pytest assertion
 
     asyncio.run(run())

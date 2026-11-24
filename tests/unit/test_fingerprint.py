@@ -29,20 +29,20 @@ def _opt() -> Option:
 
 def test_fingerprint_is_64_hex():
     fp = fingerprint(_opt())
-    assert len(fp) == 64
-    assert all(c in "0123456789abcdef" for c in fp)
+    assert len(fp) == 64  # noqa: S101 pytest assertion
+    assert all(c in "0123456789abcdef" for c in fp)  # noqa: S101 pytest assertion
 
 
 def test_fingerprint_changes_on_price_mutation():
     a = _opt()
     b = a.model_copy(update={"price": Money(amount_cents=9999, currency="USD")})
-    assert fingerprint(a) != fingerprint(b)
+    assert fingerprint(a) != fingerprint(b)  # noqa: S101 pytest assertion
 
 
 def test_canonical_json_is_dict_order_independent():
     d1 = {"a": 1, "b": {"x": 2, "y": 3}}
     d2 = {"b": {"y": 3, "x": 2}, "a": 1}
-    assert canonical_json(d1) == canonical_json(d2)
+    assert canonical_json(d1) == canonical_json(d2)  # noqa: S101 pytest assertion
 
 
 @given(
@@ -60,14 +60,14 @@ def test_canonical_json_stable_under_key_permutation(d: dict) -> None:
     reordered = dict(reversed(items))
     a = canonical_json(d)
     b = canonical_json(reordered)
-    assert a == b
+    assert a == b  # noqa: S101 pytest assertion
 
 
 def test_fingerprint_value_equality_across_instances() -> None:
     """Two independently constructed value-equal Options must hash identically."""
     a = _opt()
     b = _opt()
-    assert fingerprint(a) == fingerprint(b)
+    assert fingerprint(a) == fingerprint(b)  # noqa: S101 pytest assertion
 
 
 def test_fingerprint_pinned_digest() -> None:
@@ -76,7 +76,7 @@ def test_fingerprint_pinned_digest() -> None:
     If this test breaks because Pydantic changed serialization, update the pin AND
     decide whether existing stored fingerprints need migrating.
     """
-    assert fingerprint(_opt()) == _OPT_PINNED_DIGEST
+    assert fingerprint(_opt()) == _OPT_PINNED_DIGEST  # noqa: S101 pytest assertion
 
 
 def test_fingerprint_survives_json_round_trip() -> None:
@@ -86,11 +86,11 @@ def test_fingerprint_survives_json_round_trip() -> None:
     """
     opt = _opt()
     parsed = Option.model_validate_json(opt.model_dump_json())
-    assert fingerprint(opt) == fingerprint(parsed)
+    assert fingerprint(opt) == fingerprint(parsed)  # noqa: S101 pytest assertion
 
 
 def test_canonical_json_nfc_normalises_strings() -> None:
     """NFC and NFD representations of the same string must produce the same JSON."""
     nfc = "Café"  # é precomposed (NFC)
     nfd = "Café"  # e + combining acute (NFD)
-    assert canonical_json({"name": nfc}) == canonical_json({"name": nfd})
+    assert canonical_json({"name": nfc}) == canonical_json({"name": nfd})  # noqa: S101 pytest assertion

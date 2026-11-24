@@ -84,13 +84,13 @@ async def test_re_quote_within_threshold_proceeds(tmp_path: Path, meter) -> None
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "confirmed"
+    assert result["status"] == "confirmed"  # noqa: S101 pytest assertion
     rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
     kinds = [r["kind"] for r in rows]
-    assert kinds == ["requested", "verified", "executed", "outcome"]
+    assert kinds == ["requested", "verified", "executed", "outcome"]  # noqa: S101 pytest assertion
     verified = next(r for r in rows if r["kind"] == "verified")
     # drift should be 0 since no surge
-    assert verified["checks"]["requote_price_drift_cents"] == 0
+    assert verified["checks"]["requote_price_drift_cents"] == 0  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -126,29 +126,29 @@ async def test_re_quote_above_threshold_returns_price_changed_with_new_draft(
     )
 
     # Outcome must be price_changed
-    assert result["status"] == "price_changed"
-    assert "new_draft_id" in result
+    assert result["status"] == "price_changed"  # noqa: S101 pytest assertion
+    assert "new_draft_id" in result  # noqa: S101 pytest assertion
     import re
 
-    assert re.match(r"^[0-9A-Z]{26}$", result["new_draft_id"]), "new_draft_id must be a ULID"
+    assert re.match(r"^[0-9A-Z]{26}$", result["new_draft_id"]), "new_draft_id must be a ULID"  # noqa: S101 pytest assertion
 
     rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
     kinds = [r["kind"] for r in rows]
 
     # Invariant 6: no executed row for rejected action
-    assert "executed" not in kinds, "executed row must NOT appear after price_changed rejection"
+    assert "executed" not in kinds, "executed row must NOT appear after price_changed rejection"  # noqa: S101 pytest assertion
 
     verified = next(r for r in rows if r["kind"] == "verified")
-    assert verified["result"] == "rejected"
-    assert verified["reason"] == "price_changed"
+    assert verified["result"] == "rejected"  # noqa: S101 pytest assertion
+    assert verified["reason"] == "price_changed"  # noqa: S101 pytest assertion
     checks = verified["checks"]
-    assert checks["draft_found"] is True
-    assert checks["fingerprint_match"] is True
-    assert checks["requote_price_drift_cents"] > 100  # threshold is 100
-    assert "new_draft_id" in checks
+    assert checks["draft_found"] is True  # noqa: S101 pytest assertion
+    assert checks["fingerprint_match"] is True  # noqa: S101 pytest assertion
+    assert checks["requote_price_drift_cents"] > 100  # threshold is 100  # noqa: S101 pytest assertion
+    assert "new_draft_id" in checks  # noqa: S101 pytest assertion
 
     outcome = next(r for r in rows if r["kind"] == "outcome")
-    assert outcome["status"] == "price_changed"
+    assert outcome["status"] == "price_changed"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -171,10 +171,10 @@ async def test_re_quote_drift_recorded_in_verified_checks_within_threshold(
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "confirmed"
+    assert result["status"] == "confirmed"  # noqa: S101 pytest assertion
     rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
     verified = next(r for r in rows if r["kind"] == "verified")
-    assert "requote_price_drift_cents" in verified["checks"]
+    assert "requote_price_drift_cents" in verified["checks"]  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -227,11 +227,11 @@ async def test_re_quote_no_intent_snapshot_rejected(tmp_path: Path, meter) -> No
         turn_id="T",
     )
     # Intent guard fires: rejected without executed row (invariant 6).
-    assert result["status"] == "rejected"
-    assert "intent_snapshot_missing_or_unsupported" in result.get("reason", "")
+    assert result["status"] == "rejected"  # noqa: S101 pytest assertion
+    assert "intent_snapshot_missing_or_unsupported" in result.get("reason", "")  # noqa: S101 pytest assertion
     rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
     kinds = [r["kind"] for r in rows]
-    assert "executed" not in kinds
+    assert "executed" not in kinds  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -259,4 +259,4 @@ async def test_price_drift_stub_test_is_now_a_real_call(tmp_path: Path, meter) -
     rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
     verified = next(r for r in rows if r["kind"] == "verified")
     # Drift is 0 because no surge, but it came from a real provider.discover() call
-    assert verified["checks"]["requote_price_drift_cents"] == 0
+    assert verified["checks"]["requote_price_drift_cents"] == 0  # noqa: S101 pytest assertion

@@ -97,13 +97,13 @@ async def test_happy_path_returns_booking_dict(tmp_path: Path) -> None:
         "summary_title": "UberX",
         "price_cents": 1850,
     }
-    assert result == expected
+    assert result == expected  # noqa: S101 pytest assertion
 
     rows = log.read("S1")
     outcome = rows[1]
-    assert outcome["kind"] == "outcome"
-    assert outcome["status"] == "ok"
-    assert outcome["result"] == expected
+    assert outcome["kind"] == "outcome"  # noqa: S101 pytest assertion
+    assert outcome["status"] == "ok"  # noqa: S101 pytest assertion
+    assert outcome["result"] == expected  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -122,16 +122,16 @@ async def test_emits_requested_then_outcome_only(tmp_path: Path) -> None:
     )
 
     rows = log.read("S2")
-    assert len(rows) == 2, f"Expected exactly 2 rows, got {len(rows)}: {rows}"
+    assert len(rows) == 2, f"Expected exactly 2 rows, got {len(rows)}: {rows}"  # noqa: S101 pytest assertion
 
     requested, outcome = rows
-    assert requested["kind"] == "requested"
-    assert outcome["kind"] == "outcome"
-    assert requested["action_id"] == outcome["action_id"]
+    assert requested["kind"] == "requested"  # noqa: S101 pytest assertion
+    assert outcome["kind"] == "outcome"  # noqa: S101 pytest assertion
+    assert requested["action_id"] == outcome["action_id"]  # noqa: S101 pytest assertion
 
     kinds = {r["kind"] for r in rows}
-    assert "verified" not in kinds
-    assert "executed" not in kinds
+    assert "verified" not in kinds  # noqa: S101 pytest assertion
+    assert "executed" not in kinds  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -155,8 +155,8 @@ async def test_runner_kwargs_with_clock_no_type_error(tmp_path: Path) -> None:
         turn_id="T-REG",
     )
 
-    assert result["booking_id"] == "BID-REG"
-    assert result["status"] == "en_route"
+    assert result["booking_id"] == "BID-REG"  # noqa: S101 pytest assertion
+    assert result["status"] == "en_route"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -174,13 +174,13 @@ async def test_unknown_booking_returns_error_dict_no_raise(tmp_path: Path) -> No
         turn_id="T3",
     )
 
-    assert result == {"status": "error", "error": "unknown booking"}
+    assert result == {"status": "error", "error": "unknown booking"}  # noqa: S101 pytest assertion
 
     rows = log.read("S3")
-    assert len(rows) == 2
+    assert len(rows) == 2  # noqa: S101 pytest assertion
     requested, outcome = rows
-    assert requested["kind"] == "requested"
-    assert outcome["kind"] == "outcome"
-    assert outcome["status"] == "error"
-    assert outcome["error"] == "unknown booking"
-    assert outcome["result"] is None
+    assert requested["kind"] == "requested"  # noqa: S101 pytest assertion
+    assert outcome["kind"] == "outcome"  # noqa: S101 pytest assertion
+    assert outcome["status"] == "error"  # noqa: S101 pytest assertion
+    assert outcome["error"] == "unknown booking"  # noqa: S101 pytest assertion
+    assert outcome["result"] is None  # noqa: S101 pytest assertion

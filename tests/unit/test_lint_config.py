@@ -18,5 +18,20 @@ def _ruff_lint() -> dict[str, Any]:
     return data["tool"]["ruff"]["lint"]
 
 
+def _is_bandit(code: str) -> bool:
+    # "S" or "S<digits>"; other prefixes starting with S (e.g. SIM) are not bandit.
+    return code == "S" or (code.startswith("S") and code[1:].isdigit())
+
+
 def test_bandit_rules_are_selected() -> None:
-    assert "S" in _ruff_lint()["select"]
+    assert "S" in _ruff_lint()["select"]  # noqa: S101 pytest assertion
+
+
+def test_no_file_level_bandit_ignores() -> None:
+    per_file = _ruff_lint().get("per-file-ignores", {})
+    offenders = {
+        pattern: codes
+        for pattern, codes in per_file.items()
+        if any(_is_bandit(code) for code in codes)
+    }
+    assert offenders == {}, "suppress bandit findings line by line with a reason"  # noqa: S101 pytest assertion

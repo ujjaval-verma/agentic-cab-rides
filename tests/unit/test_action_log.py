@@ -18,14 +18,14 @@ def test_log_rejects_escaping_session_ids(tmp_path: Path) -> None:
             log.emit({"session_id": bad, "kind": "requested"})
         with pytest.raises(UnsafePathError):
             log.read(bad)
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["logs"]
-    assert list(base.iterdir()) == []
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["logs"]  # noqa: S101 pytest assertion
+    assert list(base.iterdir()) == []  # noqa: S101 pytest assertion
 
 
 def test_log_valid_ulid_round_trips(tmp_path: Path) -> None:
     log = JSONLActionLog(log_dir=tmp_path)
     log.emit({"session_id": _ULID, "kind": "requested"})
-    assert log.read(_ULID) == [{"session_id": _ULID, "kind": "requested"}]
+    assert log.read(_ULID) == [{"session_id": _ULID, "kind": "requested"}]  # noqa: S101 pytest assertion
 
 
 def test_log_appends_and_reads(tmp_path: Path) -> None:
@@ -54,8 +54,8 @@ def test_log_appends_and_reads(tmp_path: Path) -> None:
         }
     )
     rows = log.read(sid)
-    assert len(rows) == 2
-    assert [r["kind"] for r in rows] == ["requested", "outcome"]
+    assert len(rows) == 2  # noqa: S101 pytest assertion
+    assert [r["kind"] for r in rows] == ["requested", "outcome"]  # noqa: S101 pytest assertion
 
 
 def test_log_file_is_appendonly_format(tmp_path: Path) -> None:
@@ -70,8 +70,8 @@ def test_log_file_is_appendonly_format(tmp_path: Path) -> None:
     )
     content = (tmp_path / "S.jsonl").read_text()
     lines = [ln for ln in content.splitlines() if ln.strip()]
-    assert len(lines) == 1
-    assert json.loads(lines[0])["kind"] == "requested"
+    assert len(lines) == 1  # noqa: S101 pytest assertion
+    assert json.loads(lines[0])["kind"] == "requested"  # noqa: S101 pytest assertion
 
 
 def test_redact_leaves_approver_id_and_channel_unchanged() -> None:
@@ -86,7 +86,7 @@ def test_redact_leaves_approver_id_and_channel_unchanged() -> None:
             "approver_id": principal_id,
             "channel": "web",
         }
-        assert redact({"checks": {"confirmation": confirmation}}) == {
+        assert redact({"checks": {"confirmation": confirmation}}) == {  # noqa: S101 pytest assertion
             "checks": {"confirmation": confirmation}
         }
 
@@ -111,8 +111,8 @@ def test_redact_strips_phone_and_name_in_address() -> None:
         }
     )
     serialised = json.dumps(result)
-    assert "555-1234" not in serialised
-    assert "Jane Doe" not in serialised
-    assert "the office" not in serialised  # raw stripped
-    assert "123 Main St" in serialised  # formatted survives
-    assert "456 Market St" in serialised
+    assert "555-1234" not in serialised  # noqa: S101 pytest assertion
+    assert "Jane Doe" not in serialised  # noqa: S101 pytest assertion
+    assert "the office" not in serialised  # raw stripped  # noqa: S101 pytest assertion
+    assert "123 Main St" in serialised  # formatted survives  # noqa: S101 pytest assertion
+    assert "456 Market St" in serialised  # noqa: S101 pytest assertion

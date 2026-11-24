@@ -110,7 +110,7 @@ async def test_run_turn_records_one_llm_call_on_non_tool_use_final_response() ->
         clock=clock,
     )
 
-    assert len(meter.calls) == 1
+    assert len(meter.calls) == 1  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -142,7 +142,7 @@ async def test_run_turn_records_one_call_per_iteration_including_tool_use() -> N
         clock=clock,
     )
 
-    assert len(meter.calls) == 2
+    assert len(meter.calls) == 2  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -176,12 +176,12 @@ async def test_recorded_llm_call_forwards_usage_token_counts_into_price_call() -
     )
 
     call = meter.calls[0]
-    assert call.provider == "anthropic"
-    assert call.model == MODEL_ID
-    assert call.input_tokens == 200
-    assert call.output_tokens == 50
-    assert call.cache_read_input_tokens == 10
-    assert call.cache_creation_input_tokens == 5
+    assert call.provider == "anthropic"  # noqa: S101 pytest assertion
+    assert call.model == MODEL_ID  # noqa: S101 pytest assertion
+    assert call.input_tokens == 200  # noqa: S101 pytest assertion
+    assert call.output_tokens == 50  # noqa: S101 pytest assertion
+    assert call.cache_read_input_tokens == 10  # noqa: S101 pytest assertion
+    assert call.cache_creation_input_tokens == 5  # noqa: S101 pytest assertion
     expected_cost = price_call(
         model=MODEL_ID,
         input_tokens=200,
@@ -189,7 +189,7 @@ async def test_recorded_llm_call_forwards_usage_token_counts_into_price_call() -
         cache_read_input_tokens=10,
         cache_creation_input_tokens=5,
     )
-    assert call.cost_microcents == expected_cost
+    assert call.cost_microcents == expected_cost  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -213,8 +213,8 @@ async def test_missing_cache_fields_on_usage_yield_zero_not_a_crash() -> None:
     )
 
     call = meter.calls[0]
-    assert call.cache_read_input_tokens == 0
-    assert call.cache_creation_input_tokens == 0
+    assert call.cache_read_input_tokens == 0  # noqa: S101 pytest assertion
+    assert call.cache_creation_input_tokens == 0  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -244,8 +244,8 @@ async def test_null_cache_fields_on_usage_yield_zero_not_a_crash() -> None:
     )
 
     call = meter.calls[0]
-    assert call.cache_read_input_tokens == 0
-    assert call.cache_creation_input_tokens == 0
+    assert call.cache_read_input_tokens == 0  # noqa: S101 pytest assertion
+    assert call.cache_creation_input_tokens == 0  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -274,4 +274,4 @@ async def test_recorded_latency_ms_reflects_frozen_clock_advance() -> None:
     # and once after client.messages.create, so the single iteration here spans
     # exactly one step: latency_ms must be the real elapsed value (1), not a
     # hardcoded 0 — the regression this test exists to catch.
-    assert call.latency_ms == 1
+    assert call.latency_ms == 1  # noqa: S101 pytest assertion

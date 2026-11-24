@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[2]
 def _load_script() -> ModuleType:
     path = ROOT / "scripts" / "audit_deps.py"
     spec = importlib.util.spec_from_file_location("audit_deps", path)
-    assert spec is not None
-    assert spec.loader is not None
+    assert spec is not None  # noqa: S101 pytest assertion
+    assert spec.loader is not None  # noqa: S101 pytest assertion
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -78,29 +78,29 @@ class FakeRunner:
 
 
 def test_classify_clean() -> None:
-    assert audit_deps.classify(0, CLEAN_JSON) == "clean"
+    assert audit_deps.classify(0, CLEAN_JSON) == "clean"  # noqa: S101 pytest assertion
 
 
 def test_classify_vulnerable() -> None:
-    assert audit_deps.classify(1, VULN_JSON) == "vulnerable"
+    assert audit_deps.classify(1, VULN_JSON) == "vulnerable"  # noqa: S101 pytest assertion
 
 
 def test_classify_unavailable_on_empty_or_non_json_stdout() -> None:
-    assert audit_deps.classify(1, "") == "unavailable"
-    assert audit_deps.classify(1, "Traceback: connection refused") == "unavailable"
+    assert audit_deps.classify(1, "") == "unavailable"  # noqa: S101 pytest assertion
+    assert audit_deps.classify(1, "Traceback: connection refused") == "unavailable"  # noqa: S101 pytest assertion
 
 
 def test_unavailable_warns_and_passes_by_default(capsys: pytest.CaptureFixture[str]) -> None:
     runner = FakeRunner(audit_rc=1, audit_stdout="", audit_stderr="connection refused")
-    assert audit_deps.main([], run=runner) == 0
+    assert audit_deps.main([], run=runner) == 0  # noqa: S101 pytest assertion
     err = capsys.readouterr().err
-    assert "warning: dependency audit could not complete" in err
-    assert "connection refused" in err
+    assert "warning: dependency audit could not complete" in err  # noqa: S101 pytest assertion
+    assert "connection refused" in err  # noqa: S101 pytest assertion
 
 
 def test_unavailable_fails_in_strict_mode() -> None:
     runner = FakeRunner(audit_rc=1, audit_stdout="", audit_stderr="connection refused")
-    assert audit_deps.main(["--strict"], run=runner) == 2
+    assert audit_deps.main(["--strict"], run=runner) == 2  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("argv", [[], ["--strict"]])
@@ -108,29 +108,29 @@ def test_vulnerable_fails_in_both_modes(
     argv: list[str], capsys: pytest.CaptureFixture[str]
 ) -> None:
     runner = FakeRunner(audit_rc=1, audit_stdout=VULN_JSON)
-    assert audit_deps.main(argv, run=runner) == 1
+    assert audit_deps.main(argv, run=runner) == 1  # noqa: S101 pytest assertion
     out = capsys.readouterr().out
-    assert "badpkg" in out
-    assert "PYSEC-0000-1" in out
-    assert "1.0.1" in out
+    assert "badpkg" in out  # noqa: S101 pytest assertion
+    assert "PYSEC-0000-1" in out  # noqa: S101 pytest assertion
+    assert "1.0.1" in out  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("argv", [[], ["--strict"]])
 def test_clean_passes_in_both_modes(argv: list[str]) -> None:
-    assert audit_deps.main(argv, run=FakeRunner()) == 0
+    assert audit_deps.main(argv, run=FakeRunner()) == 0  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("argv", [[], ["--strict"]])
 def test_failed_export_returns_1_in_both_modes(argv: list[str]) -> None:
     runner = FakeRunner(export_rc=2)
-    assert audit_deps.main(argv, run=runner) == 1
-    assert len(runner.calls) == 1
+    assert audit_deps.main(argv, run=runner) == 1  # noqa: S101 pytest assertion
+    assert len(runner.calls) == 1  # noqa: S101 pytest assertion
 
 
 def test_missing_pip_audit_binary_counts_as_unavailable() -> None:
     runner = FakeRunner(audit_raises=FileNotFoundError("uv"))
-    assert audit_deps.main([], run=runner) == 0
-    assert audit_deps.main(["--strict"], run=runner) == 2
+    assert audit_deps.main([], run=runner) == 0  # noqa: S101 pytest assertion
+    assert audit_deps.main(["--strict"], run=runner) == 2  # noqa: S101 pytest assertion
 
 
 def test_argv_passed_to_tools() -> None:
@@ -138,10 +138,10 @@ def test_argv_passed_to_tools() -> None:
     audit_deps.main([], run=runner)
     export, audit = runner.calls
     for flag in ("--frozen", "--all-groups", "--no-emit-project"):
-        assert flag in export
+        assert flag in export  # noqa: S101 pytest assertion
     for flag in ("--no-deps", "--disable-pip", "--strict"):
-        assert flag in audit
-    assert audit[audit.index("-f") + 1] == "json"
+        assert flag in audit  # noqa: S101 pytest assertion
+    assert audit[audit.index("-f") + 1] == "json"  # noqa: S101 pytest assertion
 
 
 def test_readme_development_section_mentions_make_audit() -> None:
@@ -149,17 +149,17 @@ def test_readme_development_section_mentions_make_audit() -> None:
     start = text.index("## Development")
     end = text.find("\n## ", start + 1)
     section = text[start : end if end != -1 else len(text)]
-    assert "make audit" in section
+    assert "make audit" in section  # noqa: S101 pytest assertion
 
 
 def test_makefile_audit_target_runs_script_with_flags() -> None:
     text = (ROOT / "Makefile").read_text(encoding="utf-8")
     phony = re.search(r"^\.PHONY:((?:.*\\\n)*.*)$", text, re.MULTILINE)
-    assert phony is not None
-    assert "audit" in phony.group(1).replace("\\", " ").split()
+    assert phony is not None  # noqa: S101 pytest assertion
+    assert "audit" in phony.group(1).replace("\\", " ").split()  # noqa: S101 pytest assertion
     target = re.search(r"^audit:[^\n]*## \S[^\n]*\n((?:\t[^\n]*\n)+)", text, re.MULTILINE)
-    assert target is not None
-    assert "scripts/audit_deps.py $(AUDIT_FLAGS)" in target.group(1)
+    assert target is not None  # noqa: S101 pytest assertion
+    assert "scripts/audit_deps.py $(AUDIT_FLAGS)" in target.group(1)  # noqa: S101 pytest assertion
     verify = re.search(r"^verify:([^\n#]*)", text, re.MULTILINE)
-    assert verify is not None
-    assert "audit" not in verify.group(1).split()
+    assert verify is not None  # noqa: S101 pytest assertion
+    assert "audit" not in verify.group(1).split()  # noqa: S101 pytest assertion

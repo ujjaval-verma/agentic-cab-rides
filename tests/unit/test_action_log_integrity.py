@@ -64,7 +64,7 @@ def _assert_integrity(rows: list[dict]) -> None:
         if ver is None or ver.get("result") != "rejected":
             continue
         exe = [r for r in group if r["kind"] == "executed"]
-        assert not exe, (
+        assert not exe, (  # noqa: S101 pytest assertion
             f"INVARIANT VIOLATED: action_id={action_id} has verified.result=='rejected' "
             f"AND {len(exe)} executed row(s); short-circuit failed"
         )

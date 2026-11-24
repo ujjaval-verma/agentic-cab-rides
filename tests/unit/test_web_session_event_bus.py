@@ -18,7 +18,7 @@ async def test_publish_then_subscribe_yields_row() -> None:
         received.append(item)
         break  # stop after first item
 
-    assert received == [row]
+    assert received == [row]  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -37,8 +37,8 @@ async def test_two_subscribers_different_sessions_isolated() -> None:
         items_b.append(item)
         break
 
-    assert items_a == [{"kind": "a"}]
-    assert items_b == [{"kind": "b"}]
+    assert items_a == [{"kind": "a"}]  # noqa: S101 pytest assertion
+    assert items_b == [{"kind": "b"}]  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -58,8 +58,8 @@ async def test_overflow_drops_oldest() -> None:
         first_item = item
         break
 
-    assert first_item is not None
-    assert first_item["seq"] == 1
+    assert first_item is not None  # noqa: S101 pytest assertion
+    assert first_item["seq"] == 1  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -84,6 +84,6 @@ async def test_late_subscriber_misses_pre_subscription_rows() -> None:
         received.append(item)
         break
 
-    assert received == [{"kind": "fresh", "seq": 99}]
+    assert received == [{"kind": "fresh", "seq": 99}]  # noqa: S101 pytest assertion
     # sess-A2 items are not visible from fresh-session
-    assert all(item.get("kind") != "early" for item in received)
+    assert all(item.get("kind") != "early" for item in received)  # noqa: S101 pytest assertion

@@ -80,11 +80,11 @@ async def test_active_prior_booking_without_nonce_returns_duplicate_intent(harne
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r1["status"] == "confirmed"
+    assert r1["status"] == "confirmed"  # noqa: S101 pytest assertion
 
     # Second confirm — fresh draft, same intent, no nonce.
     d2 = await _prepare_draft(sim, store, clock, intent)
-    assert d2.draft_id != d1.draft_id
+    assert d2.draft_id != d1.draft_id  # noqa: S101 pytest assertion
     r2 = await confirm_booking(
         ConfirmArgs(draft_id=d2.draft_id),
         provider=sim,
@@ -96,9 +96,9 @@ async def test_active_prior_booking_without_nonce_returns_duplicate_intent(harne
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r2["status"] == "duplicate_intent"
-    assert r2["existing_booking_id"] == r1["booking_id"]
-    assert r2["existing_status"] not in {"completed", "cancelled", "failed"}
+    assert r2["status"] == "duplicate_intent"  # noqa: S101 pytest assertion
+    assert r2["existing_booking_id"] == r1["booking_id"]  # noqa: S101 pytest assertion
+    assert r2["existing_status"] not in {"completed", "cancelled", "failed"}  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -127,7 +127,7 @@ async def test_active_prior_booking_with_nonce_proceeds(harness, meter) -> None:
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r1["status"] == "confirmed"
+    assert r1["status"] == "confirmed"  # noqa: S101 pytest assertion
 
     d2 = await _prepare_draft(sim, store, clock, intent)
     r2 = await confirm_booking(
@@ -141,8 +141,8 @@ async def test_active_prior_booking_with_nonce_proceeds(harness, meter) -> None:
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r2["status"] == "confirmed"
-    assert r2["booking_id"] != r1["booking_id"]
+    assert r2["status"] == "confirmed"  # noqa: S101 pytest assertion
+    assert r2["booking_id"] != r1["booking_id"]  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -171,7 +171,7 @@ async def test_terminal_prior_booking_lets_new_through(harness, meter) -> None:
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r1["status"] == "confirmed"
+    assert r1["status"] == "confirmed"  # noqa: S101 pytest assertion
 
     # Force the first booking to terminal via the StateStore (no public API needed).
     from agentic_cab.core.types import BookingEvent
@@ -196,8 +196,8 @@ async def test_terminal_prior_booking_lets_new_through(harness, meter) -> None:
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r2["status"] == "confirmed"
-    assert r2["booking_id"] != r1["booking_id"]
+    assert r2["status"] == "confirmed"  # noqa: S101 pytest assertion
+    assert r2["booking_id"] != r1["booking_id"]  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -227,7 +227,7 @@ async def test_duplicate_intent_log_shape_no_executed_row(harness, meter) -> Non
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r1["status"] == "confirmed"
+    assert r1["status"] == "confirmed"  # noqa: S101 pytest assertion
 
     d2 = await _prepare_draft(sim, store, clock, intent)
     r2 = await confirm_booking(
@@ -241,29 +241,29 @@ async def test_duplicate_intent_log_shape_no_executed_row(harness, meter) -> Non
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r2["status"] == "duplicate_intent"
+    assert r2["status"] == "duplicate_intent"  # noqa: S101 pytest assertion
 
     # Check log shape for the second action
     action_id_2 = r2["action_id"]
     rows = [r for r in log.read(session_id) if r["action_id"] == action_id_2]
     kinds = [r["kind"] for r in rows]
-    assert "executed" not in kinds, "duplicate_intent must NOT emit an executed row (invariant 6)"
-    assert kinds == ["requested", "verified", "outcome"]
+    assert "executed" not in kinds, "duplicate_intent must NOT emit an executed row (invariant 6)"  # noqa: S101 pytest assertion
+    assert kinds == ["requested", "verified", "outcome"]  # noqa: S101 pytest assertion
     verified = next(r for r in rows if r["kind"] == "verified")
-    assert verified["result"] == "rejected"
-    assert verified.get("reason") == "duplicate_intent"
-    assert isinstance(verified.get("checks"), dict), (
+    assert verified["result"] == "rejected"  # noqa: S101 pytest assertion
+    assert verified.get("reason") == "duplicate_intent"  # noqa: S101 pytest assertion
+    assert isinstance(verified.get("checks"), dict), (  # noqa: S101 pytest assertion
         "verified row must carry a 'checks' dict (spec §5)"
     )
-    assert "intent_hash" in verified["checks"], (
+    assert "intent_hash" in verified["checks"], (  # noqa: S101 pytest assertion
         "verified.checks must include 'intent_hash' (spec §5)"
     )
-    assert "existing_booking_id" in verified["checks"], (
+    assert "existing_booking_id" in verified["checks"], (  # noqa: S101 pytest assertion
         "verified.checks must include 'existing_booking_id' (spec §5)"
     )
     outcome = next(r for r in rows if r["kind"] == "outcome")
-    assert outcome["status"] == "duplicate_intent"
-    assert outcome["result"]["existing_booking_id"] == r1["booking_id"]
+    assert outcome["status"] == "duplicate_intent"  # noqa: S101 pytest assertion
+    assert outcome["result"]["existing_booking_id"] == r1["booking_id"]  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -304,7 +304,7 @@ async def test_recall_path_heals_null_intent_hash(harness, meter) -> None:
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r1["status"] == "confirmed"
+    assert r1["status"] == "confirmed"  # noqa: S101 pytest assertion
     booking_id = r1["booking_id"]
 
     # Simulate the crash: NULL out the intent_hash on the booking row so it looks
@@ -316,7 +316,7 @@ async def test_recall_path_heals_null_intent_hash(harness, meter) -> None:
 
     # Verify the setup: intent_hash IS NULL now, so find_active_booking_by_intent_hash
     # returns None (the booking is invisible to the dedup lookup).
-    assert store.find_active_booking_by_intent_hash(ih) is None, (
+    assert store.find_active_booking_by_intent_hash(ih) is None, (  # noqa: S101 pytest assertion
         "Test precondition: booking must NOT be found before the heal"
     )
 
@@ -336,13 +336,13 @@ async def test_recall_path_heals_null_intent_hash(harness, meter) -> None:
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r2["status"] == "confirmed"
-    assert r2["booking_id"] == booking_id
+    assert r2["status"] == "confirmed"  # noqa: S101 pytest assertion
+    assert r2["booking_id"] == booking_id  # noqa: S101 pytest assertion
 
     # THE KEY ASSERTION: after the recall, intent_hash must be healed on the booking row.
     healed = store.find_active_booking_by_intent_hash(ih)
-    assert healed is not None, "intent_hash must be healed on the recall path"
-    assert healed.booking_id == booking_id
+    assert healed is not None, "intent_hash must be healed on the recall path"  # noqa: S101 pytest assertion
+    assert healed.booking_id == booking_id  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -380,7 +380,7 @@ async def test_decline_then_retry_proceeds(harness, meter) -> None:
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r1["status"] == "rejected"
+    assert r1["status"] == "rejected"  # noqa: S101 pytest assertion
 
     # Retry: fresh draft, same intent, no nonce. Same intent-bound key would
     # otherwise short-circuit on "in_progress" — release_claim prevents that.
@@ -396,7 +396,7 @@ async def test_decline_then_retry_proceeds(harness, meter) -> None:
         session_id=session_id,
         turn_id=new_turn_id(),
     )
-    assert r2["status"] == "confirmed", f"retry after decline must proceed; got {r2}"
+    assert r2["status"] == "confirmed", f"retry after decline must proceed; got {r2}"  # noqa: S101 pytest assertion
 
 
 def test_release_claim_is_idempotent_and_safe(tmp_path: Path) -> None:
@@ -416,10 +416,10 @@ def test_release_claim_is_idempotent_and_safe(tmp_path: Path) -> None:
 
     # Claim, then release — second release is a no-op
     claim = store.claim_or_recall(key, scope="confirm")
-    assert claim.status == "new"
+    assert claim.status == "new"  # noqa: S101 pytest assertion
     store.release_claim(key, scope="confirm")
     store.release_claim(key, scope="confirm")
 
     # After release, re-claiming the same key returns "new" again
     re_claim = store.claim_or_recall(key, scope="confirm")
-    assert re_claim.status == "new"
+    assert re_claim.status == "new"  # noqa: S101 pytest assertion

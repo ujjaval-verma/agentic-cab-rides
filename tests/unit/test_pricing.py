@@ -13,7 +13,7 @@ def test_known_token_mix_prices_exactly():
         cache_read_input_tokens=2000,
         cache_creation_input_tokens=400,
     )
-    assert cost == 500_000 + 1_250_000 + 100_000 + 250_000
+    assert cost == 500_000 + 1_250_000 + 100_000 + 250_000  # noqa: S101 pytest assertion
 
 
 def test_cache_read_is_cheaper_than_input_for_same_tokens():
@@ -21,8 +21,8 @@ def test_cache_read_is_cheaper_than_input_for_same_tokens():
     cached = price_call(
         model=MODEL_ID, input_tokens=0, output_tokens=0, cache_read_input_tokens=10_000
     )
-    assert cached < plain
-    assert cached * 10 == plain
+    assert cached < plain  # noqa: S101 pytest assertion
+    assert cached * 10 == plain  # noqa: S101 pytest assertion
 
 
 def test_cache_write_is_more_expensive_than_input_for_same_tokens():
@@ -30,12 +30,12 @@ def test_cache_write_is_more_expensive_than_input_for_same_tokens():
     written = price_call(
         model=MODEL_ID, input_tokens=0, output_tokens=0, cache_creation_input_tokens=10_000
     )
-    assert written > plain
-    assert written * 4 == plain * 5
+    assert written > plain  # noqa: S101 pytest assertion
+    assert written * 4 == plain * 5  # noqa: S101 pytest assertion
 
 
 def test_zero_token_call_costs_zero():
-    assert price_call(model=MODEL_ID, input_tokens=0, output_tokens=0) == 0
+    assert price_call(model=MODEL_ID, input_tokens=0, output_tokens=0) == 0  # noqa: S101 pytest assertion
 
 
 def test_unknown_model_raises():

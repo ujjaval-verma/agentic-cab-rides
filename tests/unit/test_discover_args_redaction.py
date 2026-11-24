@@ -35,11 +35,11 @@ def test_redact_strips_pickup_address_and_dropoff_address_strings() -> None:
     }
     out = redact(raw)
     serialized = json.dumps(out)
-    assert RAW_PICKUP not in serialized, "pickup_address leaked"
-    assert RAW_DROPOFF not in serialized, "dropoff_address leaked"
+    assert RAW_PICKUP not in serialized, "pickup_address leaked"  # noqa: S101 pytest assertion
+    assert RAW_DROPOFF not in serialized, "dropoff_address leaked"  # noqa: S101 pytest assertion
     # lat/lng are not PII — they remain.
-    assert out["args"]["pickup_lat"] == 1.0
-    assert out["args"]["dropoff_lat"] == 3.0
+    assert out["args"]["pickup_lat"] == 1.0  # noqa: S101 pytest assertion
+    assert out["args"]["dropoff_lat"] == 3.0  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -69,8 +69,8 @@ async def test_discover_options_log_does_not_contain_raw_addresses(
     )
     log_file = tmp_path / "logs" / "S.jsonl"
     contents = log_file.read_text()
-    assert RAW_PICKUP not in contents, "pickup_address leaked into JSONL log"
-    assert RAW_DROPOFF not in contents, "dropoff_address leaked into JSONL log"
+    assert RAW_PICKUP not in contents, "pickup_address leaked into JSONL log"  # noqa: S101 pytest assertion
+    assert RAW_DROPOFF not in contents, "dropoff_address leaked into JSONL log"  # noqa: S101 pytest assertion
 
 
 # ---------------------------------------------------------------------------
@@ -94,8 +94,8 @@ def test_redact_strips_geocode_query_string() -> None:
     raw = {"args": {"query": RAW_QUERY}}
     out = redact(raw)
     serialized = json.dumps(out)
-    assert RAW_QUERY not in serialized, "query leaked in redact() output"
-    assert out["args"]["query"] == "[redacted-address]"
+    assert RAW_QUERY not in serialized, "query leaked in redact() output"  # noqa: S101 pytest assertion
+    assert out["args"]["query"] == "[redacted-address]"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -118,4 +118,4 @@ async def test_geocode_address_log_does_not_contain_raw_query(
 
     log_file = tmp_path / "logs" / "G.jsonl"
     contents = log_file.read_text()
-    assert RAW_QUERY not in contents, "geocode query leaked into JSONL log"
+    assert RAW_QUERY not in contents, "geocode query leaked into JSONL log"  # noqa: S101 pytest assertion

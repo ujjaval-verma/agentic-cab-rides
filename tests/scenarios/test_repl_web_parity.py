@@ -239,7 +239,7 @@ async def _run_happy_path_sequence(
     # Pick the UberX option (first option whose title starts with "UberX").
     options: list[dict[str, Any]] = discover_result["options"]
     uberx_options = [o for o in options if o["title"].startswith("UberX")]
-    assert uberx_options, f"No UberX option in discover result: {options}"
+    assert uberx_options, f"No UberX option in discover result: {options}"  # noqa: S101 pytest assertion
     option_id = uberx_options[0]["option_id"]
 
     # --- prepare booking ---
@@ -266,7 +266,7 @@ async def _run_happy_path_sequence(
         turn_id=turn_id,
     )
     got_status = confirm_result["status"]
-    assert got_status == "confirmed", f"Expected 'confirmed', got {got_status!r}"
+    assert got_status == "confirmed", f"Expected 'confirmed', got {got_status!r}"  # noqa: S101 pytest assertion
     return str(confirm_result["booking_id"])
 
 
@@ -410,7 +410,7 @@ async def test_repl_web_parity_happy_path(tmp_path: Path) -> None:
     web_rows = web_log.all_rows
 
     # 1. Same number of rows.
-    assert len(repl_rows) == len(web_rows), (
+    assert len(repl_rows) == len(web_rows), (  # noqa: S101 pytest assertion
         f"Row count mismatch: REPL={len(repl_rows)}, web={len(web_rows)}\n"
         f"REPL tools: {[r.get('tool') for r in repl_rows]}\n"
         f"Web  tools: {[r.get('tool') for r in web_rows]}"
@@ -422,24 +422,24 @@ async def test_repl_web_parity_happy_path(tmp_path: Path) -> None:
 
     for i, (r_row, w_row) in enumerate(zip(repl_normalized, web_normalized, strict=True)):
         msg = f"Row {i} diverges between REPL and web paths:\n  REPL: {r_row}\n  Web:  {w_row}"
-        assert r_row == w_row, msg
+        assert r_row == w_row, msg  # noqa: S101 pytest assertion
 
     # 3. Both paths ended with a confirmed booking.
     repl_booking = repl_store.get_booking(repl_booking_id)
     web_booking = web_store.get_booking(web_booking_id)
 
-    assert repl_booking is not None, "REPL booking not found in store"
-    assert web_booking is not None, "Web booking not found in store"
+    assert repl_booking is not None, "REPL booking not found in store"  # noqa: S101 pytest assertion
+    assert web_booking is not None, "Web booking not found in store"  # noqa: S101 pytest assertion
 
     # UberSim initialises a new booking with status="requested" (the first state-machine
     # step). The action-log outcome row records status="confirmed" (tool-layer concept).
     # Both bookings should share the same provider-initial status.
-    assert repl_booking.status == web_booking.status
+    assert repl_booking.status == web_booking.status  # noqa: S101 pytest assertion
 
     # 4. Both bookings carry the same price (deterministic UberSim at fixed seed + clock).
     repl_cents = repl_booking.summary.price.amount_cents
     web_cents = web_booking.summary.price.amount_cents
-    assert repl_cents == web_cents, f"Price mismatch: REPL={repl_cents}¢, web={web_cents}¢"
+    assert repl_cents == web_cents, f"Price mismatch: REPL={repl_cents}¢, web={web_cents}¢"  # noqa: S101 pytest assertion
 
     # 5. Final outcome rows both show status=confirmed.
     repl_outcome = next(
@@ -458,5 +458,5 @@ async def test_repl_web_parity_happy_path(tmp_path: Path) -> None:
         ),
         None,
     )
-    assert repl_outcome is not None, "REPL: no confirmed outcome row found"
-    assert web_outcome is not None, "Web: no confirmed outcome row found"
+    assert repl_outcome is not None, "REPL: no confirmed outcome row found"  # noqa: S101 pytest assertion
+    assert web_outcome is not None, "Web: no confirmed outcome row found"  # noqa: S101 pytest assertion

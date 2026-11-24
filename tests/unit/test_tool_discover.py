@@ -33,8 +33,8 @@ async def test_discover_emits_requested_and_outcome(tmp_path: Path) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert "options" in result
-    assert len(result["options"]) == 4  # uberx, comfort, uberxl, black (P3 multi-class)
+    assert "options" in result  # noqa: S101 pytest assertion
+    assert len(result["options"]) == 4  # uberx, comfort, uberxl, black (P3 multi-class)  # noqa: S101 pytest assertion
     rows = log.read("S")
     kinds = [r["kind"] for r in rows]
-    assert kinds == ["requested", "outcome"]
+    assert kinds == ["requested", "outcome"]  # noqa: S101 pytest assertion
