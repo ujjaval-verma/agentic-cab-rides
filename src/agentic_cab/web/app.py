@@ -256,6 +256,9 @@ def _evict_stale_sessions(clock: Clock) -> None:
     confirmation is pinned — never evicted by either rule — so a human waiting
     at the gate is never stranded. Pending confirmations carry their own
     `expires_at`, so a pinned session cannot pin memory indefinitely.
+
+    Evicting a session also closes its SSE bus subscriptions, so open streams
+    end and the bus never holds an entry for a session that is gone.
     """
     now = clock.now()
 
@@ -266,6 +269,7 @@ def _evict_stale_sessions(clock: Clock) -> None:
     ]
     for sid in idle_ids:
         del _sessions[sid]
+        _bus.close_session(sid)
         _log.info("web.session.evicted", session_id=sid, reason="idle")
 
     overflow = len(_sessions) - _MAX_SESSIONS
@@ -276,6 +280,7 @@ def _evict_stale_sessions(clock: Clock) -> None:
         )
         for sid, _state in evictable[:overflow]:
             del _sessions[sid]
+            _bus.close_session(sid)
             _log.info("web.session.evicted", session_id=sid, reason="lru")
 
         remaining_overflow = len(_sessions) - _MAX_SESSIONS
@@ -284,6 +289,23 @@ def _evict_stale_sessions(clock: Clock) -> None:
                 "web.session.cap_exceeded_pinned",
                 overflow=remaining_overflow,
             )
+
+
+async def _event_stream(
+    bus: SessionEventBus,
+    channel: WebConfirmationChannel,
+    session_id: str,
+) -> AsyncGenerator[dict[str, str], None]:
+    """Body of one `/events` stream: this subscriber's rows as SSE `data` frames.
+
+    The subscription is registered when the generator first runs and closed by
+    the `with` block when it ends — including when sse-starlette cancels it on
+    client disconnect — so the bus entry goes away with the last stream.
+    Callers must have authorized `session_id` before calling.
+    """
+    with bus.open(session_id) as sub:
+        async for row in sub:
+            yield {"data": json.dumps(row, default=str)}
 
 
 # ---------- App factory ----------
@@ -328,8 +350,9 @@ def create_app(
                 session_id=record.session_id,
                 subject_id=req.subject_id,
             )
-            # Publish into the session's SSE channel so a reloaded browser tab
-            # can render the confirmation modal.
+            # Publish into the session's SSE channel. At startup no stream is
+            # subscribed yet, so this is a no-op that creates no bus entry
+            # (restart recovery is a follow-up in docs/FOLLOWUPS.md).
             _bus.publish(
                 record.session_id,  # use the original session_id, not subject_id
                 {
@@ -374,17 +397,13 @@ def create_app(
         Authorized before any stream opens; EventSource sends the same-origin
         session cookie automatically, so the token never rides in the URL.
         """
-        _authorize(request, session_id, clock=_clock)
+        state = _authorize(request, session_id, clock=_clock)
         _log.info("web.events.subscribe", session_id=session_id)
-
-        async def _generator() -> AsyncGenerator[dict[str, str], None]:
-            async for row in _bus.subscribe(session_id):
-                yield {"data": json.dumps(row, default=str)}
 
         # ping=15 sends a `: ping` comment every 15s so browsers / proxies / OS
         # idle timers don't kill the stream when the agent is quiet. ping=0
         # disabled this and surfaced as spurious "connection lost" banners.
-        return EventSourceResponse(_generator(), ping=15)
+        return EventSourceResponse(_event_stream(_bus, state.channel, session_id), ping=15)
 
     @app.post("/sessions")
     async def create_session(request: Request) -> JSONResponse:

@@ -9,6 +9,7 @@ request on its channel, and calling POST /sessions/{sid}/confirmations/{subject_
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -27,11 +28,13 @@ from agentic_cab.web.app import (
     _SESSION_COOKIE_MAX_AGE,
     _SESSION_IDLE_TTL,
     _create_session,
+    _event_stream,
     _evict_stale_sessions,
     _sessions,
     create_app,
 )
 from agentic_cab.web.channel import WebConfirmationChannel
+from agentic_cab.web.sse import SessionEventBus, Subscription
 
 
 @pytest.fixture(autouse=True)
@@ -46,6 +49,14 @@ def _isolated_sessions() -> Iterator[None]:
     _sessions.clear()
     yield
     _sessions.clear()
+
+
+@pytest.fixture(autouse=True)
+def bus(monkeypatch: pytest.MonkeyPatch) -> SessionEventBus:
+    """A fresh module-level SSE bus per test, so bus state never leaks across tests."""
+    fresh = SessionEventBus()
+    monkeypatch.setattr("agentic_cab.web.app._bus", fresh)
+    return fresh
 
 
 # Loopback base URL for every web test client. Starlette's default Host
@@ -734,7 +745,7 @@ def test_get_session_log_returns_empty_for_fresh_session(tmp_path: Path) -> None
     assert data["rows"] == []  # noqa: S101 pytest assertion
 
 
-def test_startup_flushes_pending_confirmations(tmp_path: Path) -> None:
+def test_startup_flushes_pending_confirmations(tmp_path: Path, bus: SessionEventBus) -> None:
     """On startup, pending_confirmations rows are re-published to the SSE bus.
 
     We seed the pending_confirmations table directly (bypassing the channel)
@@ -785,6 +796,8 @@ def test_startup_flushes_pending_confirmations(tmp_path: Path) -> None:
     pending = store.list_pending_confirmations(now=datetime.now(UTC))
     ids = {r.request.subject_id for r in pending}
     assert "draft-startup-test" in ids  # noqa: S101 pytest assertion
+    # With nobody subscribed, the flush publishes into an empty bus: no entry.
+    assert bus.session_count() == 0  # noqa: S101 pytest assertion
 
 
 def test_startup_hook_publishes_to_session_id_not_subject_id(tmp_path: Path) -> None:
@@ -1216,3 +1229,95 @@ def test_evicted_session_id_is_rejected_with_403(tmp_path: Path) -> None:
     response = client.post("/chat", json={"session_id": sid, "message": "hi again"})
     assert response.status_code == 403  # noqa: S101 pytest assertion
     assert sid not in _sessions  # noqa: S101 pytest assertion
+
+
+# ---------- SSE bus lifecycle ----------
+#
+# SSE through TestClient deadlocks (see test_get_events_route_is_registered), so
+# these drive the `/events` body, `_event_stream`, directly with anext / aclose.
+
+
+async def _await_subscribers(bus: SessionEventBus, sid: str, n: int) -> None:
+    for _ in range(200):
+        if bus.subscriber_count(sid) == n:
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError(f"subscriber count for {sid} never reached {n}")
+
+
+async def _ended(sub: Subscription) -> bool:
+    """True once *sub*'s iteration ends with no rows left (bounded, never hangs)."""
+
+    async def _collect() -> list[dict[str, object]]:
+        return [row async for row in sub]
+
+    return await asyncio.wait_for(_collect(), timeout=2.0) == []
+
+
+def _clocked_app(tmp_path: Path) -> tuple[FastAPI, FrozenClock]:
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    return _app_with(tmp_path, clock=clock), clock
+
+
+async def test_event_stream_close_removes_bus_entry(tmp_path: Path, bus: SessionEventBus) -> None:
+    async with _async_client(_new_app(tmp_path)) as client:
+        sid = await _amint(client)
+        stream = _event_stream(bus, _sessions[sid].channel, sid)
+        first = asyncio.ensure_future(anext(stream))
+        await _await_subscribers(bus, sid, 1)
+
+        bus.publish(sid, {"kind": "agent_reply", "text": "hi"})
+        item = await asyncio.wait_for(first, timeout=3.0)
+        assert json.loads(item["data"]) == {"kind": "agent_reply", "text": "hi"}  # noqa: S101 pytest assertion
+
+        await stream.aclose()
+        assert bus.session_count() == 0  # noqa: S101 pytest assertion
+
+
+async def test_session_eviction_closes_its_bus_subscriptions(
+    tmp_path: Path, bus: SessionEventBus
+) -> None:
+    fastapi_app, clock = _clocked_app(tmp_path)
+    async with _async_client(fastapi_app) as client:
+        sid = await _amint(client)
+        sub = bus.open(sid)
+        clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
+        await _amint(client)  # the mint runs the idle-eviction sweep
+
+        assert sid not in _sessions  # noqa: S101 pytest assertion
+        assert bus.session_count() == 0  # noqa: S101 pytest assertion
+        assert await _ended(sub)  # noqa: S101 pytest assertion
+
+
+async def test_lru_eviction_closes_its_bus_subscriptions(
+    tmp_path: Path, bus: SessionEventBus
+) -> None:
+    from agentic_cab.adapters.state_store import SqliteStateStore
+
+    clock = FrozenClock(start=datetime(2026, 1, 1, tzinfo=UTC))
+    store = SqliteStateStore(db_path=tmp_path / "state.db", check_same_thread=False)
+    store.apply_schema()
+    oldest = "sess-lru-oldest"
+    _create_session(oldest, store=store, clock=clock)
+    sub = bus.open(oldest)
+    for i in range(_MAX_SESSIONS):
+        clock.tick(timedelta(seconds=1))
+        _create_session(f"sess-lru-{i}", store=store, clock=clock)
+
+    _evict_stale_sessions(clock)
+
+    assert oldest not in _sessions  # noqa: S101 pytest assertion
+    assert bus.session_count() == 0  # noqa: S101 pytest assertion
+    assert await _ended(sub)  # noqa: S101 pytest assertion
+
+
+def test_unknown_session_ids_do_not_grow_bus_memory(app: TestClient, bus: SessionEventBus) -> None:
+    unknown = [_ulid(1000 + i) for i in range(50)]
+    for sid in unknown:
+        assert app.get("/events", params={"session_id": sid}).status_code == 403  # noqa: S101 pytest assertion
+    assert bus.session_count() == 0  # noqa: S101 pytest assertion
+    assert not _sessions  # noqa: S101 pytest assertion
+
+    for sid in unknown:
+        bus.publish(sid, {"kind": "agent_reply", "text": "nobody listens"})
+    assert bus.session_count() == 0  # noqa: S101 pytest assertion
