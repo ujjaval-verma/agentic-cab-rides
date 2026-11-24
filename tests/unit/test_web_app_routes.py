@@ -372,6 +372,74 @@ def test_loopback_hosts_are_accepted(app: TestClient, host: str) -> None:
     assert app.post("/sessions", headers={"host": host}).status_code == 200  # noqa: S101 pytest assertion
 
 
+def _app_with(tmp_path: Path, **kw: object) -> FastAPI:
+    return create_app(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+        **kw,  # type: ignore[arg-type]
+    )
+
+
+def _host_status(fastapi_app: FastAPI, host: str) -> int:
+    return _client(fastapi_app).get("/", headers={"host": host}).status_code
+
+
+def test_bind_host_argument_is_allowed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AGENTIC_CAB_WEB_HOST", raising=False)
+    fastapi_app = _app_with(tmp_path, bind_host="192.168.1.5")
+    assert _host_status(fastapi_app, "192.168.1.5") == 200  # noqa: S101 pytest assertion
+    assert _host_status(fastapi_app, "192.168.1.5:8000") == 200  # noqa: S101 pytest assertion
+    assert _host_status(fastapi_app, "127.0.0.1") == 200  # noqa: S101 pytest assertion
+    assert _host_status(fastapi_app, "evil.example") == 400  # noqa: S101 pytest assertion
+
+
+def test_bind_host_env_var_is_allowed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENTIC_CAB_WEB_HOST", "192.168.1.5")
+    fastapi_app = _app_with(tmp_path)
+    assert _host_status(fastapi_app, "192.168.1.5") == 200  # noqa: S101 pytest assertion
+    assert _host_status(fastapi_app, "evil.example") == 400  # noqa: S101 pytest assertion
+
+
+def test_bind_host_argument_wins_over_env_var(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AGENTIC_CAB_WEB_HOST", "10.0.0.9")
+    fastapi_app = _app_with(tmp_path, bind_host="192.168.1.5")
+    assert _host_status(fastapi_app, "192.168.1.5") == 200  # noqa: S101 pytest assertion
+    assert _host_status(fastapi_app, "10.0.0.9") == 400  # noqa: S101 pytest assertion
+
+
+def _app_bound_to(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, host: str, source: str
+) -> FastAPI:
+    """Build the app with `host` configured via the `bind_host` argument or the env var."""
+    if source == "env":
+        monkeypatch.setenv("AGENTIC_CAB_WEB_HOST", host)
+        return _app_with(tmp_path)
+    monkeypatch.delenv("AGENTIC_CAB_WEB_HOST", raising=False)
+    return _app_with(tmp_path, bind_host=host)
+
+
+@pytest.mark.parametrize("wildcard", ["0.0.0.0", "::", ""])  # noqa: S104 wildcard is the input under test
+@pytest.mark.parametrize("source", ["arg", "env"])
+def test_wildcard_bind_host_adds_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wildcard: str, source: str
+) -> None:
+    fastapi_app = _app_bound_to(tmp_path, monkeypatch, wildcard, source)
+    assert _host_status(fastapi_app, "evil.example") == 400  # noqa: S101 pytest assertion
+    assert _host_status(fastapi_app, "127.0.0.1") == 200  # noqa: S101 pytest assertion
+
+
+@pytest.mark.parametrize("star", ["*", "*.example"])
+@pytest.mark.parametrize("source", ["arg", "env"])
+def test_star_bind_host_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, star: str, source: str
+) -> None:
+    with pytest.raises(ValueError, match="bind host"):
+        _app_bound_to(tmp_path, monkeypatch, star, source)
+
+
 def test_get_index_serves_html(app: TestClient) -> None:
     """GET / returns 200 with HTML content (or 404 if static not built yet)."""
     response = app.get("/")
