@@ -19,6 +19,10 @@ session's server-minted `principal_id`, never a request field.
 Host: `TrustedHostMiddleware` refuses (400) any request whose `Host` is not
 loopback, so a DNS-rebinding page cannot reach any route.
 
+Origin: `SameOriginMiddleware` (web/origin.py) refuses (403) any POST/PUT/
+PATCH/DELETE whose `Origin` is present and not this server's own origin, so a
+page on another localhost port cannot drive /chat or approve a confirmation.
+
 Layer: web/* may import from agent/, tools/, adapters/. Nothing in tools/ or
 adapters/ may import from here (invariant 1).
 """
@@ -60,6 +64,7 @@ from agentic_cab.agent.loop import run_turn
 from agentic_cab.core.ids import SessionId, new_principal_id, new_session_id, new_turn_id
 from agentic_cab.core.ports import Clock
 from agentic_cab.web.channel import WebConfirmationChannel
+from agentic_cab.web.origin import SameOriginMiddleware
 from agentic_cab.web.sse import SessionEventBus
 
 _log = structlog.get_logger(__name__)
@@ -339,6 +344,10 @@ def create_app(
         yield  # app runs here
 
     app = FastAPI(title="Agentic Cab Rides", lifespan=_lifespan)
+    # Order matters: the last middleware added is the outermost. The Host check
+    # must run first (a foreign Host gets 400) because the Origin check trusts
+    # `Host` to define the server's own origin.
+    app.add_middleware(SameOriginMiddleware)
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=_hosts,
