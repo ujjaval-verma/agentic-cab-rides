@@ -129,9 +129,9 @@ async def test_run_scenario_uses_one_meter_instance_for_run_turn_and_both_gated_
     assert "run_turn_meter" in captured, "run_turn was not called"
     assert "confirm_booking_meter" in captured, "confirm_booking handler was not reached"
     assert "cancel_booking_meter" in captured, "cancel_booking handler was not reached"
-    assert (
-        captured["run_turn_meter"] is captured["confirm_booking_meter"]
-    ), "run_turn and the confirm_booking handler must share the SAME CostMeter instance"
-    assert (
-        captured["run_turn_meter"] is captured["cancel_booking_meter"]
-    ), "run_turn and the cancel_booking handler must share the SAME CostMeter instance"
+    assert captured["run_turn_meter"] is captured["confirm_booking_meter"], (
+        "run_turn and the confirm_booking handler must share the SAME CostMeter instance"
+    )
+    assert captured["run_turn_meter"] is captured["cancel_booking_meter"], (
+        "run_turn and the cancel_booking handler must share the SAME CostMeter instance"
+    )

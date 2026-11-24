@@ -871,12 +871,12 @@ def test_post_chat_uses_one_meter_for_run_turn_and_both_gated_tools(tmp_path: Pa
 
     session_meter = _sessions[sid].meter
     assert captured["run_turn_meter"] is session_meter
-    assert (
-        captured["confirm_booking_meter"] is session_meter
-    ), "confirm_booking must receive the session's own CostMeter"
-    assert (
-        captured["cancel_booking_meter"] is session_meter
-    ), "cancel_booking must receive the session's own CostMeter"
+    assert captured["confirm_booking_meter"] is session_meter, (
+        "confirm_booking must receive the session's own CostMeter"
+    )
+    assert captured["cancel_booking_meter"] is session_meter, (
+        "cancel_booking must receive the session's own CostMeter"
+    )
 
 
 def test_get_meter_is_stable_per_session_and_distinct_across_sessions(app: TestClient) -> None:

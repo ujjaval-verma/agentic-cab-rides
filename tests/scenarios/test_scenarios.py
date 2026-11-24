@@ -52,9 +52,9 @@ def test_scenario_user_turns_is_nonempty_string_list(scenario_path: Path) -> Non
     user_turns = scn.get("user_turns")
     assert isinstance(user_turns, list), f"{scenario_path.name}: user_turns must be a list"
     assert user_turns, f"{scenario_path.name}: user_turns must be non-empty"
-    assert all(
-        isinstance(t, str) for t in user_turns
-    ), f"{scenario_path.name}: every user_turns entry must be a string"
+    assert all(isinstance(t, str) for t in user_turns), (
+        f"{scenario_path.name}: every user_turns entry must be a string"
+    )
 
 
 @pytest.mark.parametrize("scenario_path", _PATHS, ids=_scenario_ids(_PATHS))

@@ -46,9 +46,9 @@ async def test_06_cross_session_dedup(tmp_path: Path) -> None:
         and r.get("tool") == "confirm_booking"
         and not r.get("replayed", False)
     ]
-    assert (
-        len(confirm_executes) == 2
-    ), f"expected 2 non-replayed confirm_booking executed rows, got {len(confirm_executes)}"
+    assert len(confirm_executes) == 2, (
+        f"expected 2 non-replayed confirm_booking executed rows, got {len(confirm_executes)}"
+    )
 
     # Hard sanity: exactly one outcome row with status="duplicate_intent".
     dups = [

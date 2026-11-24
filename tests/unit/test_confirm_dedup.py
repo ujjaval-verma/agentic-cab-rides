@@ -252,15 +252,15 @@ async def test_duplicate_intent_log_shape_no_executed_row(harness, meter) -> Non
     verified = next(r for r in rows if r["kind"] == "verified")
     assert verified["result"] == "rejected"
     assert verified.get("reason") == "duplicate_intent"
-    assert isinstance(
-        verified.get("checks"), dict
-    ), "verified row must carry a 'checks' dict (spec §5)"
-    assert (
-        "intent_hash" in verified["checks"]
-    ), "verified.checks must include 'intent_hash' (spec §5)"
-    assert (
-        "existing_booking_id" in verified["checks"]
-    ), "verified.checks must include 'existing_booking_id' (spec §5)"
+    assert isinstance(verified.get("checks"), dict), (
+        "verified row must carry a 'checks' dict (spec §5)"
+    )
+    assert "intent_hash" in verified["checks"], (
+        "verified.checks must include 'intent_hash' (spec §5)"
+    )
+    assert "existing_booking_id" in verified["checks"], (
+        "verified.checks must include 'existing_booking_id' (spec §5)"
+    )
     outcome = next(r for r in rows if r["kind"] == "outcome")
     assert outcome["status"] == "duplicate_intent"
     assert outcome["result"]["existing_booking_id"] == r1["booking_id"]
@@ -316,9 +316,9 @@ async def test_recall_path_heals_null_intent_hash(harness, meter) -> None:
 
     # Verify the setup: intent_hash IS NULL now, so find_active_booking_by_intent_hash
     # returns None (the booking is invisible to the dedup lookup).
-    assert (
-        store.find_active_booking_by_intent_hash(ih) is None
-    ), "Test precondition: booking must NOT be found before the heal"
+    assert store.find_active_booking_by_intent_hash(ih) is None, (
+        "Test precondition: booking must NOT be found before the heal"
+    )
 
     # Now call confirm_booking again with the same intent (new draft, same key derivation).
     # generation=0 still (no terminal bookings with this intent_hash visible).
