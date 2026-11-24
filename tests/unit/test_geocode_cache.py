@@ -96,6 +96,13 @@ def test_cache_file_is_valid_json(tmp_path: Path) -> None:
     assert parsed["formatted"] == addr.formatted
 
 
+def test_cache_file_name_is_stable_sha1_of_normalised_query(tmp_path: Path) -> None:
+    """Existing on-disk fixtures must keep matching: the key is sha1("test query")."""
+    cache = GeocodeCache(fixtures_dir=tmp_path)
+    cache.put("  Test Query ", _make_addr())
+    assert [p.name for p in tmp_path.iterdir()] == ["4cbdfc765c265da260dc725d94660db139f2edac.json"]
+
+
 def test_overwrite_updates_existing_cache_entry(tmp_path: Path) -> None:
     cache = GeocodeCache(fixtures_dir=tmp_path)
     addr1 = _make_addr(confidence=0.5)
