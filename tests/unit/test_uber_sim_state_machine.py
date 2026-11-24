@@ -45,27 +45,27 @@ def test_advance_through_full_lifecycle_under_frozen_clock() -> None:
 
     # At t=0 → still requested
     b = advance(booking, clock, avail, start)
-    assert b.status == "requested"
+    assert b.status == "requested"  # noqa: S101 pytest assertion
 
     # At t=31s → matched
     clock.tick(timedelta(seconds=31))
     b = advance(booking, clock, avail, start)
-    assert b.status == "matched"
+    assert b.status == "matched"  # noqa: S101 pytest assertion
 
     # At t=61s → en_route
     clock.tick(timedelta(seconds=30))
     b = advance(booking, clock, avail, start)
-    assert b.status == "en_route"
+    assert b.status == "en_route"  # noqa: S101 pytest assertion
 
     # At t=181s → in_progress
     clock.tick(timedelta(seconds=120))
     b = advance(booking, clock, avail, start)
-    assert b.status == "in_progress"
+    assert b.status == "in_progress"  # noqa: S101 pytest assertion
 
     # At t=481s → completed
     clock.tick(timedelta(seconds=300))
     b = advance(booking, clock, avail, start)
-    assert b.status == "completed"
+    assert b.status == "completed"  # noqa: S101 pytest assertion
 
 
 def test_force_no_availability_keeps_booking_in_requested() -> None:
@@ -76,7 +76,7 @@ def test_force_no_availability_keeps_booking_in_requested() -> None:
     avail = DriverAvailability(available=True, force_no_availability=True)
     booking = _booking("requested")
     b = advance(booking, clock, avail, start)
-    assert b.status == "requested"
+    assert b.status == "requested"  # noqa: S101 pytest assertion
 
 
 def test_available_false_keeps_booking_in_requested() -> None:
@@ -87,7 +87,7 @@ def test_available_false_keeps_booking_in_requested() -> None:
     avail = DriverAvailability(available=False)
     booking = _booking("requested")
     b = advance(booking, clock, avail, start)
-    assert b.status == "requested"
+    assert b.status == "requested"  # noqa: S101 pytest assertion
 
 
 def test_terminal_status_does_not_advance() -> None:
@@ -99,7 +99,7 @@ def test_terminal_status_does_not_advance() -> None:
         avail = DriverAvailability(available=True)
         booking = _booking(terminal)
         b = advance(booking, clock, avail, start)
-        assert b.status == terminal, f"Expected {terminal!r} to remain terminal"
+        assert b.status == terminal, f"Expected {terminal!r} to remain terminal"  # noqa: S101 pytest assertion
 
 
 def test_advance_is_deterministic() -> None:
@@ -111,4 +111,4 @@ def test_advance_is_deterministic() -> None:
     booking = _booking("requested")
     b1 = advance(booking, clock, avail, start)
     b2 = advance(booking, clock, avail, start)
-    assert b1.status == b2.status
+    assert b1.status == b2.status  # noqa: S101 pytest assertion

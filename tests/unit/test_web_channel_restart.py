@@ -54,7 +54,7 @@ async def test_request_writes_pending_row(tmp_path: Path) -> None:
     # The durable row should be present while the future is pending.
     pending = store.list_pending_confirmations(now=datetime.now(UTC))
     ids = {r.request.subject_id for r in pending}
-    assert "draft-write-test" in ids
+    assert "draft-write-test" in ids  # noqa: S101 pytest assertion
 
     # Clean up: resolve and await.
     channel.resolve(req.subject_id, approved=False)
@@ -81,7 +81,7 @@ async def test_resolve_clears_pending_row(tmp_path: Path) -> None:
 
     pending = store.list_pending_confirmations(now=datetime.now(UTC))
     ids = {r.request.subject_id for r in pending}
-    assert "draft-resolve-test" not in ids
+    assert "draft-resolve-test" not in ids  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -97,8 +97,8 @@ async def test_timeout_clears_pending_row(tmp_path: Path) -> None:
     req = _req(subject_id="draft-timeout-test", seconds=0.05)
 
     result = await asyncio.wait_for(channel.request(req), timeout=3.0)
-    assert result.reason == "timeout"
+    assert result.reason == "timeout"  # noqa: S101 pytest assertion
 
     pending = store.list_pending_confirmations(now=datetime.now(UTC))
     ids = {r.request.subject_id for r in pending}
-    assert "draft-timeout-test" not in ids
+    assert "draft-timeout-test" not in ids  # noqa: S101 pytest assertion

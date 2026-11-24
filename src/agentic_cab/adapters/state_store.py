@@ -242,8 +242,7 @@ class SqliteStateStore:
         # on already-finalized keys (no-op) or never-claimed keys (no-op).
         with self._write() as conn:
             conn.execute(
-                "DELETE FROM idempotency_keys"
-                " WHERE key = ? AND scope = ? AND booking_id IS NULL",
+                "DELETE FROM idempotency_keys WHERE key = ? AND scope = ? AND booking_id IS NULL",
                 (key, scope),
             )
 

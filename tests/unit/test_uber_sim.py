@@ -36,12 +36,12 @@ async def test_discover_returns_uberx_option(sim: UberSimAdapter) -> None:
     )
     options = await sim.discover(intent)
     # P3: sim now returns all 4 vehicle classes
-    assert len(options) == 4
+    assert len(options) == 4  # noqa: S101 pytest assertion
     vehicle_classes = {
         o.details.vehicle_class for o in options if isinstance(o.details, RideOptionDetails)
     }
-    assert "uberx" in vehicle_classes
-    assert all(o.price.amount_cents > 0 for o in options)
+    assert "uberx" in vehicle_classes  # noqa: S101 pytest assertion
+    assert all(o.price.amount_cents > 0 for o in options)  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -56,8 +56,8 @@ async def test_prepare_then_confirm_returns_booking(sim: UberSimAdapter) -> None
     draft = await sim.prepare(opt.option_id)
     booking = await sim.confirm(draft.draft_id, idempotency_key="K1")
     # P3: sim starts booking at "requested" (state machine initial state)
-    assert booking.status == "requested"
-    assert booking.draft_id == draft.draft_id
+    assert booking.status == "requested"  # noqa: S101 pytest assertion
+    assert booking.draft_id == draft.draft_id  # noqa: S101 pytest assertion
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ async def test_quote_cancel_fee_by_status(
     store, sim = _make_sim(tmp_path, "s2.db")
     booking = _make_booking(store, status)
     fee = await sim.quote_cancel_fee(booking.booking_id)
-    assert fee == Money(amount_cents=expected_fee_cents, currency="USD")
+    assert fee == Money(amount_cents=expected_fee_cents, currency="USD")  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("status", ["in_progress", "completed"])

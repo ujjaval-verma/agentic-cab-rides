@@ -42,44 +42,44 @@ T0 = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
 def test_same_intent_same_hash() -> None:
     a = intent_hash(_ride(), "uberx", now=T0)
     b = intent_hash(_ride(), "uberx", now=T0)
-    assert a == b
-    assert len(a) == 64  # sha256 hex
+    assert a == b  # noqa: S101 pytest assertion
+    assert len(a) == 64  # sha256 hex  # noqa: S101 pytest assertion
 
 
 def test_now_collapses_within_ten_minute_bucket() -> None:
     a = intent_hash(_ride(when="now"), "uberx", now=T0)
     b = intent_hash(_ride(when="now"), "uberx", now=T0.replace(minute=9, second=59))
-    assert a == b
+    assert a == b  # noqa: S101 pytest assertion
 
 
 def test_now_differs_across_ten_minute_bucket() -> None:
     a = intent_hash(_ride(when="now"), "uberx", now=T0)
     b = intent_hash(_ride(when="now"), "uberx", now=T0.replace(minute=10))
-    assert a != b
+    assert a != b  # noqa: S101 pytest assertion
 
 
 def test_vehicle_class_changes_hash() -> None:
     a = intent_hash(_ride(), "uberx", now=T0)
     b = intent_hash(_ride(), "comfort", now=T0)
-    assert a != b
+    assert a != b  # noqa: S101 pytest assertion
 
 
 def test_party_size_changes_hash() -> None:
     a = intent_hash(_ride(party_size=1), "uberx", now=T0)
     b = intent_hash(_ride(party_size=2), "uberx", now=T0)
-    assert a != b
+    assert a != b  # noqa: S101 pytest assertion
 
 
 def test_pickup_changes_hash() -> None:
     a = intent_hash(_ride(), "uberx", now=T0)
     b = intent_hash(_ride(pickup=_addr("A2", 37.5, -122.0)), "uberx", now=T0)
-    assert a != b
+    assert a != b  # noqa: S101 pytest assertion
 
 
 def test_dropoff_changes_hash() -> None:
     a = intent_hash(_ride(), "uberx", now=T0)
     b = intent_hash(_ride(dropoff=_addr("B2", 37.5, -122.5)), "uberx", now=T0)
-    assert a != b
+    assert a != b  # noqa: S101 pytest assertion
 
 
 def test_concrete_when_hashes_to_its_iso_string() -> None:
@@ -87,7 +87,7 @@ def test_concrete_when_hashes_to_its_iso_string() -> None:
     a = intent_hash(_ride(when=fixed), "uberx", now=T0)
     b = intent_hash(_ride(when=fixed), "uberx", now=T0.replace(hour=23))
     # Concrete `when` ignores `now`; hash stays stable.
-    assert a == b
+    assert a == b  # noqa: S101 pytest assertion
 
 
 def test_appointment_intent_raises_not_implemented() -> None:
@@ -107,23 +107,23 @@ def test_appointment_intent_raises_not_implemented() -> None:
 def test_confirm_idempotency_key_is_deterministic() -> None:
     k1 = confirm_idempotency_key("ih-abc", 0, None)
     k2 = confirm_idempotency_key("ih-abc", 0, None)
-    assert k1 == k2
-    assert len(k1) == 64
+    assert k1 == k2  # noqa: S101 pytest assertion
+    assert len(k1) == 64  # noqa: S101 pytest assertion
 
 
 def test_confirm_idempotency_key_changes_with_generation() -> None:
     k1 = confirm_idempotency_key("ih-abc", 0, None)
     k2 = confirm_idempotency_key("ih-abc", 1, None)
-    assert k1 != k2
+    assert k1 != k2  # noqa: S101 pytest assertion
 
 
 def test_confirm_idempotency_key_changes_with_nonce() -> None:
     k1 = confirm_idempotency_key("ih-abc", 0, None)
     k2 = confirm_idempotency_key("ih-abc", 0, "nonce-1")
-    assert k1 != k2
+    assert k1 != k2  # noqa: S101 pytest assertion
 
 
 def test_confirm_idempotency_key_changes_with_intent_hash() -> None:
     k1 = confirm_idempotency_key("ih-abc", 0, None)
     k2 = confirm_idempotency_key("ih-xyz", 0, None)
-    assert k1 != k2
+    assert k1 != k2  # noqa: S101 pytest assertion

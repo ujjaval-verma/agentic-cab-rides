@@ -71,7 +71,7 @@ SKIP_SUFFIXES = {
 
 def staged_files() -> list[Path]:
     out = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],  # noqa: S607 git resolved from PATH by design for repo hooks
         capture_output=True,
         text=True,
         check=True,
@@ -81,7 +81,7 @@ def staged_files() -> list[Path]:
 
 def tracked_files() -> list[Path]:
     out = subprocess.run(
-        ["git", "ls-files"],
+        ["git", "ls-files"],  # noqa: S607 git resolved from PATH by design for repo hooks
         capture_output=True,
         text=True,
         check=True,

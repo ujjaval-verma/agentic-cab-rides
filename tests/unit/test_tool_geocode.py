@@ -65,25 +65,25 @@ async def test_happy_path_emits_requested_then_outcome(tmp_path: Path) -> None:
     )
 
     rows = log.read("S1")
-    assert len(rows) == 2, f"Expected 2 rows, got {len(rows)}: {rows}"
+    assert len(rows) == 2, f"Expected 2 rows, got {len(rows)}: {rows}"  # noqa: S101 pytest assertion
 
     requested, outcome = rows
-    assert requested["kind"] == "requested"
-    assert outcome["kind"] == "outcome"
+    assert requested["kind"] == "requested"  # noqa: S101 pytest assertion
+    assert outcome["kind"] == "outcome"  # noqa: S101 pytest assertion
     # Both share same action_id
-    assert requested["action_id"] == outcome["action_id"]
+    assert requested["action_id"] == outcome["action_id"]  # noqa: S101 pytest assertion
     # Outcome shape
-    assert outcome["status"] == "ok"
-    assert outcome["error"] is None
+    assert outcome["status"] == "ok"  # noqa: S101 pytest assertion
+    assert outcome["error"] is None  # noqa: S101 pytest assertion
     res = outcome["result"]
-    assert res["formatted"] == "123 Main St, Springfield, IL 62701, USA"
-    assert res["lat"] == 39.7817
-    assert res["lng"] == -89.6501
-    assert res["confidence"] == 0.9
-    assert res["alternates_count"] == 0
+    assert res["formatted"] == "123 Main St, Springfield, IL 62701, USA"  # noqa: S101 pytest assertion
+    assert res["lat"] == 39.7817  # noqa: S101 pytest assertion
+    assert res["lng"] == -89.6501  # noqa: S101 pytest assertion
+    assert res["confidence"] == 0.9  # noqa: S101 pytest assertion
+    assert res["alternates_count"] == 0  # noqa: S101 pytest assertion
     # Return value matches outcome result
-    assert result["formatted"] == res["formatted"]
-    assert result["alternates_count"] == 0
+    assert result["formatted"] == res["formatted"]  # noqa: S101 pytest assertion
+    assert result["alternates_count"] == 0  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -108,10 +108,10 @@ async def test_outcome_includes_alternates_count_for_ambiguous_result(tmp_path: 
     rows = log.read("S2")
     outcome = rows[1]
     res = outcome["result"]
-    assert res["alternates_count"] == 2
-    assert res["confidence"] == 0.3
+    assert res["alternates_count"] == 2  # noqa: S101 pytest assertion
+    assert res["confidence"] == 0.3  # noqa: S101 pytest assertion
     # Raw alternates list must NOT appear in logs (invariant 8 PII redaction)
-    assert "alternates" not in res
+    assert "alternates" not in res  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -132,7 +132,7 @@ async def test_outcome_alternates_count_zero_for_high_confidence(tmp_path: Path)
 
     rows = log.read("S3")
     outcome = rows[1]
-    assert outcome["result"]["alternates_count"] == 0
+    assert outcome["result"]["alternates_count"] == 0  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -151,14 +151,14 @@ async def test_geocoder_error_emits_outcome_error(tmp_path: Path) -> None:
     )
 
     rows = log.read("S4")
-    assert len(rows) == 2
+    assert len(rows) == 2  # noqa: S101 pytest assertion
     requested, outcome = rows
-    assert requested["kind"] == "requested"
-    assert outcome["kind"] == "outcome"
-    assert outcome["status"] == "error"
-    assert outcome["error"] == "nominatim down"
-    assert outcome["result"] is None
+    assert requested["kind"] == "requested"  # noqa: S101 pytest assertion
+    assert outcome["kind"] == "outcome"  # noqa: S101 pytest assertion
+    assert outcome["status"] == "error"  # noqa: S101 pytest assertion
+    assert outcome["error"] == "nominatim down"  # noqa: S101 pytest assertion
+    assert outcome["result"] is None  # noqa: S101 pytest assertion
     # Return value matches
-    assert result["status"] == "error"
-    assert result["error"] == "nominatim down"
-    assert result["result"] is None
+    assert result["status"] == "error"  # noqa: S101 pytest assertion
+    assert result["error"] == "nominatim down"  # noqa: S101 pytest assertion
+    assert result["result"] is None  # noqa: S101 pytest assertion

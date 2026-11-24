@@ -42,10 +42,10 @@ async def test_prepare_persists_draft_and_emits_2_rows(tmp_path: Path) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert "draft_id" in result
-    assert "fingerprint" in result
-    assert store.get_draft(result["draft_id"]) is not None
+    assert "draft_id" in result  # noqa: S101 pytest assertion
+    assert "fingerprint" in result  # noqa: S101 pytest assertion
+    assert store.get_draft(result["draft_id"]) is not None  # noqa: S101 pytest assertion
     rows = log.read("S")
     # Last 2 rows are this tool's requested+outcome
-    assert [r["kind"] for r in rows[-2:]] == ["requested", "outcome"]
-    assert rows[-2]["tool"] == "prepare_booking"
+    assert [r["kind"] for r in rows[-2:]] == ["requested", "outcome"]  # noqa: S101 pytest assertion
+    assert rows[-2]["tool"] == "prepare_booking"  # noqa: S101 pytest assertion

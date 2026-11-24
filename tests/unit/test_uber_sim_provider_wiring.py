@@ -50,7 +50,7 @@ async def test_discover_returns_all_four_vehicle_classes(tmp_path: Path) -> None
     vehicle_classes = {
         o.details.vehicle_class for o in options if isinstance(o.details, RideOptionDetails)
     }
-    assert vehicle_classes == {"uberx", "comfort", "uberxl", "black"}
+    assert vehicle_classes == {"uberx", "comfort", "uberxl", "black"}  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -58,10 +58,10 @@ async def test_discover_prices_ordered_uberx_cheapest(tmp_path: Path) -> None:
     """uberx must be the cheapest option."""
     _, sim = _sim(tmp_path)
     options = sorted(await sim.discover(_INTENT), key=lambda o: o.price.amount_cents)
-    assert isinstance(options[0].details, RideOptionDetails)
-    assert options[0].details.vehicle_class == "uberx"
-    assert isinstance(options[-1].details, RideOptionDetails)
-    assert options[-1].details.vehicle_class == "black"
+    assert isinstance(options[0].details, RideOptionDetails)  # noqa: S101 pytest assertion
+    assert options[0].details.vehicle_class == "uberx"  # noqa: S101 pytest assertion
+    assert isinstance(options[-1].details, RideOptionDetails)  # noqa: S101 pytest assertion
+    assert options[-1].details.vehicle_class == "black"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -97,7 +97,7 @@ async def test_surge_curve_applied_on_discover(tmp_path: Path) -> None:
     }
 
     for vc in ("uberx", "comfort", "uberxl", "black"):
-        assert opts_surge[vc] > opts_no[vc], f"Expected surge price for {vc} to be higher"
+        assert opts_surge[vc] > opts_no[vc], f"Expected surge price for {vc} to be higher"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -123,7 +123,7 @@ async def test_confirm_final_price_uses_surge_on_confirm(tmp_path: Path) -> None
     await sim.confirm(draft.draft_id, idempotency_key="K-surge")
     # last_confirm_price_cents is set by confirm() after re-pricing with on_confirm=True
     confirm_price_cents = sim.last_confirm_price_cents
-    assert confirm_price_cents > price_at_discover
+    assert confirm_price_cents > price_at_discover  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -141,12 +141,12 @@ async def test_track_uses_state_machine(tmp_path: Path) -> None:
 
     # At t=0 booking is newly confirmed; state machine should yield 'requested'
     tracked0 = await sim.track(booking.booking_id)
-    assert tracked0.status == "requested"
+    assert tracked0.status == "requested"  # noqa: S101 pytest assertion
 
     # Advance clock past matched threshold
     clock.tick(timedelta(seconds=35))
     tracked1 = await sim.track(booking.booking_id)
-    assert tracked1.status == "matched"
+    assert tracked1.status == "matched"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -165,4 +165,4 @@ async def test_force_no_availability_keeps_tracking_in_requested(tmp_path: Path)
 
     clock.tick(timedelta(hours=2))  # well past completion
     tracked = await sim.track(booking.booking_id)
-    assert tracked.status == "requested"
+    assert tracked.status == "requested"  # noqa: S101 pytest assertion

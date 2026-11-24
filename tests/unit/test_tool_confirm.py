@@ -73,10 +73,10 @@ async def test_happy_path_emits_4_rows_in_order(harness, meter) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "confirmed"
+    assert result["status"] == "confirmed"  # noqa: S101 pytest assertion
     action_id = result["action_id"]
     rows = [r for r in log.read("S") if r["action_id"] == action_id]
-    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]
+    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -97,10 +97,10 @@ async def test_verified_row_records_approver_id_and_channel(harness, meter) -> N
         turn_id="T",
     )
     rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
-    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]
+    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]  # noqa: S101 pytest assertion
     confirmation = next(r for r in rows if r["kind"] == "verified")["checks"]["confirmation"]
-    assert confirmation["approver_id"] == "scripted"
-    assert confirmation["channel"] == "scripted"
+    assert confirmation["approver_id"] == "scripted"  # noqa: S101 pytest assertion
+    assert confirmation["channel"] == "scripted"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -128,13 +128,13 @@ async def test_fingerprint_mismatch_short_circuits(harness, meter) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "rejected"
+    assert result["status"] == "rejected"  # noqa: S101 pytest assertion
     action_id = result["action_id"]
     rows = [r for r in log.read("S") if r["action_id"] == action_id]
     kinds = [r["kind"] for r in rows]
-    assert "executed" not in kinds  # CRITICAL: invariant 6 — rejected → no executed
+    assert "executed" not in kinds  # CRITICAL: invariant 6 — rejected → no executed  # noqa: S101 pytest assertion
     verified = next(r for r in rows if r["kind"] == "verified")
-    assert verified["result"] == "rejected"
+    assert verified["result"] == "rejected"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -154,8 +154,8 @@ async def test_consumed_draft_rejected(harness, meter) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "rejected"
-    assert "consumed" in result["reason"].lower()
+    assert result["status"] == "rejected"  # noqa: S101 pytest assertion
+    assert "consumed" in result["reason"].lower()  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -190,8 +190,8 @@ async def test_idempotency_replay_short_circuits_second_provider_call(harness, m
         session_id="S",
         turn_id="T",
     )
-    assert r1["status"] == "confirmed"
-    assert "booking_id" in r1
+    assert r1["status"] == "confirmed"  # noqa: S101 pytest assertion
+    assert "booking_id" in r1  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -224,16 +224,16 @@ async def test_provider_exception_closes_log_with_outcome(harness, monkeypatch, 
     confirm_requested = [
         r for r in log.read("S") if r["kind"] == "requested" and r.get("tool") == "confirm_booking"
     ]
-    assert len(confirm_requested) == 1
+    assert len(confirm_requested) == 1  # noqa: S101 pytest assertion
     action_id = confirm_requested[0]["action_id"]
     rows = [r for r in log.read("S") if r["action_id"] == action_id]
     # verified=ok happened, but then provider raised. We must have an outcome.
     kinds = [r["kind"] for r in rows]
-    assert "verified" in kinds
-    assert kinds[-1] == "outcome"
+    assert "verified" in kinds  # noqa: S101 pytest assertion
+    assert kinds[-1] == "outcome"  # noqa: S101 pytest assertion
     outcome = rows[-1]
-    assert outcome["status"] == "error"
-    assert "provider exploded" in (outcome.get("error") or "")
+    assert outcome["status"] == "error"  # noqa: S101 pytest assertion
+    assert "provider exploded" in (outcome.get("error") or "")  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -264,11 +264,11 @@ async def test_confirm_request_uses_subject_kind_draft(harness, meter) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "confirmed"
-    assert len(captured) == 1
+    assert result["status"] == "confirmed"  # noqa: S101 pytest assertion
+    assert len(captured) == 1  # noqa: S101 pytest assertion
     req = captured[0]
-    assert req.subject_kind == "draft"
-    assert req.subject_id == draft_id
+    assert req.subject_kind == "draft"  # noqa: S101 pytest assertion
+    assert req.subject_id == draft_id  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -297,11 +297,11 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
     # Prepare ONE draft; compute the expected key via the new signature.
     draft_id = await _prepare(sim, log, clock)
     draft = store.get_draft(draft_id)
-    assert draft is not None
+    assert draft is not None  # noqa: S101 pytest assertion
     from agentic_cab.core.types import RideIntent, RideOptionDetails
 
-    assert isinstance(draft.intent_snapshot, RideIntent)
-    assert isinstance(draft.option_snapshot.details, RideOptionDetails)
+    assert isinstance(draft.intent_snapshot, RideIntent)  # noqa: S101 pytest assertion
+    assert isinstance(draft.option_snapshot.details, RideOptionDetails)  # noqa: S101 pytest assertion
     ih = intent_hash(
         draft.intent_snapshot,
         draft.option_snapshot.details.vehicle_class,
@@ -354,7 +354,7 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
             session_id="S",
             turn_id="T",
         )
-        assert r1["status"] == "confirmed"
+        assert r1["status"] == "confirmed"  # noqa: S101 pytest assertion
         booking_id_1 = r1["booking_id"]
 
         # Second call: same draft_id, same store — draft is still valid (consume was no-op).
@@ -370,13 +370,13 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
             session_id="S",
             turn_id="T2",
         )
-        assert r2["status"] == "confirmed"
+        assert r2["status"] == "confirmed"  # noqa: S101 pytest assertion
 
         # Core assertion: exactly one provider.confirm call across both tool invocations.
-        assert spy.call_count == 1  # provider.confirm must be called exactly once
+        assert spy.call_count == 1  # provider.confirm must be called exactly once  # noqa: S101 pytest assertion
 
     # Same booking_id returned from both calls.
-    assert r2["booking_id"] == booking_id_1  # recall branch must return original booking_id
+    assert r2["booking_id"] == booking_id_1  # recall branch must return original booking_id  # noqa: S101 pytest assertion
 
     # Both executed rows carry identical idempotency_key.
     exec_rows_1 = [
@@ -385,25 +385,25 @@ async def test_retry_after_synthetic_failure_reuses_idempotency_key(
     exec_rows_2 = [
         r for r in log.read("S") if r["action_id"] == r2["action_id"] and r["kind"] == "executed"
     ]
-    assert len(exec_rows_1) == 1
-    assert len(exec_rows_2) == 1
+    assert len(exec_rows_1) == 1  # noqa: S101 pytest assertion
+    assert len(exec_rows_2) == 1  # noqa: S101 pytest assertion
     key_from_log_1 = exec_rows_1[0]["idempotency_key"]
     key_from_log_2 = exec_rows_2[0]["idempotency_key"]
     # Both executed rows must carry identical keys (structural idempotency guarantee).
-    assert key_from_log_1 == key_from_log_2
+    assert key_from_log_1 == key_from_log_2  # noqa: S101 pytest assertion
     # Verify raw key determinism independently: same inputs → same output.
-    assert expected_key == confirm_idempotency_key(ih, 0, None)
+    assert expected_key == confirm_idempotency_key(ih, 0, None)  # noqa: S101 pytest assertion
 
     # Second call's verified row must expose idempotency='recalled' in checks.
     verified_rows_2 = [
         r for r in log.read("S") if r["action_id"] == r2["action_id"] and r["kind"] == "verified"
     ]
-    assert len(verified_rows_2) == 1
+    assert len(verified_rows_2) == 1  # noqa: S101 pytest assertion
     # second call's verified row must signal recall in checks.idempotency
-    assert verified_rows_2[0]["checks"].get("idempotency") == "recalled"
+    assert verified_rows_2[0]["checks"].get("idempotency") == "recalled"  # noqa: S101 pytest assertion
 
     # Second call's executed row must be marked as a replay.
-    assert exec_rows_2[0].get("replayed") is True
+    assert exec_rows_2[0].get("replayed") is True  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -426,4 +426,4 @@ async def test_price_drift_is_zero_with_no_surge(harness, meter) -> None:
     )
     rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
     verified = next(r for r in rows if r["kind"] == "verified")
-    assert verified["checks"]["requote_price_drift_cents"] == 0
+    assert verified["checks"]["requote_price_drift_cents"] == 0  # noqa: S101 pytest assertion

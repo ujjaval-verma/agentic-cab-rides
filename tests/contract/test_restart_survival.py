@@ -102,7 +102,7 @@ def test_finalised_key_recalled_across_store_instances(tmp_path: Path) -> None:
     key = confirm_idempotency_key("f" * 64, 0, None)
 
     first = store_a.claim_or_recall(key, scope="confirm")
-    assert first.status == "new"
+    assert first.status == "new"  # noqa: S101 pytest assertion
 
     store_a.finalize_idempotency(key, booking=booking)
 
@@ -110,8 +110,8 @@ def test_finalised_key_recalled_across_store_instances(tmp_path: Path) -> None:
     store_b = _make_store(db_path)
 
     second = store_b.claim_or_recall(key, scope="confirm")
-    assert second.status == "recalled"
-    assert second.booking_id == booking.booking_id
+    assert second.status == "recalled"  # noqa: S101 pytest assertion
+    assert second.booking_id == booking.booking_id  # noqa: S101 pytest assertion
 
     # If we were tracking provider calls, confirm would be called 0 times here.
     # The recall short-circuit in confirm_booking ensures no double-book.
@@ -136,14 +136,14 @@ def test_in_progress_key_visible_across_store_instances(tmp_path: Path) -> None:
     crash_key = "crash-key-abc123"
 
     first = store_a.claim_or_recall(crash_key, scope="confirm")
-    assert first.status == "new"
+    assert first.status == "new"  # noqa: S101 pytest assertion
     # Crash: no finalize_idempotency call.
 
     # Instance B reads the same SQLite file.
     store_b = _make_store(db_path)
     second = store_b.claim_or_recall(crash_key, scope="confirm")
-    assert second.status == "in_progress"
-    assert second.booking_id is None
+    assert second.status == "in_progress"  # noqa: S101 pytest assertion
+    assert second.booking_id is None  # noqa: S101 pytest assertion
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +232,7 @@ async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path, met
         session_id="S",
         turn_id="T1",
     )
-    assert r1["status"] == "confirmed"
+    assert r1["status"] == "confirmed"  # noqa: S101 pytest assertion
     booking_id_1 = r1["booking_id"]
 
     # --- Simulate restart: Instance B with fresh store + sim ---
@@ -265,8 +265,8 @@ async def test_tool_replay_via_same_key_returns_same_booking(tmp_path: Path, met
     )
 
     # Same booking returned — no double-book.
-    assert r2["status"] == "confirmed"
-    assert r2["booking_id"] == booking_id_1  # same booking; no double-book
+    assert r2["status"] == "confirmed"  # noqa: S101 pytest assertion
+    assert r2["booking_id"] == booking_id_1  # same booking; no double-book  # noqa: S101 pytest assertion
 
     # provider.confirm was NOT called on Instance B.
-    assert not provider_confirm_called, "provider.confirm must not be called on a recalled key"
+    assert not provider_confirm_called, "provider.confirm must not be called on a recalled key"  # noqa: S101 pytest assertion

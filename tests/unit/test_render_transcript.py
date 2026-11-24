@@ -52,4 +52,4 @@ def test_render_snapshot(snapshot) -> None:
         action_log=rows,
         invariants=invariants,
     )
-    assert md == snapshot
+    assert md == snapshot  # noqa: S101 pytest assertion

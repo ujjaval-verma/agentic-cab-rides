@@ -24,11 +24,11 @@ async def test_match_approve() -> None:
             expires_at=datetime(2026, 5, 19, 12, 5, tzinfo=UTC),
         )
     )
-    assert res.approved is True
-    assert res.reason == "approved"
-    assert res.approver == "scripted"
-    assert res.approver_id == "scripted"
-    assert res.channel == "scripted"
+    assert res.approved is True  # noqa: S101 pytest assertion
+    assert res.reason == "approved"  # noqa: S101 pytest assertion
+    assert res.approver == "scripted"  # noqa: S101 pytest assertion
+    assert res.approver_id == "scripted"  # noqa: S101 pytest assertion
+    assert res.channel == "scripted"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -48,10 +48,10 @@ async def test_match_decline() -> None:
             expires_at=datetime(2026, 5, 19, 12, 5, tzinfo=UTC),
         )
     )
-    assert res.approved is False
-    assert res.reason == "declined"
-    assert res.approver_id is None
-    assert res.channel == "scripted"
+    assert res.approved is False  # noqa: S101 pytest assertion
+    assert res.reason == "declined"  # noqa: S101 pytest assertion
+    assert res.approver_id is None  # noqa: S101 pytest assertion
+    assert res.channel == "scripted"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio

@@ -192,24 +192,24 @@ async def test_in_progress_claim_returns_in_progress_outcome(tmp_path: Path, met
     )
 
     # Outcome shape
-    assert result["status"] == "in_progress"
-    assert result["reason"] == "concurrent claim"
+    assert result["status"] == "in_progress"  # noqa: S101 pytest assertion
+    assert result["reason"] == "concurrent claim"  # noqa: S101 pytest assertion
     action_id = result["action_id"]
 
     rows = [r for r in log.read("S-ip") if r["action_id"] == action_id]
     kinds = [r["kind"] for r in rows]
 
     # Invariant 6: no executed row after a rejected verified.
-    assert "executed" not in kinds, f"executed row must not appear; rows: {kinds}"
+    assert "executed" not in kinds, f"executed row must not appear; rows: {kinds}"  # noqa: S101 pytest assertion
 
     # Verified must carry the idempotency marker and result=rejected.
     verified = next(r for r in rows if r["kind"] == "verified")
-    assert verified["result"] == "rejected"
-    assert verified["checks"]["idempotency"] == "in_progress"
+    assert verified["result"] == "rejected"  # noqa: S101 pytest assertion
+    assert verified["checks"]["idempotency"] == "in_progress"  # noqa: S101 pytest assertion
 
     # Outcome must close the action.
     outcome = next(r for r in rows if r["kind"] == "outcome")
-    assert outcome["status"] == "in_progress"
+    assert outcome["status"] == "in_progress"  # noqa: S101 pytest assertion
 
     # Row order: requested → verified → outcome (no executed).
-    assert kinds == ["requested", "verified", "outcome"]
+    assert kinds == ["requested", "verified", "outcome"]  # noqa: S101 pytest assertion

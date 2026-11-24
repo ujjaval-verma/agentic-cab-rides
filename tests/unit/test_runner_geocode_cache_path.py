@@ -30,7 +30,7 @@ _KNOWN_QUERY = "Market & Powell, San Francisco"
 
 def test_default_geocode_fixtures_points_at_committed_path() -> None:
     """_DEFAULT_GEOCODE_FIXTURES resolves to fixtures/geocode at repo root."""
-    assert _DEFAULT_GEOCODE_FIXTURES.resolve() == _COMMITTED_FIXTURES.resolve(), (
+    assert _DEFAULT_GEOCODE_FIXTURES.resolve() == _COMMITTED_FIXTURES.resolve(), (  # noqa: S101 pytest assertion
         f"runner._DEFAULT_GEOCODE_FIXTURES is {_DEFAULT_GEOCODE_FIXTURES!r} "
         f"but expected {_COMMITTED_FIXTURES!r}. "
         "Scenario runs will miss the fixture cache and hit live Nominatim."
@@ -41,9 +41,9 @@ def test_committed_fixture_cache_returns_address_ref_for_known_query() -> None:
     """GeocodeCache at the committed path returns a non-None AddressRef for a known query."""
     cache = GeocodeCache(fixtures_dir=_DEFAULT_GEOCODE_FIXTURES)
     result = cache.get(_KNOWN_QUERY)
-    assert result is not None, (
+    assert result is not None, (  # noqa: S101 pytest assertion
         f"GeocodeCache.get({_KNOWN_QUERY!r}) returned None. "
         "Either the fixture file is missing or _DEFAULT_GEOCODE_FIXTURES is wrong."
     )
-    assert result.lat == pytest.approx(37.7836)
-    assert result.lng == pytest.approx(-122.4088)
+    assert result.lat == pytest.approx(37.7836)  # noqa: S101 pytest assertion
+    assert result.lng == pytest.approx(-122.4088)  # noqa: S101 pytest assertion

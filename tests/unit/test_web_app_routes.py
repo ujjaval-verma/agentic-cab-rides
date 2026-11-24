@@ -67,53 +67,53 @@ _BAD_SESSION_IDS = [
 @pytest.mark.parametrize("bad", _BAD_SESSION_IDS)
 def test_chat_rejects_invalid_session_id(app: TestClient, tmp_path: Path, bad: str) -> None:
     response = app.post("/chat", json={"session_id": bad, "message": "hi"})
-    assert response.status_code == 422
-    assert not (tmp_path / "logs").exists() or list((tmp_path / "logs").iterdir()) == []
-    assert not _sessions
+    assert response.status_code == 422  # noqa: S101 pytest assertion
+    assert not (tmp_path / "logs").exists() or list((tmp_path / "logs").iterdir()) == []  # noqa: S101 pytest assertion
+    assert not _sessions  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("bad", _BAD_SESSION_IDS)
 def test_events_rejects_invalid_session_id(app: TestClient, bad: str) -> None:
-    assert app.get("/events", params={"session_id": bad}).status_code == 422
+    assert app.get("/events", params={"session_id": bad}).status_code == 422  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("bad", [_ULID.lower(), "not-a-ulid", "%2E%2E"])
 def test_session_log_rejects_invalid_session_id(app: TestClient, bad: str) -> None:
-    assert app.get(f"/sessions/{bad}/log").status_code == 422
+    assert app.get(f"/sessions/{bad}/log").status_code == 422  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("bad", ["..%2F..%2Fetc%2Fx", "%2Fabs"])
 def test_session_log_encoded_slashes_never_reach_the_handler(app: TestClient, bad: str) -> None:
     # Decoded slashes change the route shape, so the router refuses before validation.
-    assert app.get(f"/sessions/{bad}/log").status_code in (404, 422)
+    assert app.get(f"/sessions/{bad}/log").status_code in (404, 422)  # noqa: S101 pytest assertion
 
 
 def test_chat_accepts_minted_session(app: TestClient) -> None:
     sid = _mint(app)
     response = app.post("/chat", json={"session_id": sid, "message": "hi"})
-    assert response.status_code == 200
-    assert response.json()["session_id"] == sid
+    assert response.status_code == 200  # noqa: S101 pytest assertion
+    assert response.json()["session_id"] == sid  # noqa: S101 pytest assertion
 
 
 def test_session_log_accepts_minted_session(app: TestClient) -> None:
     sid = _mint(app)
     response = app.get(f"/sessions/{sid}/log")
-    assert response.status_code == 200
-    assert response.json() == {"session_id": sid, "rows": []}
+    assert response.status_code == 200  # noqa: S101 pytest assertion
+    assert response.json() == {"session_id": sid, "rows": []}  # noqa: S101 pytest assertion
 
 
 def test_post_sessions_mints_valid_ulid(app: TestClient) -> None:
     from agentic_cab.core.ids import parse_session_id
 
     response = app.post("/sessions")
-    assert response.status_code == 200
-    assert parse_session_id(response.json()["session_id"])
+    assert response.status_code == 200  # noqa: S101 pytest assertion
+    assert parse_session_id(response.json()["session_id"])  # noqa: S101 pytest assertion
 
 
 def _session_cookie_header(response: object, sid: str) -> str:
     headers = response.headers.get_list("set-cookie")  # type: ignore[attr-defined]
     matching = [h for h in headers if h.startswith(f"cab_session_{sid}=")]
-    assert len(matching) == 1, headers
+    assert len(matching) == 1, headers  # noqa: S101 pytest assertion
     return matching[0]
 
 
@@ -122,12 +122,12 @@ def test_post_sessions_sets_httponly_samesite_strict_session_cookie(app: TestCli
     sid = response.json()["session_id"]
     header = _session_cookie_header(response, sid)
     attrs = {part.strip().lower() for part in header.split(";")[1:]}
-    assert "httponly" in attrs
-    assert "samesite=strict" in attrs
-    assert "path=/" in attrs
+    assert "httponly" in attrs  # noqa: S101 pytest assertion
+    assert "samesite=strict" in attrs  # noqa: S101 pytest assertion
+    assert "path=/" in attrs  # noqa: S101 pytest assertion
     # Bounded lifetime so cookies from reloaded tabs cannot pile up for the whole
     # browser session and overflow the Cookie header.
-    assert f"max-age={int(_SESSION_COOKIE_MAX_AGE.total_seconds())}" in attrs
+    assert f"max-age={int(_SESSION_COOKIE_MAX_AGE.total_seconds())}" in attrs  # noqa: S101 pytest assertion
 
 
 def _make_clocked_client(tmp_path: Path) -> tuple[TestClient, FrozenClock]:
@@ -149,13 +149,13 @@ def test_post_sessions_expires_cookies_of_sessions_no_longer_live(tmp_path: Path
     clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
 
     response = client.post("/sessions")  # evicts stale_sid, then sweeps its cookie
-    assert stale_sid not in _sessions
+    assert stale_sid not in _sessions  # noqa: S101 pytest assertion
     header = _session_cookie_header(response, stale_sid)
     attrs = {part.strip().lower() for part in header.split(";")[1:]}
-    assert "max-age=0" in attrs
-    assert "path=/" in attrs
-    assert client.cookies.get(f"cab_session_{stale_sid}") is None
-    assert client.cookies.get(f"cab_session_{response.json()['session_id']}")
+    assert "max-age=0" in attrs  # noqa: S101 pytest assertion
+    assert "path=/" in attrs  # noqa: S101 pytest assertion
+    assert client.cookies.get(f"cab_session_{stale_sid}") is None  # noqa: S101 pytest assertion
+    assert client.cookies.get(f"cab_session_{response.json()['session_id']}")  # noqa: S101 pytest assertion
 
 
 def test_post_sessions_keeps_cookies_of_live_sessions(tmp_path: Path) -> None:
@@ -163,17 +163,17 @@ def test_post_sessions_keeps_cookies_of_live_sessions(tmp_path: Path) -> None:
     live_sid = _mint(client)  # another open tab
     response = client.post("/sessions")
     headers = response.headers.get_list("set-cookie")
-    assert not any(h.startswith(f"cab_session_{live_sid}=") for h in headers), headers
-    assert client.cookies.get(f"cab_session_{live_sid}")
+    assert not any(h.startswith(f"cab_session_{live_sid}=") for h in headers), headers  # noqa: S101 pytest assertion
+    assert client.cookies.get(f"cab_session_{live_sid}")  # noqa: S101 pytest assertion
 
 
 def test_post_sessions_body_carries_only_session_id(app: TestClient) -> None:
     response = app.post("/sessions")
     sid = response.json()["session_id"]
-    assert list(response.json()) == ["session_id"]
+    assert list(response.json()) == ["session_id"]  # noqa: S101 pytest assertion
     token = app.cookies.get(f"cab_session_{sid}")
-    assert token
-    assert token not in response.text
+    assert token  # noqa: S101 pytest assertion
+    assert token not in response.text  # noqa: S101 pytest assertion
 
 
 def test_post_sessions_mints_distinct_unguessable_tokens(app: TestClient) -> None:
@@ -181,11 +181,11 @@ def test_post_sessions_mints_distinct_unguessable_tokens(app: TestClient) -> Non
     sid_b = app.post("/sessions").json()["session_id"]
     token_a = app.cookies.get(f"cab_session_{sid_a}")
     token_b = app.cookies.get(f"cab_session_{sid_b}")
-    assert token_a
-    assert token_b
-    assert token_a != token_b
-    assert len(token_a) >= 43
-    assert len(token_b) >= 43
+    assert token_a  # noqa: S101 pytest assertion
+    assert token_b  # noqa: S101 pytest assertion
+    assert token_a != token_b  # noqa: S101 pytest assertion
+    assert len(token_a) >= 43  # noqa: S101 pytest assertion
+    assert len(token_b) >= 43  # noqa: S101 pytest assertion
 
 
 def test_post_sessions_registers_state_with_token_and_principal(app: TestClient) -> None:
@@ -193,16 +193,16 @@ def test_post_sessions_registers_state_with_token_and_principal(app: TestClient)
 
     sid = app.post("/sessions").json()["session_id"]
     state = _sessions[sid]
-    assert state.token == app.cookies.get(f"cab_session_{sid}")
-    assert parse_session_id(state.principal_id)
-    assert state.principal_id != sid
-    assert state.token not in repr(state), "token must never appear in repr/logs"
+    assert state.token == app.cookies.get(f"cab_session_{sid}")  # noqa: S101 pytest assertion
+    assert parse_session_id(state.principal_id)  # noqa: S101 pytest assertion
+    assert state.principal_id != sid  # noqa: S101 pytest assertion
+    assert state.token not in repr(state), "token must never appear in repr/logs"  # noqa: S101 pytest assertion
 
 
 def _mint(client: TestClient) -> str:
     """Mint a session through the real route; the client's jar now holds its token."""
     response = client.post("/sessions")
-    assert response.status_code == 200
+    assert response.status_code == 200  # noqa: S101 pytest assertion
     return response.json()["session_id"]
 
 
@@ -222,7 +222,7 @@ _AUTH_ROUTES = ["chat", "events", "log"]
 def test_session_route_without_cookie_is_forbidden(app: TestClient, route: str) -> None:
     sid = _mint(app)
     app.cookies.clear()
-    assert _call(app, route, sid).status_code == 403
+    assert _call(app, route, sid).status_code == 403  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("route", _AUTH_ROUTES)
@@ -232,13 +232,13 @@ def test_session_route_with_wrong_cookie_is_forbidden(app: TestClient, route: st
     sid = _mint(app)
     app.cookies.clear()
     app.cookies.set(f"cab_session_{sid}", secrets.token_urlsafe(32))
-    assert _call(app, route, sid).status_code == 403
+    assert _call(app, route, sid).status_code == 403  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("route", _AUTH_ROUTES)
 def test_session_route_for_never_minted_session_is_forbidden(app: TestClient, route: str) -> None:
-    assert _call(app, route, _ulid(42)).status_code == 403
-    assert _ulid(42) not in _sessions, "an unknown session id must never be created on demand"
+    assert _call(app, route, _ulid(42)).status_code == 403  # noqa: S101 pytest assertion
+    assert _ulid(42) not in _sessions, "an unknown session id must never be created on demand"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("route", _AUTH_ROUTES)
@@ -258,14 +258,14 @@ def test_session_route_for_evicted_session_is_forbidden(tmp_path: Path, route: s
     )
     sid = _mint(client)
     stale_token = client.cookies.get(f"cab_session_{sid}")
-    assert stale_token
+    assert stale_token  # noqa: S101 pytest assertion
     clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
     _mint(client)  # the mint runs the eviction sweep (and expires the stale cookie)
-    assert sid not in _sessions
+    assert sid not in _sessions  # noqa: S101 pytest assertion
     # Present the once-valid token anyway, as a client that ignored the expiry would.
     client.cookies.set(f"cab_session_{sid}", stale_token)
-    assert _call(client, route, sid).status_code == 403
-    assert sid not in _sessions, "an evicted session id is never revived"
+    assert _call(client, route, sid).status_code == 403  # noqa: S101 pytest assertion
+    assert sid not in _sessions, "an evicted session id is never revived"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.parametrize("route", _AUTH_ROUTES)
@@ -281,21 +281,21 @@ def test_session_a_cookie_cannot_reach_session_b(tmp_path: Path, route: str) -> 
     sid_b = _mint(client_b)
 
     # A's jar only carries cab_session_<A>; addressing B's id finds no B cookie.
-    assert _call(client_a, route, sid_b).status_code == 403
+    assert _call(client_a, route, sid_b).status_code == 403  # noqa: S101 pytest assertion
 
     # A's token replayed under B's cookie name is still a mismatch.
     token_a = client_a.cookies.get(f"cab_session_{sid_a}")
-    assert token_a
+    assert token_a  # noqa: S101 pytest assertion
     client_a.cookies.set(f"cab_session_{sid_b}", token_a)
-    assert _call(client_a, route, sid_b).status_code == 403
+    assert _call(client_a, route, sid_b).status_code == 403  # noqa: S101 pytest assertion
 
 
 def test_app_js_uses_server_minted_session_id() -> None:
     js = (Path(__file__).resolve().parents[2] / "src/agentic_cab/web/static/app.js").read_text(
         encoding="utf-8"
     )
-    assert "randomUUID" not in js
-    assert '"/sessions"' in js
+    assert "randomUUID" not in js  # noqa: S101 pytest assertion
+    assert '"/sessions"' in js  # noqa: S101 pytest assertion
 
 
 def test_app_js_posts_confirmations_to_session_route_without_approver() -> None:
@@ -304,13 +304,13 @@ def test_app_js_posts_confirmations_to_session_route_without_approver() -> None:
     js = (Path(__file__).resolve().parents[2] / "src/agentic_cab/web/static/app.js").read_text(
         encoding="utf-8"
     )
-    assert "approver" not in js, "the browser must never send an approver"
-    assert '"/confirmations/"' in js
+    assert "approver" not in js, "the browser must never send an approver"  # noqa: S101 pytest assertion
+    assert '"/confirmations/"' in js  # noqa: S101 pytest assertion
     # Every "/confirmations/" path is built under the "/sessions/" prefix.
     for match in re.finditer(r'"/confirmations/"', js):
         preceding = js[max(0, match.start() - 120) : match.start()]
-        assert '"/sessions/"' in preceding, preceding
-    assert 'credentials: "same-origin"' in js
+        assert '"/sessions/"' in preceding, preceding  # noqa: S101 pytest assertion
+    assert 'credentials: "same-origin"' in js  # noqa: S101 pytest assertion
 
 
 @pytest.fixture
@@ -329,9 +329,9 @@ def test_get_index_serves_html(app: TestClient) -> None:
     response = app.get("/")
     # In the test environment the static dir exists with index.html.
     # If not present, a 404 is acceptable at this stage.
-    assert response.status_code in (200, 404)
+    assert response.status_code in (200, 404)  # noqa: S101 pytest assertion
     if response.status_code == 200:
-        assert "text/html" in response.headers["content-type"]
+        assert "text/html" in response.headers["content-type"]  # noqa: S101 pytest assertion
 
 
 # ---------- Session-scoped confirmations ----------
@@ -349,7 +349,7 @@ def _async_client(fastapi_app: FastAPI) -> httpx.AsyncClient:
 
 async def _amint(client: httpx.AsyncClient) -> str:
     response = await client.post("/sessions")
-    assert response.status_code == 200
+    assert response.status_code == 200  # noqa: S101 pytest assertion
     return response.json()["session_id"]
 
 
@@ -393,12 +393,12 @@ async def test_session_scoped_confirmation_resolves_pending_future(tmp_path: Pat
         response = await client.post(
             f"/sessions/{sid}/confirmations/draft-xyz", json={"approved": True}
         )
-        assert response.status_code == 200
-        assert response.json()["status"] == "resolved"
+        assert response.status_code == 200  # noqa: S101 pytest assertion
+        assert response.json()["status"] == "resolved"  # noqa: S101 pytest assertion
 
         result = await asyncio.wait_for(task, timeout=3.0)
-        assert result.approved is True
-        assert result.reason == "approved"
+        assert result.approved is True  # noqa: S101 pytest assertion
+        assert result.reason == "approved"  # noqa: S101 pytest assertion
 
 
 async def test_session_scoped_confirmation_returns_404_when_no_pending(tmp_path: Path) -> None:
@@ -407,7 +407,7 @@ async def test_session_scoped_confirmation_returns_404_when_no_pending(tmp_path:
         response = await client.post(
             f"/sessions/{sid}/confirmations/nonexistent-id", json={"approved": True}
         )
-        assert response.status_code == 404
+        assert response.status_code == 404  # noqa: S101 pytest assertion
 
 
 async def test_session_scoped_confirmation_requires_session_token(tmp_path: Path) -> None:
@@ -421,8 +421,8 @@ async def test_session_scoped_confirmation_requires_session_token(tmp_path: Path
         response = await client.post(
             f"/sessions/{sid}/confirmations/draft-tok", json={"approved": True}
         )
-        assert response.status_code == 403
-        assert channel.has_pending(), "an unauthenticated POST must not touch the gate"
+        assert response.status_code == 403  # noqa: S101 pytest assertion
+        assert channel.has_pending(), "an unauthenticated POST must not touch the gate"  # noqa: S101 pytest assertion
 
         channel.resolve("draft-tok", approved=False)
         await asyncio.wait_for(task, timeout=3.0)
@@ -442,25 +442,25 @@ async def test_cross_session_approval_is_rejected(tmp_path: Path) -> None:
         response = await client_a.post(
             f"/sessions/{sid_b}/confirmations/draft-of-b", json={"approved": True}
         )
-        assert response.status_code == 403
+        assert response.status_code == 403  # noqa: S101 pytest assertion
 
         # A addresses its own session with B's subject id → not pending there → 404.
         response = await client_a.post(
             f"/sessions/{sid_a}/confirmations/draft-of-b", json={"approved": True}
         )
-        assert response.status_code == 404
+        assert response.status_code == 404  # noqa: S101 pytest assertion
 
-        assert channel_b.has_pending(), "B's pending confirmation must be untouched"
-        assert not task.done()
+        assert channel_b.has_pending(), "B's pending confirmation must be untouched"  # noqa: S101 pytest assertion
+        assert not task.done()  # noqa: S101 pytest assertion
 
         # B resolves its own request normally.
         response = await client_b.post(
             f"/sessions/{sid_b}/confirmations/draft-of-b", json={"approved": True}
         )
-        assert response.status_code == 200
+        assert response.status_code == 200  # noqa: S101 pytest assertion
         result = await asyncio.wait_for(task, timeout=3.0)
-        assert result.approved is True
-        assert result.approver_id == _sessions[sid_b].principal_id
+        assert result.approved is True  # noqa: S101 pytest assertion
+        assert result.approver_id == _sessions[sid_b].principal_id  # noqa: S101 pytest assertion
 
 
 async def test_body_supplied_approver_is_ignored(tmp_path: Path) -> None:
@@ -474,21 +474,21 @@ async def test_body_supplied_approver_is_ignored(tmp_path: Path) -> None:
             f"/sessions/{sid}/confirmations/draft-mallory",
             json={"approved": True, "approver": "mallory", "approver_id": "mallory"},
         )
-        assert response.status_code == 200
+        assert response.status_code == 200  # noqa: S101 pytest assertion
 
         result = await asyncio.wait_for(task, timeout=3.0)
-        assert result.approver == "web-user"
-        assert result.approver_id == _sessions[sid].principal_id
-        assert result.channel == "web"
-        assert "mallory" not in result.model_dump_json()
+        assert result.approver == "web-user"  # noqa: S101 pytest assertion
+        assert result.approver_id == _sessions[sid].principal_id  # noqa: S101 pytest assertion
+        assert result.channel == "web"  # noqa: S101 pytest assertion
+        assert "mallory" not in result.model_dump_json()  # noqa: S101 pytest assertion
 
 
 def test_old_unscoped_confirmation_route_is_gone(app: TestClient) -> None:
     route_paths = [getattr(r, "path", None) for r in app.app.routes]  # type: ignore[attr-defined]
-    assert "/confirmations/{subject_id}" not in route_paths
-    assert "/sessions/{session_id}/confirmations/{subject_id}" in route_paths
+    assert "/confirmations/{subject_id}" not in route_paths  # noqa: S101 pytest assertion
+    assert "/sessions/{session_id}/confirmations/{subject_id}" in route_paths  # noqa: S101 pytest assertion
     response = app.post("/confirmations/anything", json={"approved": True})
-    assert response.status_code in (404, 405)
+    assert response.status_code in (404, 405)  # noqa: S101 pytest assertion
 
 
 async def test_full_confirm_flow_logs_principal_and_never_the_token(
@@ -507,7 +507,7 @@ async def test_full_confirm_flow_logs_principal_and_never_the_token(
     async with _async_client(_new_app(tmp_path)) as client:
         sid = await _amint(client)
         token = client.cookies.get(f"cab_session_{sid}")
-        assert token
+        assert token  # noqa: S101 pytest assertion
         state = _sessions[sid]
         store = SqliteStateStore(db_path=tmp_path / "data" / "state.db", check_same_thread=False)
         log = JSONLActionLog(log_dir=tmp_path / "logs")
@@ -556,22 +556,22 @@ async def test_full_confirm_flow_logs_principal_and_never_the_token(
             f"/sessions/{sid}/confirmations/{draft_id}",
             json={"approved": True, "approver": "mallory"},
         )
-        assert response.status_code == 200
+        assert response.status_code == 200  # noqa: S101 pytest assertion
         result = await asyncio.wait_for(task, timeout=5.0)
-        assert result["status"] == "confirmed"
+        assert result["status"] == "confirmed"  # noqa: S101 pytest assertion
 
         rows = [r for r in log.read(sid) if r["action_id"] == result["action_id"]]
-        assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]
+        assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]  # noqa: S101 pytest assertion
         confirmation = next(r for r in rows if r["kind"] == "verified")["checks"]["confirmation"]
-        assert confirmation["approver"] == "web-user"
-        assert confirmation["approver_id"] == state.principal_id
-        assert confirmation["channel"] == "web"
+        assert confirmation["approver"] == "web-user"  # noqa: S101 pytest assertion
+        assert confirmation["approver_id"] == state.principal_id  # noqa: S101 pytest assertion
+        assert confirmation["channel"] == "web"  # noqa: S101 pytest assertion
 
         log_files = list((tmp_path / "logs").rglob("*"))
-        assert log_files
+        assert log_files  # noqa: S101 pytest assertion
         for path in log_files:
             if path.is_file():
-                assert token not in path.read_text(encoding="utf-8"), path
+                assert token not in path.read_text(encoding="utf-8"), path  # noqa: S101 pytest assertion
 
 
 def test_get_events_route_is_registered(tmp_path: Path) -> None:
@@ -597,7 +597,7 @@ def test_get_events_route_is_registered(tmp_path: Path) -> None:
     )
     # Verify the /events route is registered in the app.
     route_paths = [getattr(r, "path", None) for r in fastapi_app.routes]
-    assert "/events" in route_paths, f"Expected /events route; found: {route_paths}"
+    assert "/events" in route_paths, f"Expected /events route; found: {route_paths}"  # noqa: S101 pytest assertion
 
 
 def test_get_session_log_returns_empty_for_fresh_session(tmp_path: Path) -> None:
@@ -611,10 +611,10 @@ def test_get_session_log_returns_empty_for_fresh_session(tmp_path: Path) -> None
 
     sid = _mint(client)
     response = client.get(f"/sessions/{sid}/log")
-    assert response.status_code == 200
+    assert response.status_code == 200  # noqa: S101 pytest assertion
     data = response.json()
-    assert data["session_id"] == sid
-    assert data["rows"] == []
+    assert data["session_id"] == sid  # noqa: S101 pytest assertion
+    assert data["rows"] == []  # noqa: S101 pytest assertion
 
 
 def test_startup_flushes_pending_confirmations(tmp_path: Path) -> None:
@@ -667,7 +667,7 @@ def test_startup_flushes_pending_confirmations(tmp_path: Path) -> None:
     # The pending row is still in the DB (startup hook publishes but does NOT pop).
     pending = store.list_pending_confirmations(now=datetime.now(UTC))
     ids = {r.request.subject_id for r in pending}
-    assert "draft-startup-test" in ids
+    assert "draft-startup-test" in ids  # noqa: S101 pytest assertion
 
 
 def test_startup_hook_publishes_to_session_id_not_subject_id(tmp_path: Path) -> None:
@@ -733,11 +733,11 @@ def test_startup_hook_publishes_to_session_id_not_subject_id(tmp_path: Path) -> 
     finally:
         _app_module._bus = original_bus
 
-    assert publish_calls, "Expected at least one publish call from the startup hook"
+    assert publish_calls, "Expected at least one publish call from the startup hook"  # noqa: S101 pytest assertion
     keys_used = [call[0] for call in publish_calls]
     # session_id must be used as the bus key, not subject_id
-    assert session_id in keys_used
-    assert subject_id not in keys_used
+    assert session_id in keys_used  # noqa: S101 pytest assertion
+    assert subject_id not in keys_used  # noqa: S101 pytest assertion
 
 
 def test_get_sim_memoizes_per_session(app: TestClient) -> None:
@@ -751,12 +751,12 @@ def test_get_sim_memoizes_per_session(app: TestClient) -> None:
     sid_b = _mint(app)
 
     sim_a1 = _sessions[sid_a].sim
-    assert app.post("/chat", json={"session_id": sid_a, "message": "hi"}).status_code == 200
+    assert app.post("/chat", json={"session_id": sid_a, "message": "hi"}).status_code == 200  # noqa: S101 pytest assertion
     sim_a2 = _sessions[sid_a].sim
     sim_b = _sessions[sid_b].sim
 
-    assert sim_a1 is sim_a2, "same session must reuse the cached adapter"
-    assert sim_a1 is not sim_b, "different sessions must get distinct adapters"
+    assert sim_a1 is sim_a2, "same session must reuse the cached adapter"  # noqa: S101 pytest assertion
+    assert sim_a1 is not sim_b, "different sessions must get distinct adapters"  # noqa: S101 pytest assertion
 
 
 def _gated_tool_use_response(tool_name: str, tool_input: dict) -> MagicMock:
@@ -857,7 +857,7 @@ def test_post_chat_uses_one_meter_for_run_turn_and_both_gated_tools(tmp_path: Pa
             "/chat",
             json={"session_id": sid, "message": "confirm then cancel"},
         )
-        assert response.status_code == 200
+        assert response.status_code == 200  # noqa: S101 pytest assertion
 
         # The turn runs in a background task on the TestClient's portal loop; poll
         # (bounded) until both gated tools have been reached.
@@ -865,18 +865,18 @@ def test_post_chat_uses_one_meter_for_run_turn_and_both_gated_tools(tmp_path: Pa
         while time.monotonic() < deadline and "cancel_booking_meter" not in captured:
             time.sleep(0.01)
 
-    assert "run_turn_meter" in captured, "run_turn was not called"
-    assert "confirm_booking_meter" in captured, "the confirm_booking handler was not reached"
-    assert "cancel_booking_meter" in captured, "the cancel_booking handler was not reached"
+    assert "run_turn_meter" in captured, "run_turn was not called"  # noqa: S101 pytest assertion
+    assert "confirm_booking_meter" in captured, "the confirm_booking handler was not reached"  # noqa: S101 pytest assertion
+    assert "cancel_booking_meter" in captured, "the cancel_booking handler was not reached"  # noqa: S101 pytest assertion
 
     session_meter = _sessions[sid].meter
-    assert captured["run_turn_meter"] is session_meter
-    assert (
-        captured["confirm_booking_meter"] is session_meter
-    ), "confirm_booking must receive the session's own CostMeter"
-    assert (
-        captured["cancel_booking_meter"] is session_meter
-    ), "cancel_booking must receive the session's own CostMeter"
+    assert captured["run_turn_meter"] is session_meter  # noqa: S101 pytest assertion
+    assert captured["confirm_booking_meter"] is session_meter, (  # noqa: S101 pytest assertion
+        "confirm_booking must receive the session's own CostMeter"
+    )
+    assert captured["cancel_booking_meter"] is session_meter, (  # noqa: S101 pytest assertion
+        "cancel_booking must receive the session's own CostMeter"
+    )
 
 
 def test_get_meter_is_stable_per_session_and_distinct_across_sessions(app: TestClient) -> None:
@@ -889,12 +889,12 @@ def test_get_meter_is_stable_per_session_and_distinct_across_sessions(app: TestC
     sid_b = _mint(app)
 
     meter_a1 = _sessions[sid_a].meter
-    assert app.post("/chat", json={"session_id": sid_a, "message": "hi"}).status_code == 200
+    assert app.post("/chat", json={"session_id": sid_a, "message": "hi"}).status_code == 200  # noqa: S101 pytest assertion
     meter_a2 = _sessions[sid_a].meter
     meter_b = _sessions[sid_b].meter
 
-    assert meter_a1 is meter_a2, "same session must reuse the cached meter"
-    assert meter_a1 is not meter_b, "different sessions must get distinct meters"
+    assert meter_a1 is meter_a2, "same session must reuse the cached meter"  # noqa: S101 pytest assertion
+    assert meter_a1 is not meter_b, "different sessions must get distinct meters"  # noqa: S101 pytest assertion
 
 
 def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
@@ -917,10 +917,10 @@ def test_post_chat_kicks_off_a_turn(tmp_path: Path) -> None:
     )
     # 200 means the background task was kicked off; the agent error (no API key)
     # will be emitted as an SSE error event, not as an HTTP error.
-    assert response.status_code == 200
+    assert response.status_code == 200  # noqa: S101 pytest assertion
     data = response.json()
-    assert data["status"] == "ok"
-    assert data["session_id"] == sid
+    assert data["status"] == "ok"  # noqa: S101 pytest assertion
+    assert data["session_id"] == sid  # noqa: S101 pytest assertion
 
 
 # ---------- Session eviction (bounded per-session state) ----------
@@ -948,13 +948,13 @@ def test_idle_session_evicted_together(tmp_path: Path) -> None:
 
     idle_sid = _mint(client)
     client.post("/chat", json={"session_id": idle_sid, "message": "hi"})
-    assert idle_sid in _sessions
+    assert idle_sid in _sessions  # noqa: S101 pytest assertion
 
     clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
     # Any subsequent mint or /chat call runs the eviction sweep first.
     _mint(client)
 
-    assert idle_sid not in _sessions, "the whole session record must be gone"
+    assert idle_sid not in _sessions, "the whole session record must be gone"  # noqa: S101 pytest assertion
 
 
 def test_session_touched_within_ttl_survives(tmp_path: Path) -> None:
@@ -978,7 +978,7 @@ def test_session_touched_within_ttl_survives(tmp_path: Path) -> None:
     other_sid = _mint(client)
     client.post("/chat", json={"session_id": other_sid, "message": "hi"})
 
-    assert kept_sid in _sessions
+    assert kept_sid in _sessions  # noqa: S101 pytest assertion
 
 
 def test_exceeding_max_sessions_evicts_lru_first(tmp_path: Path) -> None:
@@ -1000,23 +1000,23 @@ def test_exceeding_max_sessions_evicts_lru_first(tmp_path: Path) -> None:
     for _ in range(_MAX_SESSIONS):
         minted.append(_mint(client))
         clock.tick(timedelta(seconds=1))
-    assert len(_sessions) == _MAX_SESSIONS
+    assert len(_sessions) == _MAX_SESSIONS  # noqa: S101 pytest assertion
 
     # A brand-new session pushes the count to _MAX_SESSIONS + 1; the sweep at
     # its entry still saw exactly the cap, so no eviction happens yet.
     newest = _mint(client)
     clock.tick(timedelta(seconds=1))
-    assert len(_sessions) == _MAX_SESSIONS + 1
+    assert len(_sessions) == _MAX_SESSIONS + 1  # noqa: S101 pytest assertion
 
     # Touching an existing session runs the sweep again, which now sees
     # _MAX_SESSIONS + 1 and evicts the LRU session (the first minted, oldest
     # last_used_at) before touching its own state — /chat never grows the dict.
     response = client.post("/chat", json={"session_id": newest, "message": "hi again"})
-    assert response.status_code == 200
+    assert response.status_code == 200  # noqa: S101 pytest assertion
 
-    assert minted[0] not in _sessions, "least-recently-used session should be evicted first"
-    assert newest in _sessions
-    assert len(_sessions) == _MAX_SESSIONS
+    assert minted[0] not in _sessions, "least-recently-used session should be evicted first"  # noqa: S101 pytest assertion
+    assert newest in _sessions  # noqa: S101 pytest assertion
+    assert len(_sessions) == _MAX_SESSIONS  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -1054,7 +1054,7 @@ async def test_pinned_session_with_pending_confirmation_survives_eviction(
     # Push well past the idle TTL — the pinned session must survive.
     clock.tick(_SESSION_IDLE_TTL + timedelta(hours=1))
     _evict_stale_sessions(clock)
-    assert "sess-pinned" in _sessions
+    assert "sess-pinned" in _sessions  # noqa: S101 pytest assertion
 
     # It must also survive an LRU sweep even once the cap is exceeded — the
     # pinned session has the oldest last_used_at of the lot, so it would be
@@ -1062,8 +1062,8 @@ async def test_pinned_session_with_pending_confirmation_survives_eviction(
     for i in range(_MAX_SESSIONS + 5):
         _create_session(f"sess-filler-{i}", store=store, clock=clock)
     _evict_stale_sessions(clock)
-    assert "sess-pinned" in _sessions
-    assert len(_sessions) <= _MAX_SESSIONS + 1  # +1 for the pinned session itself
+    assert "sess-pinned" in _sessions  # noqa: S101 pytest assertion
+    assert len(_sessions) <= _MAX_SESSIONS + 1  # +1 for the pinned session itself  # noqa: S101 pytest assertion
 
     # Clean up: resolve so the awaited task doesn't dangle past the test.
     state.channel.resolve("draft-pinned", approved=False)
@@ -1086,16 +1086,16 @@ def test_evicted_session_id_is_rejected_with_403(tmp_path: Path) -> None:
     client = TestClient(fastapi_app, raise_server_exceptions=False)
 
     sid = _mint(client)
-    assert client.post("/chat", json={"session_id": sid, "message": "hi"}).status_code == 200
+    assert client.post("/chat", json={"session_id": sid, "message": "hi"}).status_code == 200  # noqa: S101 pytest assertion
     stale_token = client.cookies.get(f"cab_session_{sid}")
-    assert stale_token
+    assert stale_token  # noqa: S101 pytest assertion
 
     clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
     _mint(client)
-    assert sid not in _sessions
+    assert sid not in _sessions  # noqa: S101 pytest assertion
 
     # Even presenting the old, once-valid token, the session is gone for good.
     client.cookies.set(f"cab_session_{sid}", stale_token)
     response = client.post("/chat", json={"session_id": sid, "message": "hi again"})
-    assert response.status_code == 403
-    assert sid not in _sessions
+    assert response.status_code == 403  # noqa: S101 pytest assertion
+    assert sid not in _sessions  # noqa: S101 pytest assertion

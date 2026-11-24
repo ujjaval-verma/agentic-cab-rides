@@ -27,24 +27,17 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Self
+from typing import Any, Self
 
 from agentic_cab.core.ports import (
     Clock,
-    ConfirmationChannel,
     ConfirmationRequest,
     ConfirmationResult,
     StateStore,
 )
 from agentic_cab.web.sse import SessionEventBus
 
-if TYPE_CHECKING:
-    pass
-
 _WEB_APPROVER = "web-user"
-
-# Satisfy the runtime_checkable Protocol check.
-assert isinstance(ConfirmationChannel, type) or hasattr(ConfirmationChannel, "__protocol_attrs__")
 
 
 class WebConfirmationChannel:

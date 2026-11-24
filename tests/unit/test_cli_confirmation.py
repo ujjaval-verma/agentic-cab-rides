@@ -62,13 +62,13 @@ class TestCLIConfirmationChannel:
         )
         result = await channel.request(_make_request())
 
-        assert result.approved is True, (
+        assert result.approved is True, (  # noqa: S101 pytest assertion
             "Channel should approve because tty contains 'y', even though stdin says 'n'. "
             "If this fails, the channel is reading from stdin — Invariant 2 is violated."
         )
-        assert result.reason == "approved"
-        assert result.approver == "cli-tty"
-        assert result.approved_at == _FROZEN_NOW
+        assert result.reason == "approved"  # noqa: S101 pytest assertion
+        assert result.approver == "cli-tty"  # noqa: S101 pytest assertion
+        assert result.approved_at == _FROZEN_NOW  # noqa: S101 pytest assertion
 
     @pytest.mark.asyncio
     async def test_approve_records_injected_principal_and_cli_channel(self, tmp_path: Path) -> None:
@@ -80,9 +80,9 @@ class TestCLIConfirmationChannel:
             tty_path=str(fake_tty),
         )
         result = await channel.request(_make_request())
-        assert result.approved is True
-        assert result.approver_id == _PRINCIPAL_ID
-        assert result.channel == "cli"
+        assert result.approved is True  # noqa: S101 pytest assertion
+        assert result.approver_id == _PRINCIPAL_ID  # noqa: S101 pytest assertion
+        assert result.channel == "cli"  # noqa: S101 pytest assertion
 
     @pytest.mark.asyncio
     async def test_decline_records_no_principal_and_cli_channel(self, tmp_path: Path) -> None:
@@ -94,9 +94,9 @@ class TestCLIConfirmationChannel:
             tty_path=str(fake_tty),
         )
         result = await channel.request(_make_request())
-        assert result.approved is False
-        assert result.approver_id is None
-        assert result.channel == "cli"
+        assert result.approved is False  # noqa: S101 pytest assertion
+        assert result.approver_id is None  # noqa: S101 pytest assertion
+        assert result.channel == "cli"  # noqa: S101 pytest assertion
 
     @pytest.mark.asyncio
     async def test_never_reads_os_identity(
@@ -119,7 +119,7 @@ class TestCLIConfirmationChannel:
             tty_path=str(fake_tty),
         )
         result = await channel.request(_make_request())
-        assert result.approver_id == _PRINCIPAL_ID
+        assert result.approver_id == _PRINCIPAL_ID  # noqa: S101 pytest assertion
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("tty_input", ["n\n", "\n", "maybe\n"])
@@ -135,10 +135,10 @@ class TestCLIConfirmationChannel:
         )
         result = await channel.request(_make_request())
 
-        assert result.approved is False
-        assert result.reason == "declined"
-        assert result.approved_at is None
-        assert result.approver is None
+        assert result.approved is False  # noqa: S101 pytest assertion
+        assert result.reason == "declined"  # noqa: S101 pytest assertion
+        assert result.approved_at is None  # noqa: S101 pytest assertion
+        assert result.approver is None  # noqa: S101 pytest assertion
 
     @pytest.mark.asyncio
     async def test_raises_when_tty_unopenable(self) -> None:
@@ -170,7 +170,7 @@ class TestCLIConfirmationChannel:
         )
         result = await channel.request(_make_request())
 
-        assert result.approved is False
-        assert result.reason == "declined"
-        assert result.approved_at is None
-        assert result.approver is None
+        assert result.approved is False  # noqa: S101 pytest assertion
+        assert result.reason == "declined"  # noqa: S101 pytest assertion
+        assert result.approved_at is None  # noqa: S101 pytest assertion
+        assert result.approver is None  # noqa: S101 pytest assertion

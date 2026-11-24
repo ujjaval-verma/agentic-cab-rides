@@ -57,16 +57,16 @@ def test_put_and_get_draft(store: SqliteStateStore) -> None:
     d = _draft()
     store.put_draft(d)
     got = store.get_draft("D1")
-    assert got is not None
-    assert got.draft_id == "D1"
-    assert got.option_snapshot.price.amount_cents == 1500
+    assert got is not None  # noqa: S101 pytest assertion
+    assert got.draft_id == "D1"  # noqa: S101 pytest assertion
+    assert got.option_snapshot.price.amount_cents == 1500  # noqa: S101 pytest assertion
 
 
 def test_consume_draft_is_atomic_single_use(store: SqliteStateStore) -> None:
     store.put_draft(_draft())
     now = datetime(2026, 5, 19, 12, 0, 30, tzinfo=UTC)
-    assert store.consume_draft("D1", at=now) is True
-    assert store.consume_draft("D1", at=now) is False
+    assert store.consume_draft("D1", at=now) is True  # noqa: S101 pytest assertion
+    assert store.consume_draft("D1", at=now) is False  # noqa: S101 pytest assertion
 
 
 def test_claim_or_recall_new_then_recalled(store: SqliteStateStore) -> None:
@@ -76,12 +76,12 @@ def test_claim_or_recall_new_then_recalled(store: SqliteStateStore) -> None:
     store.put_booking(booking)
     key = "K1"
     first = store.claim_or_recall(key, scope="confirm")
-    assert first.status == "new"
-    assert first.booking_id is None
+    assert first.status == "new"  # noqa: S101 pytest assertion
+    assert first.booking_id is None  # noqa: S101 pytest assertion
     store.finalize_idempotency(key, booking=booking)
     second = store.claim_or_recall(key, scope="confirm")
-    assert second.status == "recalled"
-    assert second.booking_id == "B1"
+    assert second.status == "recalled"  # noqa: S101 pytest assertion
+    assert second.booking_id == "B1"  # noqa: S101 pytest assertion
 
 
 def test_claim_or_recall_in_progress_returns_in_progress(store: SqliteStateStore) -> None:
@@ -93,11 +93,11 @@ def test_claim_or_recall_in_progress_returns_in_progress(store: SqliteStateStore
     """
     key = "K-CRASH"
     first = store.claim_or_recall(key, scope="confirm")
-    assert first.status == "new"
+    assert first.status == "new"  # noqa: S101 pytest assertion
     # simulate crash: no finalize_idempotency call
     second = store.claim_or_recall(key, scope="confirm")
-    assert second.status == "in_progress"
-    assert second.booking_id is None
+    assert second.status == "in_progress"  # noqa: S101 pytest assertion
+    assert second.booking_id is None  # noqa: S101 pytest assertion
 
 
 def test_schema_apply_is_idempotent(store: SqliteStateStore) -> None:
@@ -108,7 +108,7 @@ def test_schema_apply_is_idempotent(store: SqliteStateStore) -> None:
 def test_get_draft_consumed_at_returns_none_until_consumed(store: SqliteStateStore) -> None:
     store.put_draft(_draft())
     result = store.get_draft_consumed_at("D1")
-    assert result is None
+    assert result is None  # noqa: S101 pytest assertion
 
 
 def test_get_draft_consumed_at_returns_timestamp_after_consume(store: SqliteStateStore) -> None:
@@ -116,8 +116,8 @@ def test_get_draft_consumed_at_returns_timestamp_after_consume(store: SqliteStat
     consumed_time = datetime(2026, 5, 19, 12, 1, 0, tzinfo=UTC)
     store.consume_draft("D1", at=consumed_time)
     result = store.get_draft_consumed_at("D1")
-    assert result is not None
-    assert result == consumed_time
+    assert result is not None  # noqa: S101 pytest assertion
+    assert result == consumed_time  # noqa: S101 pytest assertion
 
 
 def test_get_draft_consumed_at_returns_utc_aware_even_for_naive_stored_value(
@@ -132,7 +132,7 @@ def test_get_draft_consumed_at_returns_utc_aware_even_for_naive_stored_value(
     )
     store._conn.commit()
     result = store.get_draft_consumed_at("D1")
-    assert result is not None
-    assert result.tzinfo is not None
-    assert result.tzinfo == UTC
-    assert result == datetime(2026, 5, 19, 12, 1, 0, tzinfo=UTC)
+    assert result is not None  # noqa: S101 pytest assertion
+    assert result.tzinfo is not None  # noqa: S101 pytest assertion
+    assert result.tzinfo == UTC  # noqa: S101 pytest assertion
+    assert result == datetime(2026, 5, 19, 12, 1, 0, tzinfo=UTC)  # noqa: S101 pytest assertion

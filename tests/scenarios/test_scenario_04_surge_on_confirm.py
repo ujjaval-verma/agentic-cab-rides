@@ -53,7 +53,7 @@ def _price_changed_rows(action_id: str = "A") -> list[dict]:
 
 def test_price_changed_rejected_passes_on_valid_rows() -> None:
     rows = _price_changed_rows()
-    assert check_price_changed_rejected(rows, tool="confirm_booking") is True
+    assert check_price_changed_rejected(rows, tool="confirm_booking") is True  # noqa: S101 pytest assertion
 
 
 def test_price_changed_rejected_fails_when_no_such_action() -> None:
@@ -76,12 +76,12 @@ def test_price_changed_rejected_fails_when_no_such_action() -> None:
         {"action_id": "A", "kind": "outcome", "status": "confirmed"},
     ]
     # Happy path — no price_changed action exists
-    assert check_price_changed_rejected(rows, tool="confirm_booking") is False
+    assert check_price_changed_rejected(rows, tool="confirm_booking") is False  # noqa: S101 pytest assertion
 
 
 def test_no_executed_after_price_changed_passes_when_no_executed() -> None:
     rows = _price_changed_rows()
-    assert check_no_executed_after_price_changed(rows, tool="confirm_booking") is True
+    assert check_no_executed_after_price_changed(rows, tool="confirm_booking") is True  # noqa: S101 pytest assertion
 
 
 def test_no_executed_after_price_changed_fails_when_executed_present() -> None:
@@ -96,20 +96,20 @@ def test_no_executed_after_price_changed_fails_when_executed_present() -> None:
             "replayed": False,
         },
     ]
-    assert check_no_executed_after_price_changed(rows, tool="confirm_booking") is False
+    assert check_no_executed_after_price_changed(rows, tool="confirm_booking") is False  # noqa: S101 pytest assertion
 
 
 def test_no_double_booking_still_passes_with_price_changed_rows() -> None:
     """price_changed path has no executed rows → no_double_booking trivially passes."""
     rows = _price_changed_rows()
-    assert check_no_double_booking(rows) is True
+    assert check_no_double_booking(rows) is True  # noqa: S101 pytest assertion
 
 
 def test_price_changed_checker_ignores_wrong_tool() -> None:
     """Checker must be scoped to the specified tool."""
     rows = _price_changed_rows()
     # Checking against a different tool name returns False (no matching action)
-    assert check_price_changed_rejected(rows, tool="cancel_booking") is False
+    assert check_price_changed_rejected(rows, tool="cancel_booking") is False  # noqa: S101 pytest assertion
 
 
 def test_scenario_04_yaml_is_valid() -> None:
@@ -120,9 +120,9 @@ def test_scenario_04_yaml_is_valid() -> None:
 
     repo_root = Path(__file__).resolve().parents[2]
     path = repo_root / "scenarios" / "04_surge_on_confirm.yaml"
-    assert path.exists(), f"Missing scenario file: {path}"
+    assert path.exists(), f"Missing scenario file: {path}"  # noqa: S101 pytest assertion
     scn = yaml.safe_load(path.read_text())
-    assert scn["name"] == "04_surge_on_confirm"
-    assert scn["sim"]["surge_curve"]["force_surge_on_confirm"] is True
-    assert "price_changed_rejected" in [inv["kind"] for inv in scn["invariants"]]
-    assert "no_executed_after_price_changed" in [inv["kind"] for inv in scn["invariants"]]
+    assert scn["name"] == "04_surge_on_confirm"  # noqa: S101 pytest assertion
+    assert scn["sim"]["surge_curve"]["force_surge_on_confirm"] is True  # noqa: S101 pytest assertion
+    assert "price_changed_rejected" in [inv["kind"] for inv in scn["invariants"]]  # noqa: S101 pytest assertion
+    assert "no_executed_after_price_changed" in [inv["kind"] for inv in scn["invariants"]]  # noqa: S101 pytest assertion

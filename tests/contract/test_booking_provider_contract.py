@@ -37,7 +37,7 @@ async def test_idempotency_replay_same_key_same_booking(
     intent = intent_factory()
 
     options = await provider.discover(intent)
-    assert options, "discover must return at least one option"
+    assert options, "discover must return at least one option"  # noqa: S101 pytest assertion
 
     draft = await provider.prepare(options[0].option_id)
     key = "contract-idem-key-001"
@@ -46,7 +46,7 @@ async def test_idempotency_replay_same_key_same_booking(
     b2 = await provider.confirm(draft.draft_id, idempotency_key=key)
 
     # Same idempotency key must return the same booking_id on replay
-    assert b1.booking_id == b2.booking_id
+    assert b1.booking_id == b2.booking_id  # noqa: S101 pytest assertion
 
 
 @pytest.mark.contract
@@ -59,7 +59,7 @@ async def test_idempotency_different_key_different_booking(
     intent = intent_factory()
 
     options = await provider.discover(intent)
-    assert options
+    assert options  # noqa: S101 pytest assertion
 
     draft1 = await provider.prepare(options[0].option_id)
     b1 = await provider.confirm(draft1.draft_id, idempotency_key="keyAlpha111111111111111111")
@@ -70,7 +70,7 @@ async def test_idempotency_different_key_different_booking(
     b2 = await provider.confirm(draft2.draft_id, idempotency_key="keyBeta2222222222222222222")
 
     # Different idempotency keys must produce different bookings
-    assert b1.booking_id != b2.booking_id
+    assert b1.booking_id != b2.booking_id  # noqa: S101 pytest assertion
 
 
 @pytest.mark.contract
@@ -119,8 +119,8 @@ async def test_cancel_after_cancel_is_no_op(
     c1 = await provider.cancel(booking.booking_id, idempotency_key="contract-key-cancel")
     c2 = await provider.cancel(booking.booking_id, idempotency_key="contract-key-cancel")
 
-    assert c1.booking_id == c2.booking_id
-    assert c2.status == "cancelled"
+    assert c1.booking_id == c2.booking_id  # noqa: S101 pytest assertion
+    assert c2.status == "cancelled"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.contract
@@ -143,8 +143,8 @@ async def test_fingerprint_stable_under_no_op_re_quote(
     opts1 = await provider.discover(intent)
     opts2 = await provider.discover(intent)
 
-    assert opts1
-    assert opts2
+    assert opts1  # noqa: S101 pytest assertion
+    assert opts2  # noqa: S101 pytest assertion
 
     # Normalise option_id and expires_at (both vary per call) then fingerprint.
     # Price, title, and details must be stable for the same intent.
@@ -152,7 +152,7 @@ async def test_fingerprint_stable_under_no_op_re_quote(
     fp1 = compute_fp(opts1[0].model_copy(update=canonical_updates))
     fp2 = compute_fp(opts2[0].model_copy(update=canonical_updates))
     # Option content (excluding option_id/expires_at) must be stable across re-discover
-    assert fp1 == fp2
+    assert fp1 == fp2  # noqa: S101 pytest assertion
 
 
 @pytest.mark.contract
@@ -199,11 +199,11 @@ async def test_force_surge_on_confirm_produces_price_changed(
 
         intent = intent_factory()
         options = await surge_sim.discover(intent)
-        assert options
+        assert options  # noqa: S101 pytest assertion
 
         draft = await surge_sim.prepare(options[0].option_id)
         # confirm will re-price — last_confirm_price_cents records the surged price
         await surge_sim.confirm(draft.draft_id, idempotency_key="surge-test-key")
-        assert surge_sim.last_confirm_price_cents > 0
+        assert surge_sim.last_confirm_price_cents > 0  # noqa: S101 pytest assertion
         # The surged price should exceed the discover-time price (force_surge_on_confirm=True)
-        assert surge_sim.last_confirm_price_cents >= options[0].price.amount_cents
+        assert surge_sim.last_confirm_price_cents >= options[0].price.amount_cents  # noqa: S101 pytest assertion

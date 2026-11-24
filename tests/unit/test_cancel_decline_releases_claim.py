@@ -78,7 +78,7 @@ async def _book(
         session_id="S",
         turn_id="T",
     )
-    assert c_result["status"] == "confirmed"
+    assert c_result["status"] == "confirmed"  # noqa: S101 pytest assertion
     return c_result["booking_id"]
 
 
@@ -115,7 +115,7 @@ async def test_declined_cancel_does_not_block_retry(harness, meter) -> None:
         turn_id="T1",
         key_factory=fixed_key,
     )
-    assert r1["status"] == "rejected", f"Expected rejected, got: {r1}"
+    assert r1["status"] == "rejected", f"Expected rejected, got: {r1}"  # noqa: S101 pytest assertion
 
     # Second call: user approves. Must succeed — the declined claim must have been released.
     approve_ch = ScriptedConfirmationChannel(
@@ -133,7 +133,7 @@ async def test_declined_cancel_does_not_block_retry(harness, meter) -> None:
         turn_id="T2",
         key_factory=fixed_key,
     )
-    assert r2["status"] == "cancelled", (
+    assert r2["status"] == "cancelled", (  # noqa: S101 pytest assertion
         f"Retry after declined cancel must succeed, got: {r2}. "
         "The in_progress claim was not released on decline."
     )
@@ -168,11 +168,11 @@ async def test_declined_cancel_leaves_no_unfinalized_claim(harness, meter) -> No
         turn_id="T1",
         key_factory=fixed_key,
     )
-    assert r1["status"] == "rejected"
+    assert r1["status"] == "rejected"  # noqa: S101 pytest assertion
 
     # After decline, the claim must be gone — a fresh claim_or_recall returns "new".
     claim = store.claim_or_recall("K-CANCEL-CLAIM-CHECK", scope="cancel")
-    assert claim.status == "new", (
+    assert claim.status == "new", (  # noqa: S101 pytest assertion
         f"Expected 'new' after decline (release_claim should have cleaned up), "
         f"got: {claim.status!r}"
     )

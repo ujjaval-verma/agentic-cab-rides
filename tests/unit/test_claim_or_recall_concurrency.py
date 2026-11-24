@@ -30,7 +30,7 @@ def test_concurrent_claim_one_new_others_in_progress(tmp_path):
     for t in threads:
         t.join()
 
-    assert errors == [], f"no thread should have crashed; got {errors}"
+    assert errors == [], f"no thread should have crashed; got {errors}"  # noqa: S101 pytest assertion
     counts = Counter(results)
-    assert counts["new"] == 1, f"expected exactly one 'new', got {counts}"
-    assert counts["in_progress"] == 7, f"expected 7 'in_progress', got {counts}"
+    assert counts["new"] == 1, f"expected exactly one 'new', got {counts}"  # noqa: S101 pytest assertion
+    assert counts["in_progress"] == 7, f"expected 7 'in_progress', got {counts}"  # noqa: S101 pytest assertion

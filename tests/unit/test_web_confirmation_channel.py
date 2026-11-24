@@ -44,18 +44,18 @@ async def test_request_blocks_until_resolve() -> None:
     # Fire request in background; it should block waiting for resolve().
     task = asyncio.ensure_future(channel.request(req))
     await asyncio.sleep(0)  # yield so the coroutine starts
-    assert not task.done()
+    assert not task.done()  # noqa: S101 pytest assertion
 
     # Now resolve it.
     resolved = channel.resolve(req.subject_id, approved=True)
-    assert resolved is True
+    assert resolved is True  # noqa: S101 pytest assertion
 
     result = await asyncio.wait_for(task, timeout=2.0)
-    assert result.approved is True
-    assert result.reason == "approved"
-    assert result.approver == "web-user"
-    assert result.approver_id == principal_id
-    assert result.channel == "web"
+    assert result.approved is True  # noqa: S101 pytest assertion
+    assert result.reason == "approved"  # noqa: S101 pytest assertion
+    assert result.approver == "web-user"  # noqa: S101 pytest assertion
+    assert result.approver_id == principal_id  # noqa: S101 pytest assertion
+    assert result.channel == "web"  # noqa: S101 pytest assertion
 
 
 def test_resolve_rejects_client_supplied_approver() -> None:
@@ -89,14 +89,14 @@ async def test_request_publishes_pending_confirmation_event() -> None:
     # The collector should now have received the pending_confirmation event.
     await asyncio.wait_for(collector, timeout=2.0)
 
-    assert len(received) == 1
+    assert len(received) == 1  # noqa: S101 pytest assertion
     ev = received[0]
-    assert ev["kind"] == "pending_confirmation"
-    assert ev["subject_id"] == "draft-pub-test"
-    assert ev["subject_kind"] == "draft"
-    assert "summary" in ev
-    assert "fingerprint" in ev
-    assert "expires_at" in ev
+    assert ev["kind"] == "pending_confirmation"  # noqa: S101 pytest assertion
+    assert ev["subject_id"] == "draft-pub-test"  # noqa: S101 pytest assertion
+    assert ev["subject_kind"] == "draft"  # noqa: S101 pytest assertion
+    assert "summary" in ev  # noqa: S101 pytest assertion
+    assert "fingerprint" in ev  # noqa: S101 pytest assertion
+    assert "expires_at" in ev  # noqa: S101 pytest assertion
 
     # Clean up
     channel.resolve(req.subject_id, approved=False)
@@ -115,11 +115,11 @@ async def test_request_returns_declined_on_resolve_false() -> None:
     channel.resolve(req.subject_id, approved=False)
     result = await asyncio.wait_for(task, timeout=2.0)
 
-    assert result.approved is False
-    assert result.reason == "declined"
-    assert result.approved_at is None
-    assert result.approver_id is None
-    assert result.channel == "web"
+    assert result.approved is False  # noqa: S101 pytest assertion
+    assert result.reason == "declined"  # noqa: S101 pytest assertion
+    assert result.approved_at is None  # noqa: S101 pytest assertion
+    assert result.approver_id is None  # noqa: S101 pytest assertion
+    assert result.channel == "web"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -131,15 +131,15 @@ async def test_request_returns_timeout_on_expiry() -> None:
 
     result = await asyncio.wait_for(channel.request(req), timeout=3.0)
 
-    assert result.approved is False
-    assert result.reason == "timeout"
-    assert result.approved_at is None
-    assert result.approver_id is None
-    assert result.channel == "web"
+    assert result.approved is False  # noqa: S101 pytest assertion
+    assert result.reason == "timeout"  # noqa: S101 pytest assertion
+    assert result.approved_at is None  # noqa: S101 pytest assertion
+    assert result.approver_id is None  # noqa: S101 pytest assertion
+    assert result.channel == "web"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
 async def test_runtime_checkable_protocol_match() -> None:
     bus = SessionEventBus()
     channel = _channel(bus)
-    assert isinstance(channel, ConfirmationChannel)
+    assert isinstance(channel, ConfirmationChannel)  # noqa: S101 pytest assertion

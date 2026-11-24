@@ -17,14 +17,14 @@ def test_drain_returns_recorded_calls_in_order():
     meter = InMemoryCostMeter()
     meter.record(_call(1))
     meter.record(_call(2))
-    assert [c.output_tokens for c in meter.drain()] == [1, 2]
+    assert [c.output_tokens for c in meter.drain()] == [1, 2]  # noqa: S101 pytest assertion
 
 
 def test_second_drain_is_empty():
     meter = InMemoryCostMeter()
     meter.record(_call(1))
     meter.drain()
-    assert meter.drain() == []
+    assert meter.drain() == []  # noqa: S101 pytest assertion
 
 
 def test_drain_after_more_records_returns_only_the_new_ones():
@@ -33,4 +33,4 @@ def test_drain_after_more_records_returns_only_the_new_ones():
     meter.drain()
     meter.record(_call(2))
     meter.record(_call(3))
-    assert [c.output_tokens for c in meter.drain()] == [2, 3]
+    assert [c.output_tokens for c in meter.drain()] == [2, 3]  # noqa: S101 pytest assertion

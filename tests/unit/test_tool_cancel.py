@@ -71,7 +71,7 @@ async def _book(
         session_id="S",
         turn_id="T",
     )
-    assert c_result["status"] == "confirmed"
+    assert c_result["status"] == "confirmed"  # noqa: S101 pytest assertion
     return c_result["booking_id"]
 
 
@@ -93,10 +93,10 @@ async def test_cancel_happy_path_emits_four_rows(harness, meter) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "cancelled"
+    assert result["status"] == "cancelled"  # noqa: S101 pytest assertion
     action_id = result["action_id"]
     rows = [r for r in log.read("S") if r["action_id"] == action_id]
-    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]
+    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -118,10 +118,10 @@ async def test_cancel_verified_row_records_approver_id_and_channel(harness, mete
         turn_id="T",
     )
     rows = [r for r in log.read("S") if r["action_id"] == result["action_id"]]
-    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]
+    assert [r["kind"] for r in rows] == ["requested", "verified", "executed", "outcome"]  # noqa: S101 pytest assertion
     confirmation = next(r for r in rows if r["kind"] == "verified")["checks"]["confirmation"]
-    assert confirmation["approver_id"] == "scripted"
-    assert confirmation["channel"] == "scripted"
+    assert confirmation["approver_id"] == "scripted"  # noqa: S101 pytest assertion
+    assert confirmation["channel"] == "scripted"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -142,13 +142,13 @@ async def test_cancel_declined_emits_three_rows_no_executed(harness, meter) -> N
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "rejected"
+    assert result["status"] == "rejected"  # noqa: S101 pytest assertion
     action_id = result["action_id"]
     rows = [r for r in log.read("S") if r["action_id"] == action_id]
     kinds = [r["kind"] for r in rows]
-    assert "executed" not in kinds  # CRITICAL: invariant 6 — rejected → no executed
+    assert "executed" not in kinds  # CRITICAL: invariant 6 — rejected → no executed  # noqa: S101 pytest assertion
     verified = next(r for r in rows if r["kind"] == "verified")
-    assert verified["result"] == "rejected"
+    assert verified["result"] == "rejected"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -177,9 +177,9 @@ async def test_cancel_unknown_booking(harness, meter) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "rejected"
-    assert "unknown" in result["reason"].lower()
-    assert call_count == 0, "gate must NOT be invoked for unknown booking"
+    assert result["status"] == "rejected"  # noqa: S101 pytest assertion
+    assert "unknown" in result["reason"].lower()  # noqa: S101 pytest assertion
+    assert call_count == 0, "gate must NOT be invoked for unknown booking"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -201,7 +201,7 @@ async def test_cancel_already_cancelled_short_circuits(harness, meter) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert r1["status"] == "cancelled"
+    assert r1["status"] == "cancelled"  # noqa: S101 pytest assertion
 
     call_count = 0
 
@@ -225,9 +225,9 @@ async def test_cancel_already_cancelled_short_circuits(harness, meter) -> None:
         session_id="S",
         turn_id="T2",
     )
-    assert r2["status"] == "rejected"
-    assert "already cancelled" in r2["reason"].lower()
-    assert call_count == 0, "gate must NOT be invoked for already-cancelled booking"
+    assert r2["status"] == "rejected"  # noqa: S101 pytest assertion
+    assert "already cancelled" in r2["reason"].lower()  # noqa: S101 pytest assertion
+    assert call_count == 0, "gate must NOT be invoked for already-cancelled booking"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -265,7 +265,7 @@ async def test_cancel_idempotency_replay(harness, meter) -> None:
         turn_id="T",
         key_factory=fixed_key,
     )
-    assert r1["status"] == "cancelled"
+    assert r1["status"] == "cancelled"  # noqa: S101 pytest assertion
 
     r2 = await cancel_booking(
         CancelArgs(booking_id=booking_id),
@@ -279,14 +279,14 @@ async def test_cancel_idempotency_replay(harness, meter) -> None:
         turn_id="T2",
         key_factory=fixed_key,
     )
-    assert r2["status"] == "cancelled"
+    assert r2["status"] == "cancelled"  # noqa: S101 pytest assertion
     # The second action's executed row must carry replayed=True
     rows = [
         r for r in log.read("S") if r["action_id"] == r2["action_id"] and r["kind"] == "executed"
     ]
-    assert len(rows) == 1
-    assert rows[0].get("replayed") is True
-    assert invoke_count == 1, "gate must only be invoked once"
+    assert len(rows) == 1  # noqa: S101 pytest assertion
+    assert rows[0].get("replayed") is True  # noqa: S101 pytest assertion
+    assert invoke_count == 1, "gate must only be invoked once"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -315,11 +315,11 @@ async def test_cancel_request_uses_subject_kind_booking(harness, meter) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "cancelled"
-    assert len(captured) == 1
+    assert result["status"] == "cancelled"  # noqa: S101 pytest assertion
+    assert len(captured) == 1  # noqa: S101 pytest assertion
     req = captured[0]
-    assert req.subject_kind == "booking"
-    assert req.subject_id == booking_id
+    assert req.subject_kind == "booking"  # noqa: S101 pytest assertion
+    assert req.subject_id == booking_id  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -347,7 +347,7 @@ async def test_cancel_idempotency_key_is_deterministic_in_tool_path(
     booking_id = await _book(sim, store, log, clock, meter)
 
     booking = store.get_booking(booking_id)
-    assert booking is not None
+    assert booking is not None  # noqa: S101 pytest assertion
     status_at_quote = booking.status
 
     # Quote the fee before the cancel so we can independently derive the expected key.
@@ -388,37 +388,37 @@ async def test_cancel_idempotency_key_is_deterministic_in_tool_path(
         turn_id="T",
         key_factory=spy_factory,
     )
-    assert r1["status"] == "cancelled"
-    assert len(captured_keys) == 1
+    assert r1["status"] == "cancelled"  # noqa: S101 pytest assertion
+    assert len(captured_keys) == 1  # noqa: S101 pytest assertion
     key_first_call = captured_keys[0]
 
     # The executed row must carry the idempotency_key field.
     exec_rows_1 = [
         r for r in log.read("S") if r["action_id"] == r1["action_id"] and r["kind"] == "executed"
     ]
-    assert len(exec_rows_1) == 1
-    assert exec_rows_1[0].get("idempotency_key"), "executed row must carry idempotency_key"
+    assert len(exec_rows_1) == 1  # noqa: S101 pytest assertion
+    assert exec_rows_1[0].get("idempotency_key"), "executed row must carry idempotency_key"  # noqa: S101 pytest assertion
 
     # Key-determinism: same (booking_id, fee_cents, status_at_quote) → same key, always.
     key_a = cancel_idempotency_key(booking_id, fee_before_cancel.amount_cents, status_at_quote)
     key_b = cancel_idempotency_key(booking_id, fee_before_cancel.amount_cents, status_at_quote)
-    assert key_a == key_b, "same inputs must produce same idempotency key"
-    assert key_a == key_first_call, "key_factory output and direct derivation must match"
-    assert key_a == expected_key, "pre-computed expected key must match actual key used"
+    assert key_a == key_b, "same inputs must produce same idempotency key"  # noqa: S101 pytest assertion
+    assert key_a == key_first_call, "key_factory output and direct derivation must match"  # noqa: S101 pytest assertion
+    assert key_a == expected_key, "pre-computed expected key must match actual key used"  # noqa: S101 pytest assertion
 
     # Different fee → different key (different intent → different key, no accidental collision).
     key_different_fee = cancel_idempotency_key(
         booking_id, fee_before_cancel.amount_cents + 1, status_at_quote
     )
-    assert key_different_fee != key_a
+    assert key_different_fee != key_a  # noqa: S101 pytest assertion
 
     # Different status → different key.
     key_different_status = cancel_idempotency_key(
         booking_id, fee_before_cancel.amount_cents, "pending"
     )
-    assert key_different_status != key_a
+    assert key_different_status != key_a  # noqa: S101 pytest assertion
 
-    assert invoke_count == 1, "gate must only be invoked once across the full cancel"
+    assert invoke_count == 1, "gate must only be invoked once across the full cancel"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -447,11 +447,11 @@ async def test_cancel_fee_in_gate_summary(harness, meter) -> None:
         session_id="S",
         turn_id="T",
     )
-    assert result["status"] == "cancelled"
-    assert len(captured_summary) == 1
+    assert result["status"] == "cancelled"  # noqa: S101 pytest assertion
+    assert len(captured_summary) == 1  # noqa: S101 pytest assertion
 
     # Booking status at quote time is "confirmed" → _compute_fee returns $0.00
     expected_fee: Money = UberSimAdapter._compute_fee("confirmed")
     fee_str = f"${expected_fee.amount_cents / 100:.2f}"
     summary = captured_summary[0]
-    assert fee_str in summary, f"Expected fee {fee_str!r} in summary {summary!r}"
+    assert fee_str in summary, f"Expected fee {fee_str!r} in summary {summary!r}"  # noqa: S101 pytest assertion

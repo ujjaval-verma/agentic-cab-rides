@@ -16,7 +16,7 @@ from agentic_cab.core.types import (
 
 def test_money_is_integer_cents_only():
     m = Money(amount_cents=1234, currency="USD")
-    assert m.amount_cents == 1234
+    assert m.amount_cents == 1234  # noqa: S101 pytest assertion
     with pytest.raises(ValidationError):
         Money(amount_cents=12.34, currency="USD")  # type: ignore[arg-type]
 
@@ -27,13 +27,13 @@ def test_ride_intent_defaults():
         dropoff=AddressRef(raw="B", formatted="B", lat=0.0, lng=0.0, confidence=1.0),
         when="now",
     )
-    assert intent.kind == "ride"
-    assert intent.party_size == 1
+    assert intent.kind == "ride"  # noqa: S101 pytest assertion
+    assert intent.party_size == 1  # noqa: S101 pytest assertion
 
 
 def test_option_details_discriminated():
     details = RideOptionDetails(vehicle_class="uberx", capacity=4)
-    assert details.kind == "ride"
+    assert details.kind == "ride"  # noqa: S101 pytest assertion
 
 
 def _location() -> AddressRef:
@@ -47,8 +47,8 @@ def test_appointment_intent_validates_required_fields():
         latest_at=datetime(2026, 6, 1, 17, 0, tzinfo=UTC),
         location=_location(),
     )
-    assert intent.kind == "appointment"
-    assert intent.subject == "GP check-up"
+    assert intent.kind == "appointment"  # noqa: S101 pytest assertion
+    assert intent.subject == "GP check-up"  # noqa: S101 pytest assertion
 
 
 def test_appointment_intent_missing_subject_raises():
@@ -71,8 +71,8 @@ def test_intent_union_discriminator_routes_ride():
         "when": "now",
     }
     intent = _intent_adapter.validate_python(raw)
-    assert isinstance(intent, RideIntent)
-    assert intent.kind == "ride"
+    assert isinstance(intent, RideIntent)  # noqa: S101 pytest assertion
+    assert intent.kind == "ride"  # noqa: S101 pytest assertion
 
 
 def test_intent_union_discriminator_routes_appointment():
@@ -84,8 +84,8 @@ def test_intent_union_discriminator_routes_appointment():
         "location": {"raw": "C", "formatted": "C", "lat": 37.77, "lng": -122.41, "confidence": 1.0},
     }
     intent = _intent_adapter.validate_python(raw)
-    assert isinstance(intent, AppointmentIntent)
-    assert intent.kind == "appointment"
+    assert isinstance(intent, AppointmentIntent)  # noqa: S101 pytest assertion
+    assert intent.kind == "appointment"  # noqa: S101 pytest assertion
 
 
 def test_appointment_option_details_discriminated():
@@ -94,4 +94,4 @@ def test_appointment_option_details_discriminated():
         slot_at=datetime(2026, 6, 1, 10, 0, tzinfo=UTC),
         specialty="general",
     )
-    assert details.kind == "appointment"
+    assert details.kind == "appointment"  # noqa: S101 pytest assertion

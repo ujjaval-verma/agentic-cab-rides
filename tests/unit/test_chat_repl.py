@@ -89,7 +89,7 @@ def test_build_handlers_has_all_seven_tools(tmp_path: Path, meter) -> None:
         "track_booking",
         "list_active_bookings",
     }
-    assert set(handlers.keys()) == expected
+    assert set(handlers.keys()) == expected  # noqa: S101 pytest assertion
 
 
 def test_tool_defs_has_all_seven_tools() -> None:
@@ -103,7 +103,7 @@ def test_tool_defs_has_all_seven_tools() -> None:
         "track_booking",
         "list_active_bookings",
     }
-    assert names == expected
+    assert names == expected  # noqa: S101 pytest assertion
 
 
 # ---------------------------------------------------------------------------
@@ -249,9 +249,9 @@ async def test_repl_one_turn_persists_chat_log(tmp_path: Path) -> None:
         )
 
     log_files = list((tmp_path / "logs").glob("*.chat.jsonl"))
-    assert len(log_files) == 1, f"Expected one .chat.jsonl, got: {log_files}"
+    assert len(log_files) == 1, f"Expected one .chat.jsonl, got: {log_files}"  # noqa: S101 pytest assertion
     content = log_files[0].read_text()
-    assert content.strip(), "chat log should not be empty after one turn"
+    assert content.strip(), "chat log should not be empty after one turn"  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -311,9 +311,9 @@ async def test_repl_handler_dispatch_discover_options(tmp_path: Path) -> None:
     # Verify the action log captured the list_active_bookings call
     log_files = list((tmp_path / "logs").glob("*.jsonl"))
     action_log_files = [f for f in log_files if not f.name.endswith(".chat.jsonl")]
-    assert action_log_files, "Expected an action log file"
+    assert action_log_files, "Expected an action log file"  # noqa: S101 pytest assertion
     rows_text = action_log_files[0].read_text()
-    assert "list_active_bookings" in rows_text
+    assert "list_active_bookings" in rows_text  # noqa: S101 pytest assertion
 
 
 def _end_turn_response(text: str = "Done.") -> MagicMock:
@@ -410,12 +410,12 @@ async def test_repl_uses_one_meter_instance_for_run_turn_and_both_gated_tools(
             channel=deps["channel"],
         )
 
-    assert "run_turn_meter" in captured, "run_turn was not called"
-    assert "confirm_booking_meter" in captured, "the confirm_booking handler was not reached"
-    assert "cancel_booking_meter" in captured, "the cancel_booking handler was not reached"
-    assert (
-        captured["run_turn_meter"] is captured["confirm_booking_meter"]
-    ), "run_turn and confirm_booking must share the SAME CostMeter instance"
-    assert (
-        captured["run_turn_meter"] is captured["cancel_booking_meter"]
-    ), "run_turn and cancel_booking must share the SAME CostMeter instance"
+    assert "run_turn_meter" in captured, "run_turn was not called"  # noqa: S101 pytest assertion
+    assert "confirm_booking_meter" in captured, "the confirm_booking handler was not reached"  # noqa: S101 pytest assertion
+    assert "cancel_booking_meter" in captured, "the cancel_booking handler was not reached"  # noqa: S101 pytest assertion
+    assert captured["run_turn_meter"] is captured["confirm_booking_meter"], (  # noqa: S101 pytest assertion
+        "run_turn and confirm_booking must share the SAME CostMeter instance"
+    )
+    assert captured["run_turn_meter"] is captured["cancel_booking_meter"], (  # noqa: S101 pytest assertion
+        "run_turn and cancel_booking must share the SAME CostMeter instance"
+    )

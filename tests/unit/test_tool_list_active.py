@@ -143,13 +143,13 @@ async def test_empty_returns_empty_list(tmp_path: Path) -> None:
         turn_id="T1",
     )
 
-    assert result == {"bookings": []}
+    assert result == {"bookings": []}  # noqa: S101 pytest assertion
 
     rows = log.read("S1")
     outcome = rows[1]
-    assert outcome["kind"] == "outcome"
-    assert outcome["status"] == "ok"
-    assert outcome["result"] == {"bookings": []}
+    assert outcome["kind"] == "outcome"  # noqa: S101 pytest assertion
+    assert outcome["status"] == "ok"  # noqa: S101 pytest assertion
+    assert outcome["result"] == {"bookings": []}  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -186,8 +186,8 @@ async def test_filters_completed_cancelled_failed(tmp_path: Path) -> None:
     returned_ids = {b["booking_id"] for b in result["bookings"]}
     expected_ids = {f"BID-ACTIVE-{i:03d}" for i in range(len(active_statuses))}
 
-    assert returned_ids == expected_ids
-    assert not returned_statuses.intersection(set(terminal_statuses))
+    assert returned_ids == expected_ids  # noqa: S101 pytest assertion
+    assert not returned_statuses.intersection(set(terminal_statuses))  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio
@@ -206,13 +206,13 @@ async def test_emits_requested_then_outcome_only(tmp_path: Path) -> None:
     )
 
     rows = log.read("S3")
-    assert len(rows) == 2, f"Expected exactly 2 rows, got {len(rows)}: {rows}"
+    assert len(rows) == 2, f"Expected exactly 2 rows, got {len(rows)}: {rows}"  # noqa: S101 pytest assertion
 
     requested, outcome = rows
-    assert requested["kind"] == "requested"
-    assert outcome["kind"] == "outcome"
-    assert requested["action_id"] == outcome["action_id"]
+    assert requested["kind"] == "requested"  # noqa: S101 pytest assertion
+    assert outcome["kind"] == "outcome"  # noqa: S101 pytest assertion
+    assert requested["action_id"] == outcome["action_id"]  # noqa: S101 pytest assertion
 
     kinds = {r["kind"] for r in rows}
-    assert "verified" not in kinds
-    assert "executed" not in kinds
+    assert "verified" not in kinds  # noqa: S101 pytest assertion
+    assert "executed" not in kinds  # noqa: S101 pytest assertion

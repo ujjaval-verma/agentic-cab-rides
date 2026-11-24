@@ -14,10 +14,10 @@ def test_converter_produces_anthropic_schema() -> None:
         description="Create a draft from an option.",
         args_model=_Args,
     )
-    assert schema["name"] == "prepare_booking"
-    assert schema["description"] == "Create a draft from an option."
+    assert schema["name"] == "prepare_booking"  # noqa: S101 pytest assertion
+    assert schema["description"] == "Create a draft from an option."  # noqa: S101 pytest assertion
     inp = schema["input_schema"]
-    assert inp["type"] == "object"
-    assert "option_id" in inp["properties"]
-    assert "option_id" in inp["required"]
-    assert "note" not in inp["required"]
+    assert inp["type"] == "object"  # noqa: S101 pytest assertion
+    assert "option_id" in inp["properties"]  # noqa: S101 pytest assertion
+    assert "option_id" in inp["required"]  # noqa: S101 pytest assertion
+    assert "note" not in inp["required"]  # noqa: S101 pytest assertion

@@ -49,5 +49,5 @@ class GeocodeCache:
     # ------------------------------------------------------------------
 
     def _path_for(self: Self, query: str) -> Path:
-        key = hashlib.sha1(query.strip().lower().encode()).hexdigest()  # cache key, not crypto
+        key = hashlib.sha1(query.strip().lower().encode(), usedforsecurity=False).hexdigest()
         return self._dir / f"{key}.json"
