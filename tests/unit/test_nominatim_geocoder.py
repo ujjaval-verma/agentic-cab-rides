@@ -97,7 +97,7 @@ def _make_geocoder(
     tmp_path: Path,
     http: AsyncMock,
 ) -> NominatimGeocoder:
-    cache = GeocodeCache(fixtures_dir=tmp_path)
+    cache = GeocodeCache(cache_dir=tmp_path)
     return NominatimGeocoder(cache=cache, http=http)
 
 
@@ -278,7 +278,7 @@ def test_second_call_within_one_second_waits(tmp_path: Path) -> None:
     http = _make_http_mock(_SINGLE_RESULT * 2)  # two different results to avoid cache hit
     # Two separate geocoders share the same underlying lock — simulate via
     # a single geocoder with two different un-cached queries.
-    cache = GeocodeCache(fixtures_dir=tmp_path)
+    cache = GeocodeCache(cache_dir=tmp_path)
     g = NominatimGeocoder(cache=cache, http=http)
 
     sleep_calls: list[float] = []

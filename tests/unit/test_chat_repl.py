@@ -49,7 +49,7 @@ def _make_deps(tmp_path: Path) -> dict[str, Any]:
     log = JSONLActionLog(log_dir=tmp_path / "logs")
     sim = UberSimAdapter(store=store, clock=clock, rng_seed=42)
     channel = ScriptedConfirmationChannel(script=[], clock=clock)
-    geocode_cache = GeocodeCache(fixtures_dir=tmp_path / "geocode")
+    geocode_cache = GeocodeCache(cache_dir=tmp_path / "geocode")
     geocoder = NominatimGeocoder(cache=geocode_cache, http=MagicMock())
     return {
         "sim": sim,

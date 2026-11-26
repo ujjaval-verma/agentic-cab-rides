@@ -320,7 +320,7 @@ async def test_repl_web_parity_happy_path(tmp_path: Path) -> None:
     # making network calls.
     geocode_dir = tmp_path / "geocode"
     geocode_dir.mkdir()
-    geocode_cache = GeocodeCache(fixtures_dir=geocode_dir)
+    geocode_cache = GeocodeCache(cache_dir=geocode_dir)
 
     # Pre-seed the cache with the two addresses used by the scenario.
     from agentic_cab.core.types import AddressRef

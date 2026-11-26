@@ -37,9 +37,9 @@ def test_default_geocode_fixtures_points_at_committed_path() -> None:
     )
 
 
-def test_committed_fixture_cache_returns_address_ref_for_known_query() -> None:
-    """GeocodeCache at the committed path returns a non-None AddressRef for a known query."""
-    cache = GeocodeCache(fixtures_dir=_DEFAULT_GEOCODE_FIXTURES)
+def test_committed_fixture_cache_returns_address_ref_for_known_query(tmp_path: Path) -> None:
+    """The committed fixtures, as a read-only layer, return an AddressRef for a known query."""
+    cache = GeocodeCache(cache_dir=tmp_path, read_only_dirs=(_DEFAULT_GEOCODE_FIXTURES,))
     result = cache.get(_KNOWN_QUERY)
     assert result is not None, (  # noqa: S101 pytest assertion
         f"GeocodeCache.get({_KNOWN_QUERY!r}) returned None. "

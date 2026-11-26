@@ -322,7 +322,7 @@ async def run_repl(
     # Per-REPL approver principal: opaque, server-minted, never OS identity (inv. 8).
     _channel = channel or CLIConfirmationChannel(clock=clock, principal_id=new_principal_id())
 
-    geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
+    geocode_cache = GeocodeCache(cache_dir=_geocode_fixtures_dir)
     geocoder = NominatimGeocoder(
         cache=geocode_cache,
         http=httpx.AsyncClient(timeout=10),

@@ -436,7 +436,7 @@ def create_app(
         channel = state.channel
         meter = state.meter
 
-        geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
+        geocode_cache = GeocodeCache(cache_dir=_geocode_fixtures_dir)
         geocoder = NominatimGeocoder(
             cache=geocode_cache,
             http=httpx.AsyncClient(timeout=10),

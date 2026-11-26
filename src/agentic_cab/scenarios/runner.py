@@ -84,7 +84,7 @@ async def run_scenario(
     _geocode_fixtures_dir = (
         geocode_fixtures_dir if geocode_fixtures_dir is not None else _DEFAULT_GEOCODE_FIXTURES
     )
-    geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
+    geocode_cache = GeocodeCache(cache_dir=_geocode_fixtures_dir)
     http_client = httpx.AsyncClient()
     geocoder = NominatimGeocoder(cache=geocode_cache, http=http_client)
 
