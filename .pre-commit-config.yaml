@@ -78,3 +78,12 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
+
+      # Dependency audit on push: warns when offline, fails on a known vulnerability.
+      - id: dep-audit
+        name: dependency audit (make audit)
+        entry: make audit
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
