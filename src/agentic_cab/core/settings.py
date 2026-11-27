@@ -105,14 +105,15 @@ class RuntimeSettings:
     ) -> Self:
         """Apply explicit composition-root kwargs on top of these settings.
 
-        A new data dir takes the writable geocode cache with it (`<data_dir>/geocode`);
-        a new log dir takes the chat dir with it when the two were the same.
+        A new data dir takes the writable geocode cache with it (`<data_dir>/geocode`)
+        when the cache was still the derived default; a new log dir takes the chat
+        dir with it when the two were the same. Explicitly set dirs stay put.
         """
         updated = self
         if data_dir is not None:
-            updated = replace(
-                updated, data_dir=data_dir, geocode_cache_dir=data_dir / _GEOCODE_SUBDIR
-            )
+            derived = updated.geocode_cache_dir == updated.data_dir / _GEOCODE_SUBDIR
+            cache_dir = data_dir / _GEOCODE_SUBDIR if derived else updated.geocode_cache_dir
+            updated = replace(updated, data_dir=data_dir, geocode_cache_dir=cache_dir)
         if log_dir is not None:
             chat_dir = log_dir if updated.chat_dir == updated.log_dir else updated.chat_dir
             updated = replace(updated, log_dir=log_dir, chat_dir=chat_dir)

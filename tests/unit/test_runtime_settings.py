@@ -86,6 +86,13 @@ def test_with_overrides_keeps_a_separate_chat_dir(tmp_path: Path) -> None:
     assert base.with_overrides(log_dir=tmp_path / "l").chat_dir == tmp_path / "c"  # noqa: S101 pytest assertion
 
 
+def test_with_overrides_keeps_an_explicit_geocode_cache_dir(tmp_path: Path) -> None:
+    base = RuntimeSettings.from_env({"AGENTIC_CAB_GEOCODE_CACHE_DIR": str(tmp_path / "g")})
+    moved = base.with_overrides(data_dir=tmp_path / "d")
+    assert moved.data_dir == tmp_path / "d"  # noqa: S101 pytest assertion
+    assert moved.geocode_cache_dir == tmp_path / "g"  # noqa: S101 pytest assertion
+
+
 def test_with_overrides_no_args_is_identity() -> None:
     base = RuntimeSettings.from_env({})
     assert base.with_overrides() == base  # noqa: S101 pytest assertion
