@@ -42,6 +42,7 @@ from agentic_cab.core.ports import (
     GeocoderPort,
     StateStore,
 )
+from agentic_cab.core.settings import RuntimeSettings
 from agentic_cab.tools.cancel import CancelArgs, cancel_booking
 from agentic_cab.tools.confirm import ConfirmArgs, confirm_booking
 from agentic_cab.tools.discover import DiscoverArgs, discover_options
@@ -295,18 +296,22 @@ async def run_repl(
     console: Console | None = None,
     input_source: InputSource | None = None,
     channel: ConfirmationChannel | None = None,
+    settings: RuntimeSettings | None = None,
 ) -> None:
     """Entry point for the interactive REPL.
 
     All parameters are dependency-injectable for testing. When omitted, production
-    defaults are used (SystemClock, /dev/tty, real filesystem paths).
+    defaults are used (SystemClock, /dev/tty, `RuntimeSettings.from_env(os.environ)`
+    read at call time). Explicit path kwargs win over `settings`.
     """
-    _data_dir = data_dir or Path("data")
-    _log_dir = log_dir or Path("logs")
-    _geocode_fixtures_dir = geocode_fixtures_dir or Path("fixtures/geocode")
+    _settings = (settings or RuntimeSettings.from_env(os.environ)).with_overrides(
+        data_dir=data_dir, log_dir=log_dir, geocode_fixtures_dir=geocode_fixtures_dir
+    )
+    _data_dir = _settings.data_dir
+    _log_dir = _settings.log_dir
 
-    _data_dir.mkdir(parents=True, exist_ok=True)
-    _log_dir.mkdir(parents=True, exist_ok=True)
+    for d in (_data_dir, _log_dir, _settings.chat_dir):
+        d.mkdir(parents=True, exist_ok=True)
 
     session_id = new_session_id()
     clock = SystemClock()
@@ -322,7 +327,12 @@ async def run_repl(
     # Per-REPL approver principal: opaque, server-minted, never OS identity (inv. 8).
     _channel = channel or CLIConfirmationChannel(clock=clock, principal_id=new_principal_id())
 
-    geocode_cache = GeocodeCache(cache_dir=_geocode_fixtures_dir)
+    # Live results go to the writable cache under the data dir; the committed
+    # fixtures are a read-only seed layer.
+    geocode_cache = GeocodeCache(
+        cache_dir=_settings.geocode_cache_dir,
+        read_only_dirs=(_settings.geocode_fixtures_dir,),
+    )
     geocoder = NominatimGeocoder(
         cache=geocode_cache,
         http=httpx.AsyncClient(timeout=10),
@@ -350,7 +360,7 @@ async def run_repl(
     )
 
     client = Anthropic()
-    chat_log_path = session_chat_path(_log_dir, session_id)
+    chat_log_path = session_chat_path(_settings.chat_dir, session_id)
 
     _log.info("repl.start", session_id=session_id)
 
