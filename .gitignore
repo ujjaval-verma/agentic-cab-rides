@@ -13,7 +13,8 @@ htmlcov/
 .venv/
 .python-version.local
 
-# Project runtime state (never commit live state)
+# Project runtime state (never commit live state). data/geocode/ holds the live
+# geocode cache (raw user queries); fixtures/geocode/ is the read-only seed.
 data/
 logs/
 chat/

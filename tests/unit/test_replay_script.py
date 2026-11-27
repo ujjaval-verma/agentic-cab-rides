@@ -58,6 +58,25 @@ def test_replay_valid_ulid_with_log_exits_0(
     assert _ULID in capsys.readouterr().out  # noqa: S101 pytest assertion
 
 
+def test_replay_reads_log_and_chat_from_env_dirs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    logs, chat = tmp_path / "env-logs", tmp_path / "env-chat"
+    logs.mkdir()
+    chat.mkdir()
+    (logs / f"{_ULID}.jsonl").write_text(json.dumps({"session_id": _ULID}) + "\n")
+    marker = "chat-marker-from-env-dir"
+    (chat / f"{_ULID}.chat.jsonl").write_text(
+        json.dumps({"role": "user", "content": marker}) + "\n"
+    )
+    monkeypatch.setenv("AGENTIC_CAB_LOG_DIR", str(logs))
+    monkeypatch.setenv("AGENTIC_CAB_CHAT_DIR", str(chat))
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    assert _run(monkeypatch, cwd, _ULID) == 0  # noqa: S101 pytest assertion
+    assert marker in capsys.readouterr().out  # noqa: S101 pytest assertion
+
+
 def test_makefile_replay_quotes_session() -> None:
     text = (ROOT / "Makefile").read_text(encoding="utf-8")
     recipe = re.search(r"^replay:.*\n((?:\t.*\n)+)", text, re.MULTILINE)

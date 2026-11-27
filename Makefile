@@ -65,9 +65,17 @@ repl: ## Interactive CLI agent (CLIConfirmationChannel via /dev/tty)
 # Bind address for `make web` / `make demo`. WEB_HOST is also exported as
 # AGENTIC_CAB_WEB_HOST so the Host allowlist admits it (`--factory` cannot pass args).
 WEB_HOST ?= 127.0.0.1
-WEB_PORT ?= 8000
+WEB_PORT ?= $(or $(AGENTIC_CAB_WEB_PORT),8000)
 
-web: ## FastAPI + browser UI at http://localhost:8000 (WebConfirmationChannel)
+# Runtime dirs (see .env.example / core/settings.py). The app reads the
+# AGENTIC_CAB_* variables itself; these mirror them for `make reset`. `:=` (not
+# `?=`) so a generic DATA_DIR in the shell is never picked up by `rm -rf`;
+# override on the command line (`make reset DATA_DIR=...`) or via AGENTIC_CAB_*.
+DATA_DIR := $(or $(AGENTIC_CAB_DATA_DIR),data)
+LOG_DIR := $(or $(AGENTIC_CAB_LOG_DIR),logs)
+CHAT_DIR := $(or $(AGENTIC_CAB_CHAT_DIR),$(LOG_DIR))
+
+web: ## FastAPI + browser UI on 127.0.0.1:$WEB_PORT (WebConfirmationChannel)
 	AGENTIC_CAB_WEB_HOST=$(WEB_HOST) $(UV) run uvicorn agentic_cab.web.app:create_app --factory --host $(WEB_HOST) --port $(WEB_PORT) --reload
 
 transcripts: ## Regenerate all 6 transcripts from scenarios/
@@ -112,10 +120,10 @@ clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .ruff_cache .pyright dist build htmlcov .coverage
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 
-reset: ## Wipe data/, logs/, chat/ and re-apply schema
-	rm -rf data logs chat
-	mkdir -p data logs chat
-	$(UV) run python -m agentic_cab init-db
+reset: ## Wipe the data, log and chat dirs (AGENTIC_CAB_*_DIR) and re-apply schema
+	rm -rf "$(DATA_DIR)" "$(LOG_DIR)" "$(CHAT_DIR)"
+	mkdir -p "$(DATA_DIR)" "$(LOG_DIR)" "$(CHAT_DIR)"
+	AGENTIC_CAB_DATA_DIR="$(DATA_DIR)" $(UV) run python -m agentic_cab init-db
 
 replay: ## Pretty-print a session log: `make replay SESSION=<id>`
 	@test -n "$(SESSION)" || (echo "usage: make replay SESSION=<session_id>"; exit 1)
@@ -145,10 +153,11 @@ demo: ## Start web UI and open browser — manual smoke test  # manual smoke
 	@echo ""
 	@echo "  ╔══════════════════════════════════════════════════════════╗"
 	@echo "  ║  agentic-cab-rides — web demo                           ║"
-	@echo "  ║  Open http://127.0.0.1:8000 in your browser.            ║"
+	@echo "  ║  Open the URL below in your browser.                    ║"
 	@echo "  ║  Try: book a ride, track it, then cancel.               ║"
 	@echo "  ║  Ctrl-C to stop the server.                             ║"
 	@echo "  ╚══════════════════════════════════════════════════════════╝"
+	@echo "  http://127.0.0.1:$(WEB_PORT)"
 	@echo ""
-	$(UV) run python -m webbrowser http://127.0.0.1:8000 &
+	$(UV) run python -m webbrowser http://127.0.0.1:$(WEB_PORT) &
 	AGENTIC_CAB_WEB_HOST=$(WEB_HOST) $(UV) run uvicorn agentic_cab.web.app:create_app --factory --host $(WEB_HOST) --port $(WEB_PORT)
