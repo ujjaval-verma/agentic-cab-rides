@@ -70,6 +70,27 @@ def test_cache_dir_inside_fixtures_dir_is_refused(sub: str) -> None:
         RuntimeSettings.from_env({"AGENTIC_CAB_GEOCODE_CACHE_DIR": str(target)})
 
 
+def test_with_overrides_moves_cache_and_chat_with_their_parents(tmp_path: Path) -> None:
+    s = RuntimeSettings.from_env({}).with_overrides(
+        data_dir=tmp_path / "d", log_dir=tmp_path / "l", geocode_fixtures_dir=tmp_path / "f"
+    )
+    assert s.data_dir == tmp_path / "d"  # noqa: S101 pytest assertion
+    assert s.geocode_cache_dir == tmp_path / "d" / "geocode"  # noqa: S101 pytest assertion
+    assert s.log_dir == tmp_path / "l"  # noqa: S101 pytest assertion
+    assert s.chat_dir == tmp_path / "l"  # noqa: S101 pytest assertion
+    assert s.geocode_fixtures_dir == tmp_path / "f"  # noqa: S101 pytest assertion
+
+
+def test_with_overrides_keeps_a_separate_chat_dir(tmp_path: Path) -> None:
+    base = RuntimeSettings.from_env({"AGENTIC_CAB_CHAT_DIR": str(tmp_path / "c")})
+    assert base.with_overrides(log_dir=tmp_path / "l").chat_dir == tmp_path / "c"  # noqa: S101 pytest assertion
+
+
+def test_with_overrides_no_args_is_identity() -> None:
+    base = RuntimeSettings.from_env({})
+    assert base.with_overrides() == base  # noqa: S101 pytest assertion
+
+
 def test_module_reads_no_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The module never reads os.environ itself (invariant 9): only the mapping passed in."""
     monkeypatch.setenv("AGENTIC_CAB_DATA_DIR", str(tmp_path / "from-env"))

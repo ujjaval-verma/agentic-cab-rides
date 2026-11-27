@@ -63,6 +63,7 @@ from agentic_cab.agent.chat import build_handlers
 from agentic_cab.agent.loop import run_turn
 from agentic_cab.core.ids import SessionId, new_principal_id, new_session_id, new_turn_id
 from agentic_cab.core.ports import Clock
+from agentic_cab.core.settings import RuntimeSettings
 from agentic_cab.web.channel import WebConfirmationChannel
 from agentic_cab.web.origin import SameOriginMiddleware
 from agentic_cab.web.sse import SessionEventBus
@@ -289,6 +290,15 @@ def _evict_stale_sessions(clock: Clock) -> None:
 # ---------- App factory ----------
 
 
+def _build_geocoder(settings: RuntimeSettings, *, http: httpx.AsyncClient) -> NominatimGeocoder:
+    """Geocoder whose live cache is writable under the data dir; fixtures are read-only."""
+    cache = GeocodeCache(
+        cache_dir=settings.geocode_cache_dir,
+        read_only_dirs=(settings.geocode_fixtures_dir,),
+    )
+    return NominatimGeocoder(cache=cache, http=http)
+
+
 def create_app(
     *,
     data_dir: Path | None = None,
@@ -296,20 +306,24 @@ def create_app(
     geocode_fixtures_dir: Path | None = None,
     clock: Clock | None = None,
     bind_host: str | None = None,
+    settings: RuntimeSettings | None = None,
 ) -> FastAPI:
     """Create and return the FastAPI application.
 
-    All paths are injectable so tests can isolate filesystem state. `clock` is
-    injectable too — production wiring defaults to `SystemClock`, and tests
-    inject a `FrozenClock` to drive session-eviction timing without sleeping
-    (CLAUDE.md invariant 9). `bind_host` (else `AGENTIC_CAB_WEB_HOST`) joins
-    loopback on the Host allowlist; all-interfaces addresses add nothing and
-    `"*"` raises `ValueError`.
+    Paths come from `settings` (else `RuntimeSettings.from_env(os.environ)`, read
+    here at call time); the explicit path kwargs win over both, so tests can
+    isolate filesystem state. `clock` is injectable too — production wiring
+    defaults to `SystemClock`, and tests inject a `FrozenClock` to drive
+    session-eviction timing without sleeping (CLAUDE.md invariant 9).
+    `bind_host` (else `AGENTIC_CAB_WEB_HOST`) joins loopback on the Host
+    allowlist; all-interfaces addresses add nothing and `"*"` raises `ValueError`.
     """
     _hosts = _allowed_hosts(bind_host)
-    _data_dir = data_dir or Path("data")
-    _log_dir = log_dir or Path("logs")
-    _geocode_fixtures_dir = geocode_fixtures_dir or Path("fixtures/geocode")
+    _settings = (settings or RuntimeSettings.from_env(os.environ)).with_overrides(
+        data_dir=data_dir, log_dir=log_dir, geocode_fixtures_dir=geocode_fixtures_dir
+    )
+    _data_dir = _settings.data_dir
+    _log_dir = _settings.log_dir
     _clock: Clock = clock or SystemClock()
 
     _data_dir.mkdir(parents=True, exist_ok=True)
@@ -436,11 +450,7 @@ def create_app(
         channel = state.channel
         meter = state.meter
 
-        geocode_cache = GeocodeCache(cache_dir=_geocode_fixtures_dir)
-        geocoder = NominatimGeocoder(
-            cache=geocode_cache,
-            http=httpx.AsyncClient(timeout=10),
-        )
+        geocoder = _build_geocoder(_settings, http=httpx.AsyncClient(timeout=10))
 
         turn_id_ref = state.turn_id_ref
         turn_id_ref[0] = new_turn_id()

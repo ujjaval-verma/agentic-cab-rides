@@ -20,7 +20,7 @@ may not be it or sit inside it.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Self
 
@@ -95,3 +95,27 @@ class RuntimeSettings:
             geocode_fixtures_dir=DEFAULT_GEOCODE_FIXTURES_DIR,
             web_port=_parse_port(_get(environ, WEB_PORT_ENV)),
         )
+
+    def with_overrides(
+        self: Self,
+        *,
+        data_dir: Path | None = None,
+        log_dir: Path | None = None,
+        geocode_fixtures_dir: Path | None = None,
+    ) -> Self:
+        """Apply explicit composition-root kwargs on top of these settings.
+
+        A new data dir takes the writable geocode cache with it (`<data_dir>/geocode`);
+        a new log dir takes the chat dir with it when the two were the same.
+        """
+        updated = self
+        if data_dir is not None:
+            updated = replace(
+                updated, data_dir=data_dir, geocode_cache_dir=data_dir / _GEOCODE_SUBDIR
+            )
+        if log_dir is not None:
+            chat_dir = log_dir if updated.chat_dir == updated.log_dir else updated.chat_dir
+            updated = replace(updated, log_dir=log_dir, chat_dir=chat_dir)
+        if geocode_fixtures_dir is not None:
+            updated = replace(updated, geocode_fixtures_dir=geocode_fixtures_dir)
+        return updated
