@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Annotated
 
@@ -143,10 +144,13 @@ def web(
 ) -> None:
     """FastAPI + browser UI (WebConfirmationChannel). Prefer `make web`."""
     settings = _settings()
+    if port is not None:
+        # The app keys its session cookies on the port it actually serves.
+        settings = replace(settings, web_port=port)
     uvicorn.run(
         create_app(bind_host=host, settings=settings),
         host=host,
-        port=port if port is not None else settings.web_port,
+        port=settings.web_port,
         reload=False,
     )
 

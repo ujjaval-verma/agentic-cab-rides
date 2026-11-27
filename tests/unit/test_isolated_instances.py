@@ -125,6 +125,39 @@ async def test_each_geocoder_caches_only_under_its_own_data_dir(
     assert _snapshot(fixtures) == before  # noqa: S101 pytest assertion
 
 
+def test_one_apps_cookie_sweep_leaves_the_other_apps_session_cookies_alone(
+    instances: tuple[RuntimeSettings, RuntimeSettings, Path],
+) -> None:
+    """Browsers share cookies across ports, so tab B sends tab A's session cookie.
+
+    Separate processes do not share `_sessions`; A's entry is set aside while B
+    mints to model that, then restored to show A's tab still authorizes.
+    """
+    a, b, _ = instances
+    with (
+        TestClient(create_app(settings=a), base_url=_LOOPBACK_BASE_URL) as ca,
+        TestClient(create_app(settings=b), base_url=_LOOPBACK_BASE_URL) as cb,
+    ):
+        sid_a = ca.post("/sessions").json()["session_id"]
+        a_cookies = dict(ca.cookies.items())
+        assert a_cookies  # noqa: S101 pytest assertion
+        for name, value in a_cookies.items():
+            cb.cookies.set(name, value)  # one browser jar, two ports
+        state_a = _sessions.pop(sid_a)  # B's process cannot see A's sessions
+
+        response = cb.post("/sessions")
+        assert response.status_code == 200  # noqa: S101 pytest assertion
+        swept = response.headers.get_list("set-cookie")
+        assert not any(h.split("=", 1)[0] in a_cookies for h in swept), swept  # noqa: S101 pytest assertion
+        assert {n: cb.cookies.get(n) for n in a_cookies} == a_cookies  # noqa: S101 pytest assertion
+
+        _sessions[sid_a] = state_a
+        ca.cookies.clear()
+        for name, value in cb.cookies.items():
+            ca.cookies.set(name, value)
+        assert ca.get(f"/sessions/{sid_a}/log").status_code == 200  # noqa: S101 pytest assertion
+
+
 def test_cli_web_port_per_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     ports: list[int] = []
 

@@ -98,7 +98,7 @@ AGENTIC_CAB_DATA_DIR=/tmp/cab-b/data AGENTIC_CAB_LOG_DIR=/tmp/cab-b/logs \
   AGENTIC_CAB_WEB_PORT=8102 make web
 ```
 
-Manual check: chat in each browser tab, then confirm `/tmp/cab-a` and `/tmp/cab-b` each fill with their own `state.db`, logs and `geocode/` cache, and that `git status` stays clean. `fixtures/geocode` is read-only at runtime: live geocoding results are cached under the data dir (gitignored), never in the tracked fixtures. `tests/unit/test_isolated_instances.py` covers the same isolation without a model or network.
+Both tabs can stay open in one browser: browsers share cookies across ports, so each instance names its session cookies `cab_session_<port>_…` and only reads or expires its own. Manual check: chat in each browser tab, then confirm `/tmp/cab-a` and `/tmp/cab-b` each fill with their own `state.db`, logs and `geocode/` cache, and that `git status` stays clean. `fixtures/geocode` is read-only at runtime: live geocoding results are cached under the data dir (gitignored), never in the tracked fixtures. `tests/unit/test_isolated_instances.py` covers the same isolation without a model or network.
 
 ## Development
 

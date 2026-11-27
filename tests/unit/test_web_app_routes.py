@@ -128,7 +128,7 @@ def test_post_sessions_mints_valid_ulid(app: TestClient) -> None:
 
 def _session_cookie_header(response: object, sid: str) -> str:
     headers = response.headers.get_list("set-cookie")  # type: ignore[attr-defined]
-    matching = [h for h in headers if h.startswith(f"cab_session_{sid}=")]
+    matching = [h for h in headers if h.startswith(f"cab_session_8000_{sid}=")]
     assert len(matching) == 1, headers  # noqa: S101 pytest assertion
     return matching[0]
 
@@ -159,6 +159,27 @@ def _make_clocked_client(tmp_path: Path) -> tuple[TestClient, FrozenClock]:
     return client, clock
 
 
+def test_session_cookie_name_carries_the_served_port(tmp_path: Path) -> None:
+    from agentic_cab.core.settings import RuntimeSettings
+
+    settings = RuntimeSettings.from_env({"AGENTIC_CAB_WEB_PORT": "8101"})
+    client = _client(
+        create_app(
+            settings=settings,
+            data_dir=tmp_path / "data",
+            log_dir=tmp_path / "logs",
+            geocode_fixtures_dir=tmp_path / "fixtures",
+        )
+    )
+    # Another instance's cookie on a port that is a prefix of ours: never swept.
+    client.cookies.set(f"cab_session_810_{_ulid(1)}", "x")
+    response = client.post("/sessions")
+    sid = response.json()["session_id"]
+    headers = response.headers.get_list("set-cookie")
+    assert [h.split("=", 1)[0] for h in headers] == [f"cab_session_8101_{sid}"]  # noqa: S101 pytest assertion
+    assert client.get(f"/sessions/{sid}/log").status_code == 200  # noqa: S101 pytest assertion
+
+
 def test_post_sessions_expires_cookies_of_sessions_no_longer_live(tmp_path: Path) -> None:
     client, clock = _make_clocked_client(tmp_path)
     stale_sid = _mint(client)
@@ -170,8 +191,8 @@ def test_post_sessions_expires_cookies_of_sessions_no_longer_live(tmp_path: Path
     attrs = {part.strip().lower() for part in header.split(";")[1:]}
     assert "max-age=0" in attrs  # noqa: S101 pytest assertion
     assert "path=/" in attrs  # noqa: S101 pytest assertion
-    assert client.cookies.get(f"cab_session_{stale_sid}") is None  # noqa: S101 pytest assertion
-    assert client.cookies.get(f"cab_session_{response.json()['session_id']}")  # noqa: S101 pytest assertion
+    assert client.cookies.get(f"cab_session_8000_{stale_sid}") is None  # noqa: S101 pytest assertion
+    assert client.cookies.get(f"cab_session_8000_{response.json()['session_id']}")  # noqa: S101 pytest assertion
 
 
 def test_post_sessions_keeps_cookies_of_live_sessions(tmp_path: Path) -> None:
@@ -179,15 +200,15 @@ def test_post_sessions_keeps_cookies_of_live_sessions(tmp_path: Path) -> None:
     live_sid = _mint(client)  # another open tab
     response = client.post("/sessions")
     headers = response.headers.get_list("set-cookie")
-    assert not any(h.startswith(f"cab_session_{live_sid}=") for h in headers), headers  # noqa: S101 pytest assertion
-    assert client.cookies.get(f"cab_session_{live_sid}")  # noqa: S101 pytest assertion
+    assert not any(h.startswith(f"cab_session_8000_{live_sid}=") for h in headers), headers  # noqa: S101 pytest assertion
+    assert client.cookies.get(f"cab_session_8000_{live_sid}")  # noqa: S101 pytest assertion
 
 
 def test_post_sessions_body_carries_only_session_id(app: TestClient) -> None:
     response = app.post("/sessions")
     sid = response.json()["session_id"]
     assert list(response.json()) == ["session_id"]  # noqa: S101 pytest assertion
-    token = app.cookies.get(f"cab_session_{sid}")
+    token = app.cookies.get(f"cab_session_8000_{sid}")
     assert token  # noqa: S101 pytest assertion
     assert token not in response.text  # noqa: S101 pytest assertion
 
@@ -195,8 +216,8 @@ def test_post_sessions_body_carries_only_session_id(app: TestClient) -> None:
 def test_post_sessions_mints_distinct_unguessable_tokens(app: TestClient) -> None:
     sid_a = app.post("/sessions").json()["session_id"]
     sid_b = app.post("/sessions").json()["session_id"]
-    token_a = app.cookies.get(f"cab_session_{sid_a}")
-    token_b = app.cookies.get(f"cab_session_{sid_b}")
+    token_a = app.cookies.get(f"cab_session_8000_{sid_a}")
+    token_b = app.cookies.get(f"cab_session_8000_{sid_b}")
     assert token_a  # noqa: S101 pytest assertion
     assert token_b  # noqa: S101 pytest assertion
     assert token_a != token_b  # noqa: S101 pytest assertion
@@ -209,7 +230,7 @@ def test_post_sessions_registers_state_with_token_and_principal(app: TestClient)
 
     sid = app.post("/sessions").json()["session_id"]
     state = _sessions[sid]
-    assert state.token == app.cookies.get(f"cab_session_{sid}")  # noqa: S101 pytest assertion
+    assert state.token == app.cookies.get(f"cab_session_8000_{sid}")  # noqa: S101 pytest assertion
     assert parse_session_id(state.principal_id)  # noqa: S101 pytest assertion
     assert state.principal_id != sid  # noqa: S101 pytest assertion
     assert state.token not in repr(state), "token must never appear in repr/logs"  # noqa: S101 pytest assertion
@@ -247,7 +268,7 @@ def test_session_route_with_wrong_cookie_is_forbidden(app: TestClient, route: st
 
     sid = _mint(app)
     app.cookies.clear()
-    app.cookies.set(f"cab_session_{sid}", secrets.token_urlsafe(32))
+    app.cookies.set(f"cab_session_8000_{sid}", secrets.token_urlsafe(32))
     assert _call(app, route, sid).status_code == 403  # noqa: S101 pytest assertion
 
 
@@ -273,13 +294,13 @@ def test_session_route_for_evicted_session_is_forbidden(tmp_path: Path, route: s
         )
     )
     sid = _mint(client)
-    stale_token = client.cookies.get(f"cab_session_{sid}")
+    stale_token = client.cookies.get(f"cab_session_8000_{sid}")
     assert stale_token  # noqa: S101 pytest assertion
     clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
     _mint(client)  # the mint runs the eviction sweep (and expires the stale cookie)
     assert sid not in _sessions  # noqa: S101 pytest assertion
     # Present the once-valid token anyway, as a client that ignored the expiry would.
-    client.cookies.set(f"cab_session_{sid}", stale_token)
+    client.cookies.set(f"cab_session_8000_{sid}", stale_token)
     assert _call(client, route, sid).status_code == 403  # noqa: S101 pytest assertion
     assert sid not in _sessions, "an evicted session id is never revived"  # noqa: S101 pytest assertion
 
@@ -300,9 +321,9 @@ def test_session_a_cookie_cannot_reach_session_b(tmp_path: Path, route: str) -> 
     assert _call(client_a, route, sid_b).status_code == 403  # noqa: S101 pytest assertion
 
     # A's token replayed under B's cookie name is still a mismatch.
-    token_a = client_a.cookies.get(f"cab_session_{sid_a}")
+    token_a = client_a.cookies.get(f"cab_session_8000_{sid_a}")
     assert token_a  # noqa: S101 pytest assertion
-    client_a.cookies.set(f"cab_session_{sid_b}", token_a)
+    client_a.cookies.set(f"cab_session_8000_{sid_b}", token_a)
     assert _call(client_a, route, sid_b).status_code == 403  # noqa: S101 pytest assertion
 
 
@@ -623,7 +644,7 @@ async def test_full_confirm_flow_logs_principal_and_never_the_token(
 
     async with _async_client(_new_app(tmp_path)) as client:
         sid = await _amint(client)
-        token = client.cookies.get(f"cab_session_{sid}")
+        token = client.cookies.get(f"cab_session_8000_{sid}")
         assert token  # noqa: S101 pytest assertion
         state = _sessions[sid]
         store = SqliteStateStore(db_path=tmp_path / "data" / "state.db", check_same_thread=False)
@@ -1204,7 +1225,7 @@ def test_evicted_session_id_is_rejected_with_403(tmp_path: Path) -> None:
 
     sid = _mint(client)
     assert client.post("/chat", json={"session_id": sid, "message": "hi"}).status_code == 200  # noqa: S101 pytest assertion
-    stale_token = client.cookies.get(f"cab_session_{sid}")
+    stale_token = client.cookies.get(f"cab_session_8000_{sid}")
     assert stale_token  # noqa: S101 pytest assertion
 
     clock.tick(_SESSION_IDLE_TTL + timedelta(seconds=1))
@@ -1212,7 +1233,7 @@ def test_evicted_session_id_is_rejected_with_403(tmp_path: Path) -> None:
     assert sid not in _sessions  # noqa: S101 pytest assertion
 
     # Even presenting the old, once-valid token, the session is gone for good.
-    client.cookies.set(f"cab_session_{sid}", stale_token)
+    client.cookies.set(f"cab_session_8000_{sid}", stale_token)
     response = client.post("/chat", json={"session_id": sid, "message": "hi again"})
     assert response.status_code == 403  # noqa: S101 pytest assertion
     assert sid not in _sessions  # noqa: S101 pytest assertion

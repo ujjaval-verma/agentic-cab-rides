@@ -63,7 +63,9 @@ repl: ## Interactive CLI agent (CLIConfirmationChannel via /dev/tty)
 	$(UV) run python -m agentic_cab repl
 
 # Bind address for `make web` / `make demo`. WEB_HOST is also exported as
-# AGENTIC_CAB_WEB_HOST so the Host allowlist admits it (`--factory` cannot pass args).
+# AGENTIC_CAB_WEB_HOST so the Host allowlist admits it, and WEB_PORT as
+# AGENTIC_CAB_WEB_PORT so session cookies are keyed on the served port
+# (`--factory` cannot pass args).
 WEB_HOST ?= 127.0.0.1
 WEB_PORT ?= $(or $(AGENTIC_CAB_WEB_PORT),8000)
 
@@ -76,7 +78,7 @@ LOG_DIR := $(or $(AGENTIC_CAB_LOG_DIR),logs)
 CHAT_DIR := $(or $(AGENTIC_CAB_CHAT_DIR),$(LOG_DIR))
 
 web: ## FastAPI + browser UI on 127.0.0.1:$WEB_PORT (WebConfirmationChannel)
-	AGENTIC_CAB_WEB_HOST=$(WEB_HOST) $(UV) run uvicorn agentic_cab.web.app:create_app --factory --host $(WEB_HOST) --port $(WEB_PORT) --reload
+	AGENTIC_CAB_WEB_HOST=$(WEB_HOST) AGENTIC_CAB_WEB_PORT=$(WEB_PORT) $(UV) run uvicorn agentic_cab.web.app:create_app --factory --host $(WEB_HOST) --port $(WEB_PORT) --reload
 
 transcripts: ## Regenerate all 6 transcripts from scenarios/
 	$(UV) run python -m agentic_cab render-transcripts
@@ -160,4 +162,4 @@ demo: ## Start web UI and open browser — manual smoke test  # manual smoke
 	@echo "  http://127.0.0.1:$(WEB_PORT)"
 	@echo ""
 	$(UV) run python -m webbrowser http://127.0.0.1:$(WEB_PORT) &
-	AGENTIC_CAB_WEB_HOST=$(WEB_HOST) $(UV) run uvicorn agentic_cab.web.app:create_app --factory --host $(WEB_HOST) --port $(WEB_PORT)
+	AGENTIC_CAB_WEB_HOST=$(WEB_HOST) AGENTIC_CAB_WEB_PORT=$(WEB_PORT) $(UV) run uvicorn agentic_cab.web.app:create_app --factory --host $(WEB_HOST) --port $(WEB_PORT)

@@ -40,6 +40,8 @@ def test_web_port_comes_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_web_port_flag_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
     captured = capture_web_call(monkeypatch, {"AGENTIC_CAB_WEB_PORT": "8123"}, "--port", "8200")
     assert captured["run"]["port"] == 8200  # noqa: S101 pytest assertion
+    # The app's session-cookie discriminator must name the port actually served.
+    assert captured["create_app"]["settings"].web_port == 8200  # noqa: S101 pytest assertion
 
 
 def test_web_port_defaults_to_8000(monkeypatch: pytest.MonkeyPatch) -> None:
