@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -16,6 +17,7 @@ from agentic_cab.adapters.action_log import JSONLActionLog
 from agentic_cab.adapters.state_store import SqliteStateStore
 from agentic_cab.agent.chat import run_repl
 from agentic_cab.core.paths import session_chat_path
+from agentic_cab.core.settings import RuntimeSettings
 from agentic_cab.render.transcript import render
 from agentic_cab.scenarios.invariants import evaluate
 from agentic_cab.scenarios.runner import run_scenario
@@ -29,10 +31,17 @@ def _main() -> None:
     """Agentic Cab Rides — AI-driven cab booking agent."""
 
 
+def _settings() -> RuntimeSettings:
+    """Resolve runtime settings from the process environment, at call time."""
+    return RuntimeSettings.from_env(os.environ)
+
+
 @app.command("init-db")
 def init_db() -> None:
-    """Apply schema.sql to data/state.db (used by `make reset`)."""
-    s = SqliteStateStore(db_path=Path("data/state.db"))
+    """Apply schema.sql to <data dir>/state.db (used by `make reset`)."""
+    data_dir = _settings().data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
+    s = SqliteStateStore(db_path=data_dir / "state.db")
     s.apply_schema()
 
 
@@ -55,10 +64,11 @@ def render_transcripts(
 ) -> None:
     """Render all scenarios under scenarios/ into transcripts/ (P2 wires the actual MD render)."""
     scenarios_dir = Path("scenarios")
-    data_dir = Path("data")
-    log_dir = Path("logs")
-    data_dir.mkdir(exist_ok=True)
-    log_dir.mkdir(exist_ok=True)
+    settings = _settings()
+    data_dir = settings.data_dir
+    log_dir = settings.log_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     scenario_paths = sorted(scenarios_dir.glob("*.yaml"))
     if not scenario_paths:
@@ -126,10 +136,19 @@ def repl() -> None:
 @app.command("web")
 def web(
     host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
-    port: Annotated[int, typer.Option("--port")] = 8000,
+    port: Annotated[
+        int | None,
+        typer.Option("--port", help="Defaults to AGENTIC_CAB_WEB_PORT, else 8000."),
+    ] = None,
 ) -> None:
     """FastAPI + browser UI (WebConfirmationChannel). Prefer `make web`."""
-    uvicorn.run(create_app(bind_host=host), host=host, port=port, reload=False)
+    settings = _settings()
+    uvicorn.run(
+        create_app(bind_host=host, settings=settings),
+        host=host,
+        port=port if port is not None else settings.web_port,
+        reload=False,
+    )
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ This test:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -47,3 +48,43 @@ def test_committed_fixture_cache_returns_address_ref_for_known_query(tmp_path: P
     )
     assert result.lat == pytest.approx(37.7836)  # noqa: S101 pytest assertion
     assert result.lng == pytest.approx(-122.4088)  # noqa: S101 pytest assertion
+
+
+class _StopBeforeModelError(Exception):
+    """Raised in place of run_turn so no model call is ever made."""
+
+
+@pytest.mark.asyncio
+async def test_run_scenario_reads_fixtures_read_only_and_writes_under_data_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """run_scenario: committed fixtures are a read-only layer; writes go under data_dir."""
+    from unittest.mock import MagicMock
+
+    from agentic_cab.scenarios import runner
+
+    calls: list[dict[str, Any]] = []
+
+    def _record_cache(**kwargs: Any) -> GeocodeCache:
+        calls.append(kwargs)
+        return GeocodeCache(**kwargs)
+
+    async def _stop(*_args: Any, **_kwargs: Any) -> Any:
+        raise _StopBeforeModelError
+
+    monkeypatch.setattr(runner, "GeocodeCache", _record_cache)
+    monkeypatch.setattr(runner, "Anthropic", MagicMock())
+    monkeypatch.setattr(runner, "run_turn", _stop)
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    with pytest.raises(_StopBeforeModelError):
+        await runner.run_scenario(
+            _REPO_ROOT / "scenarios" / "01_happy_path.yaml",
+            data_dir=data_dir,
+            log_dir=tmp_path / "logs",
+        )
+
+    assert calls == [  # noqa: S101 pytest assertion
+        {"cache_dir": data_dir / "geocode", "read_only_dirs": (_DEFAULT_GEOCODE_FIXTURES,)}
+    ]
