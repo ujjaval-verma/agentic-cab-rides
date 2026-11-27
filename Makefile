@@ -76,6 +76,7 @@ WEB_PORT ?= $(or $(AGENTIC_CAB_WEB_PORT),8000)
 DATA_DIR := $(or $(AGENTIC_CAB_DATA_DIR),data)
 LOG_DIR := $(or $(AGENTIC_CAB_LOG_DIR),logs)
 CHAT_DIR := $(or $(AGENTIC_CAB_CHAT_DIR),$(LOG_DIR))
+GEOCODE_CACHE_DIR := $(or $(AGENTIC_CAB_GEOCODE_CACHE_DIR),$(DATA_DIR)/geocode)
 
 web: ## FastAPI + browser UI on 127.0.0.1:$WEB_PORT (WebConfirmationChannel)
 	AGENTIC_CAB_WEB_HOST=$(WEB_HOST) AGENTIC_CAB_WEB_PORT=$(WEB_PORT) $(UV) run uvicorn agentic_cab.web.app:create_app --factory --host $(WEB_HOST) --port $(WEB_PORT) --reload
@@ -122,8 +123,8 @@ clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .ruff_cache .pyright dist build htmlcov .coverage
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 
-reset: ## Wipe the data, log and chat dirs (AGENTIC_CAB_*_DIR) and re-apply schema
-	rm -rf "$(DATA_DIR)" "$(LOG_DIR)" "$(CHAT_DIR)"
+reset: ## Wipe the data, log, chat and geocode-cache dirs (AGENTIC_CAB_*_DIR) and re-apply schema
+	rm -rf "$(DATA_DIR)" "$(LOG_DIR)" "$(CHAT_DIR)" "$(GEOCODE_CACHE_DIR)"
 	mkdir -p "$(DATA_DIR)" "$(LOG_DIR)" "$(CHAT_DIR)"
 	AGENTIC_CAB_DATA_DIR="$(DATA_DIR)" $(UV) run python -m agentic_cab init-db
 

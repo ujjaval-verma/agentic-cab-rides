@@ -42,10 +42,14 @@ def test_makefile_web_port_defaults_from_env() -> None:
 
 def test_makefile_reset_uses_configured_dirs() -> None:
     text = _makefile()
-    for var in ("DATA_DIR", "LOG_DIR", "CHAT_DIR"):
+    for var in ("DATA_DIR", "LOG_DIR", "CHAT_DIR", "GEOCODE_CACHE_DIR"):
         assert re.search(rf"^{var} :?= \$\(or \$\(AGENTIC_CAB_{var}\),", text, re.MULTILINE), var  # noqa: S101 pytest assertion
+    geocode_default = (
+        "GEOCODE_CACHE_DIR := $(or $(AGENTIC_CAB_GEOCODE_CACHE_DIR),$(DATA_DIR)/geocode)"
+    )
+    assert geocode_default in text.splitlines()  # noqa: S101 pytest assertion
     recipe = _recipe("reset")
-    assert 'rm -rf "$(DATA_DIR)" "$(LOG_DIR)" "$(CHAT_DIR)"' in recipe  # noqa: S101 pytest assertion
+    assert 'rm -rf "$(DATA_DIR)" "$(LOG_DIR)" "$(CHAT_DIR)" "$(GEOCODE_CACHE_DIR)"' in recipe  # noqa: S101 pytest assertion
     assert "rm -rf data logs chat" not in recipe  # noqa: S101 pytest assertion
 
 
