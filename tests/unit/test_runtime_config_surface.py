@@ -49,6 +49,19 @@ def test_makefile_reset_uses_configured_dirs() -> None:
     assert "rm -rf data logs chat" not in recipe  # noqa: S101 pytest assertion
 
 
+def test_readme_documents_running_two_instances() -> None:
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    # Section ends at the next level-2+ heading (bash comments in fences use a single `#`).
+    match = re.search(
+        r"^##+ Running two instances\n(.*?)(?=^##+ |\Z)", text, re.MULTILINE | re.DOTALL
+    )
+    assert match is not None, "README needs a 'Running two instances' section"  # noqa: S101 pytest assertion
+    section = match.group(1)
+    assert "AGENTIC_CAB_DATA_DIR" in section  # noqa: S101 pytest assertion
+    assert "AGENTIC_CAB_WEB_PORT" in section  # noqa: S101 pytest assertion
+    assert "`fixtures/geocode` is read-only" in section  # noqa: S101 pytest assertion
+
+
 def test_makefile_web_help_does_not_hardcode_port() -> None:
     web_line = next(line for line in _makefile().splitlines() if line.startswith("web:"))
     assert ":8000" not in web_line  # noqa: S101 pytest assertion

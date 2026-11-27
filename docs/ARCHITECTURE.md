@@ -50,9 +50,10 @@ ships two first-class surfaces (REPL and web) and one batch surface
 
 Shared by all three surfaces:
 
-- **State** — SQLite (`data/state.db` for interactive surfaces, tmp DB per scenario). WAL journaling; same schema (`adapters/schema.sql`) regardless of surface.
+- **State** — SQLite (`<data dir>/state.db` for interactive surfaces — `data/` unless `AGENTIC_CAB_DATA_DIR` is set — and a per-scenario DB). WAL journaling; same schema (`adapters/schema.sql`) regardless of surface.
 - **Action log + chat history** — per-session JSONL under `logs/` (`<session_id>.jsonl`, `<session_id>.chat.jsonl`). REPL and web write to the same directory. `session_id` is validated as a canonical ULID at every input boundary (web request models, `scripts/replay.py`, `make replay`), and path builders in `core/paths.py` resolve the final path and refuse anything outside the log dir.
-- **Geocode cache** — file-system fixtures under `fixtures/geocode/` (one JSON per `sha1(query.strip().lower())`). Shared across surfaces and worktrees.
+- **Geocode cache** — read-only committed fixtures + writable cache under the data dir. Both layers hold one JSON per `sha1(query.strip().lower())`. Lookups try the writable cache (`<data dir>/geocode/`, or `AGENTIC_CAB_GEOCODE_CACHE_DIR`; gitignored, because entries keep the raw query) and then the committed `fixtures/geocode/`, which nothing writes at runtime. Scenario runs read the same fixtures, so transcripts stay reproducible.
+- **Runtime settings** — `core/settings.py::RuntimeSettings.from_env` resolves the data, log, chat and geocode-cache dirs and the web port from `AGENTIC_CAB_*` (see `.env.example`). Only composition roots (`__main__.py`, `create_app`, `run_repl`, `scripts/replay.py`) call it. Instances with disjoint values run side by side; the action log stays under the log dir and chat history under the chat dir (default: the log dir).
 - **Secrets** — `.env` symlinked from `~/.config/agentic-cab-rides/.env`; loaded at process start.
 
 ### Web session authentication
@@ -284,14 +285,15 @@ records gate verdict, outcome records the tool's terminal state).
 
 Two durable surfaces, deliberately not merged:
 
-- **SQLite (`data/state.db`)** holds anything that needs relational lookups
+- **SQLite (`<data dir>/state.db`)** holds anything that needs relational lookups
   or transactional guarantees: drafts, bookings, booking_events,
   idempotency_keys, pending_confirmations. The UNIQUE constraint on
   `idempotency_keys` is the load-bearing guarantee against double-bookings;
   keeping it in SQL means it survives crashes and is enforced by the
   database, not application code.
-- **JSONL (`logs/<session_id>.jsonl`, `chat/`, geocode cache)** holds
-  append-only audit artifacts. Flat files because the audit story depends
+- **JSONL (`<log dir>/<session_id>.jsonl`, `<chat dir>/<session_id>.chat.jsonl`,
+  geocode cache)** holds append-only audit artifacts. The geocode cache is
+  read-only committed fixtures + writable cache under the data dir. Flat files because the audit story depends
   on being trivially `grep`-able, `tail -f`-able, and replayable without
   a database. The action log is an externally consumable surface — its
   format and flatness matter externally, not just internally.
