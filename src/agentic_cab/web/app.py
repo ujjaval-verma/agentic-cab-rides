@@ -10,8 +10,9 @@ Routes:
   GET  /sessions/{id}/log                 → raw JSONL action-log for the session
 
 Auth: POST /sessions sets an HttpOnly, SameSite=Strict, Max-Age-bounded cookie
-`cab_session_<session_id>` holding a 256-bit server-minted token (and expires
-the cookies of sessions already evicted). Every other
+`cab_session_<port>_<session_id>` holding a 256-bit server-minted token (and
+expires this instance's cookies of sessions already evicted; the port keeps two
+instances on one host, which share a cookie jar, apart). Every other
 session route (chat, events, confirmations, log) requires it; unknown, evicted,
 or mismatched sessions get an identical 403. The approver identity is the
 session's server-minted `principal_id`, never a request field.
@@ -63,6 +64,7 @@ from agentic_cab.agent.chat import build_handlers
 from agentic_cab.agent.loop import run_turn
 from agentic_cab.core.ids import SessionId, new_principal_id, new_session_id, new_turn_id
 from agentic_cab.core.ports import Clock
+from agentic_cab.core.settings import RuntimeSettings
 from agentic_cab.web.channel import WebConfirmationChannel
 from agentic_cab.web.origin import SameOriginMiddleware
 from agentic_cab.web.sse import SessionEventBus
@@ -126,7 +128,7 @@ _bus = SessionEventBus()
 # stale option cache, a subtler bug than the leak itself.
 _SESSION_IDLE_TTL = timedelta(hours=1)
 _MAX_SESSIONS = 64
-# Absolute browser-side lifetime of a `cab_session_<id>` cookie. Not the idle
+# Absolute browser-side lifetime of a `cab_session_<port>_<id>` cookie. Not the idle
 # TTL: the server-side TTL slides on every authorized request, but the cookie is
 # only set once at mint, so a 1-hour cookie would 403 a session still in active
 # use (the client has no re-mint path). A working day is long enough for any
@@ -166,30 +168,39 @@ _sessions: dict[str, _SessionState] = {}
 _TOKEN_BYTES = 32  # 256 bits → 43 urlsafe-base64 chars
 
 
-_SESSION_COOKIE_PREFIX = "cab_session_"
+_SESSION_COOKIE_BASE = "cab_session_"
 # Shared by set and delete: a browser only drops a cookie when the deletion
 # matches the name and path it was set with; the flags stay identical too.
 _SESSION_COOKIE_ATTRS: dict[str, Any] = {"path": "/", "httponly": True, "samesite": "strict"}
 
 
-def _session_cookie_name(session_id: str) -> str:
+def _session_cookie_prefix(web_port: int) -> str:
+    """Per-instance cookie prefix, `cab_session_<port>_`.
+
+    Browsers do not separate cookies by port, so two instances on one host see
+    each other's cookies. The port keeps each instance to its own names; the
+    trailing `_` stops port 80 from matching port 8000's cookies.
+    """
+    return f"{_SESSION_COOKIE_BASE}{web_port}_"
+
+
+def _session_cookie_name(prefix: str, session_id: str) -> str:
     """One cookie per session so two open tabs never overwrite each other's token."""
-    return f"{_SESSION_COOKIE_PREFIX}{session_id}"
+    return f"{prefix}{session_id}"
 
 
-def _expire_dead_session_cookies(request: Request, response: Response) -> None:
+def _expire_dead_session_cookies(request: Request, response: Response, *, prefix: str) -> None:
     """Tell the browser to drop cookies for sessions the server no longer holds.
 
     HttpOnly cookies are invisible to page JS, so the client cannot clean up
     after itself; without this, every reload adds a cookie that rides on every
     request until the header outgrows the server's limit. Cookies of live
-    sessions (other open tabs) are left alone. Only names under our prefix are
-    touched; the value is never read.
+    sessions (other open tabs) are left alone. Only names under this instance's
+    prefix are touched, so another instance's cookies survive; the value is
+    never read.
     """
     for name in request.cookies:
-        if name.startswith(_SESSION_COOKIE_PREFIX) and (
-            name.removeprefix(_SESSION_COOKIE_PREFIX) not in _sessions
-        ):
+        if name.startswith(prefix) and name.removeprefix(prefix) not in _sessions:
             response.delete_cookie(key=name, **_SESSION_COOKIE_ATTRS)
 
 
@@ -230,14 +241,16 @@ def _create_session(
 _FORBIDDEN = "forbidden"
 
 
-def _authorize(request: Request, session_id: str, *, clock: Clock) -> _SessionState:
+def _authorize(
+    request: Request, session_id: str, *, clock: Clock, cookie_prefix: str
+) -> _SessionState:
     """Look up the caller's session (never creating one) and touch it, or 403.
 
     Unknown/evicted session, missing cookie, and wrong cookie all produce the
     same 403 so the response never reveals which session ids exist. Evicted
     sessions are never revived — the client must POST /sessions again.
     """
-    presented = request.cookies.get(_session_cookie_name(session_id))
+    presented = request.cookies.get(_session_cookie_name(cookie_prefix, session_id))
     state = _sessions.get(session_id)
     if (
         state is None
@@ -289,6 +302,15 @@ def _evict_stale_sessions(clock: Clock) -> None:
 # ---------- App factory ----------
 
 
+def _build_geocoder(settings: RuntimeSettings, *, http: httpx.AsyncClient) -> NominatimGeocoder:
+    """Geocoder whose live cache is writable under the data dir; fixtures are read-only."""
+    cache = GeocodeCache(
+        cache_dir=settings.geocode_cache_dir,
+        read_only_dirs=(settings.geocode_fixtures_dir,),
+    )
+    return NominatimGeocoder(cache=cache, http=http)
+
+
 def create_app(
     *,
     data_dir: Path | None = None,
@@ -296,21 +318,29 @@ def create_app(
     geocode_fixtures_dir: Path | None = None,
     clock: Clock | None = None,
     bind_host: str | None = None,
+    settings: RuntimeSettings | None = None,
 ) -> FastAPI:
     """Create and return the FastAPI application.
 
-    All paths are injectable so tests can isolate filesystem state. `clock` is
-    injectable too — production wiring defaults to `SystemClock`, and tests
-    inject a `FrozenClock` to drive session-eviction timing without sleeping
-    (CLAUDE.md invariant 9). `bind_host` (else `AGENTIC_CAB_WEB_HOST`) joins
-    loopback on the Host allowlist; all-interfaces addresses add nothing and
-    `"*"` raises `ValueError`.
+    Paths come from `settings` (else `RuntimeSettings.from_env(os.environ)`, read
+    here at call time); the explicit path kwargs win over both, so tests can
+    isolate filesystem state. `clock` is injectable too — production wiring
+    defaults to `SystemClock`, and tests inject a `FrozenClock` to drive
+    session-eviction timing without sleeping (CLAUDE.md invariant 9).
+    `bind_host` (else `AGENTIC_CAB_WEB_HOST`) joins loopback on the Host
+    allowlist; all-interfaces addresses add nothing and `"*"` raises `ValueError`.
     """
     _hosts = _allowed_hosts(bind_host)
-    _data_dir = data_dir or Path("data")
-    _log_dir = log_dir or Path("logs")
-    _geocode_fixtures_dir = geocode_fixtures_dir or Path("fixtures/geocode")
+    _settings = (settings or RuntimeSettings.from_env(os.environ)).with_overrides(
+        data_dir=data_dir, log_dir=log_dir, geocode_fixtures_dir=geocode_fixtures_dir
+    )
+    _data_dir = _settings.data_dir
+    _log_dir = _settings.log_dir
     _clock: Clock = clock or SystemClock()
+    _cookie_prefix = _session_cookie_prefix(_settings.web_port)
+
+    def _auth(request: Request, session_id: str) -> _SessionState:
+        return _authorize(request, session_id, clock=_clock, cookie_prefix=_cookie_prefix)
 
     _data_dir.mkdir(parents=True, exist_ok=True)
     _log_dir.mkdir(parents=True, exist_ok=True)
@@ -374,7 +404,7 @@ def create_app(
         Authorized before any stream opens; EventSource sends the same-origin
         session cookie automatically, so the token never rides in the URL.
         """
-        _authorize(request, session_id, clock=_clock)
+        _auth(request, session_id)
         _log.info("web.events.subscribe", session_id=session_id)
 
         async def _generator() -> AsyncGenerator[dict[str, str], None]:
@@ -402,9 +432,9 @@ def create_app(
         state = _create_session(session_id, store=store, clock=_clock)
         _log.info("web.session.created", session_id=session_id)
         response = JSONResponse({"session_id": session_id})
-        _expire_dead_session_cookies(request, response)
+        _expire_dead_session_cookies(request, response, prefix=_cookie_prefix)
         response.set_cookie(
-            key=_session_cookie_name(session_id),
+            key=_session_cookie_name(_cookie_prefix, session_id),
             value=state.token,
             max_age=int(_SESSION_COOKIE_MAX_AGE.total_seconds()),
             **_SESSION_COOKIE_ATTRS,
@@ -425,7 +455,7 @@ def create_app(
         # Bound session memory before this session's own state is touched; an
         # evicted session is then rejected by _authorize rather than revived.
         _evict_stale_sessions(clock)
-        state = _authorize(request, session_id, clock=clock)
+        state = _auth(request, session_id)
         _log.info("web.chat", session_id=session_id)
 
         store = SqliteStateStore(db_path=_data_dir / "state.db", check_same_thread=False)
@@ -436,11 +466,7 @@ def create_app(
         channel = state.channel
         meter = state.meter
 
-        geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
-        geocoder = NominatimGeocoder(
-            cache=geocode_cache,
-            http=httpx.AsyncClient(timeout=10),
-        )
+        geocoder = _build_geocoder(_settings, http=httpx.AsyncClient(timeout=10))
 
         turn_id_ref = state.turn_id_ref
         turn_id_ref[0] = new_turn_id()
@@ -511,7 +537,7 @@ def create_app(
         session's pending request. The approver is the session's server-side
         principal (set inside the channel); nothing in the body can override it.
         """
-        state = _authorize(request, session_id, clock=_clock)
+        state = _auth(request, session_id)
         if not state.channel.resolve(subject_id, approved=body.approved):
             raise HTTPException(
                 status_code=404, detail=f"No pending confirmation for {subject_id!r}"
@@ -527,7 +553,7 @@ def create_app(
     @app.get("/sessions/{session_id}/log")
     async def session_log(session_id: SessionId, request: Request) -> JSONResponse:
         """Return the raw action-log rows for this session."""
-        _authorize(request, session_id, clock=_clock)
+        _auth(request, session_id)
         action_log = JSONLActionLog(log_dir=_log_dir)
         rows = action_log.read(session_id)
         return JSONResponse({"session_id": session_id, "rows": rows})

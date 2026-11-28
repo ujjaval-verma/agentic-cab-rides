@@ -78,12 +78,27 @@ make link-env                                # symlinks ./.env -> ~/.config/agen
 make install                                 # uv sync + install pre-commit + pre-push hooks
 make repl                                    # CLI agent
 # or
-make web                                     # browser UI at http://localhost:8000
+make web                                     # browser UI at http://localhost:8000 (AGENTIC_CAB_WEB_PORT)
 # or
 make transcripts                             # regenerate all 6 scenario transcripts
 ```
 
 `make help` lists every target. The Makefile is the discovery surface; pre-commit and CI both call into it so there is one path.
+
+### Running two instances
+
+Runtime paths and the web port come from `AGENTIC_CAB_*` variables (all optional, documented in `.env.example`): `AGENTIC_CAB_DATA_DIR` (SQLite + live geocode cache, default `data`), `AGENTIC_CAB_LOG_DIR` (default `logs`), `AGENTIC_CAB_CHAT_DIR` (default: the log dir), `AGENTIC_CAB_GEOCODE_CACHE_DIR` (default `<data dir>/geocode`) and `AGENTIC_CAB_WEB_PORT` (default `8000`). Give each instance its own values:
+
+```bash
+# terminal 1
+AGENTIC_CAB_DATA_DIR=/tmp/cab-a/data AGENTIC_CAB_LOG_DIR=/tmp/cab-a/logs \
+  AGENTIC_CAB_WEB_PORT=8101 make web
+# terminal 2
+AGENTIC_CAB_DATA_DIR=/tmp/cab-b/data AGENTIC_CAB_LOG_DIR=/tmp/cab-b/logs \
+  AGENTIC_CAB_WEB_PORT=8102 make web
+```
+
+Both tabs can stay open in one browser: browsers share cookies across ports, so each instance names its session cookies `cab_session_<port>_…` and only reads or expires its own. Manual check: chat in each browser tab, then confirm `/tmp/cab-a` and `/tmp/cab-b` each fill with their own `state.db`, logs and `geocode/` cache, and that `git status` stays clean. `fixtures/geocode` is read-only at runtime: live geocoding results are cached under the data dir (gitignored), never in the tracked fixtures. `tests/unit/test_isolated_instances.py` covers the same isolation without a model or network.
 
 ## Development
 

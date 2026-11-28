@@ -49,7 +49,7 @@ def _make_deps(tmp_path: Path) -> dict[str, Any]:
     log = JSONLActionLog(log_dir=tmp_path / "logs")
     sim = UberSimAdapter(store=store, clock=clock, rng_seed=42)
     channel = ScriptedConfirmationChannel(script=[], clock=clock)
-    geocode_cache = GeocodeCache(fixtures_dir=tmp_path / "geocode")
+    geocode_cache = GeocodeCache(cache_dir=tmp_path / "geocode")
     geocoder = NominatimGeocoder(cache=geocode_cache, http=MagicMock())
     return {
         "sim": sim,
@@ -221,6 +221,58 @@ async def test_repl_exits_on_eof(tmp_path: Path) -> None:
         input_source=_input_source,
         channel=deps["channel"],
     )
+
+
+@pytest.mark.asyncio
+async def test_repl_uses_runtime_settings_paths(tmp_path: Path) -> None:
+    """settings drive state.db, the chat path, and a writable cache over read-only fixtures."""
+    from unittest.mock import AsyncMock
+
+    from rich.console import Console
+
+    from agentic_cab.core.settings import RuntimeSettings
+
+    settings = RuntimeSettings(
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        chat_dir=tmp_path / "chat",
+        geocode_cache_dir=tmp_path / "data" / "geocode",
+        geocode_fixtures_dir=tmp_path / "fixtures",
+        web_port=8000,
+    )
+    deps = _make_deps(tmp_path)
+    cache_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def _record_cache(*args: Any, **kwargs: Any) -> GeocodeCache:
+        cache_calls.append((args, kwargs))
+        return GeocodeCache(*args, **kwargs)
+
+    loop_spy = AsyncMock()
+    with (
+        patch("agentic_cab.agent.chat.Anthropic", return_value=_stub_client_end_message()),
+        patch("agentic_cab.agent.chat.GeocodeCache", side_effect=_record_cache),
+        patch("agentic_cab.agent.chat._repl_loop", loop_spy),
+    ):
+        await run_repl(
+            settings=settings,
+            console=Console(force_terminal=False, no_color=True),
+            input_source=lambda: None,
+            channel=deps["channel"],
+        )
+
+    assert (tmp_path / "data" / "state.db").exists()  # noqa: S101 pytest assertion
+    chat_path: Path = loop_spy.call_args.kwargs["chat_log_path"]
+    assert chat_path.parent == (tmp_path / "chat").resolve()  # noqa: S101 pytest assertion
+    assert cache_calls == [  # noqa: S101 pytest assertion
+        (
+            (),
+            {
+                "cache_dir": tmp_path / "data" / "geocode",
+                "read_only_dirs": (tmp_path / "fixtures",),
+            },
+        )
+    ]
+    assert not (tmp_path / "fixtures").exists()  # noqa: S101 pytest assertion
 
 
 @pytest.mark.asyncio

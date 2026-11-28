@@ -50,9 +50,10 @@ ships two first-class surfaces (REPL and web) and one batch surface
 
 Shared by all three surfaces:
 
-- **State** — SQLite (`data/state.db` for interactive surfaces, tmp DB per scenario). WAL journaling; same schema (`adapters/schema.sql`) regardless of surface.
-- **Action log + chat history** — per-session JSONL under `logs/` (`<session_id>.jsonl`, `<session_id>.chat.jsonl`). REPL and web write to the same directory. `session_id` is validated as a canonical ULID at every input boundary (web request models, `scripts/replay.py`, `make replay`), and path builders in `core/paths.py` resolve the final path and refuse anything outside the log dir.
-- **Geocode cache** — file-system fixtures under `fixtures/geocode/` (one JSON per `sha1(query.strip().lower())`). Shared across surfaces and worktrees.
+- **State** — SQLite (`<data dir>/state.db` for interactive surfaces — `data/` unless `AGENTIC_CAB_DATA_DIR` is set — and a per-scenario DB). WAL journaling; same schema (`adapters/schema.sql`) regardless of surface.
+- **Action log + chat history** — per-session JSONL: the action log under `<log dir>` (`<session_id>.jsonl`, from `AGENTIC_CAB_LOG_DIR`, default `logs/`) and chat history under `<chat dir>` (`<session_id>.chat.jsonl`, from `AGENTIC_CAB_CHAT_DIR`, default: the log dir). REPL and web of one instance write to the same dirs. `session_id` is validated as a canonical ULID at every input boundary (web request models, `scripts/replay.py`, `make replay`), and path builders in `core/paths.py` resolve the final path and refuse anything outside its dir.
+- **Geocode cache** — read-only committed fixtures + writable cache under the data dir. Both layers hold one JSON per `sha1(query.strip().lower())`. Lookups try the writable cache (`<data dir>/geocode/`, or `AGENTIC_CAB_GEOCODE_CACHE_DIR`; gitignored, because entries keep the raw query) and then the committed `fixtures/geocode/`, which nothing writes at runtime. Scenario runs read the same fixtures but never the live cache: each scenario gets its own writable layer (`<data dir>/scenario-geocode/<name>/`), wiped at the start of every run, so the committed fixtures are the only seed and transcripts stay reproducible.
+- **Runtime settings** — `core/settings.py::RuntimeSettings.from_env` resolves the data, log, chat and geocode-cache dirs and the web port from `AGENTIC_CAB_*` (see `.env.example`). Only composition roots (`__main__.py`, `create_app`, `run_repl`, `scripts/replay.py`) call it. Instances with disjoint values run side by side; the action log stays under the log dir and chat history under the chat dir (default: the log dir).
 - **Secrets** — `.env` symlinked from `~/.config/agentic-cab-rides/.env`; loaded at process start.
 
 ### Web session authentication
@@ -61,12 +62,16 @@ Shared by all three surfaces:
 returned in the body), a **token** (`secrets.token_urlsafe(32)`, 256 bits),
 and a **principal** (`principal_id`, a ULID). The token is set only as an
 `HttpOnly; SameSite=Strict; Path=/` cookie named
-`cab_session_<session_id>` — one per session so tabs never clobber each
-other — with `Max-Age` of 8 hours. The cookie is set once and does not slide,
+`cab_session_<port>_<session_id>` — one per session so tabs never clobber each
+other — with `Max-Age` of 8 hours. The `<port>` is `AGENTIC_CAB_WEB_PORT`
+(the port served): browsers do not separate cookies by port, so two instances
+on one host see each other's cookies, and the port keeps each instance to its
+own. The cookie is set once and does not slide,
 so it is deliberately longer than the 1-hour idle TTL (which does slide) rather
-than equal to it. Each `POST /sessions` also expires any `cab_session_*`
-cookie the request carries whose session is no longer held server-side, so
-page reloads cannot pile up dead cookies until the `Cookie` header overflows.
+than equal to it. Each `POST /sessions` also expires any `cab_session_<port>_*`
+cookie (this instance's only) the request carries whose session is no longer
+held server-side, so page reloads cannot pile up dead cookies until the
+`Cookie` header overflows.
 The token is never returned in a body, logged, or put in a URL (a cookie
 rather than a header because `EventSource` cannot set headers, and a query
 string would leak into access logs). `SameSite=Strict` blocks cross-site POSTs
@@ -284,14 +289,15 @@ records gate verdict, outcome records the tool's terminal state).
 
 Two durable surfaces, deliberately not merged:
 
-- **SQLite (`data/state.db`)** holds anything that needs relational lookups
+- **SQLite (`<data dir>/state.db`)** holds anything that needs relational lookups
   or transactional guarantees: drafts, bookings, booking_events,
   idempotency_keys, pending_confirmations. The UNIQUE constraint on
   `idempotency_keys` is the load-bearing guarantee against double-bookings;
   keeping it in SQL means it survives crashes and is enforced by the
   database, not application code.
-- **JSONL (`logs/<session_id>.jsonl`, `chat/`, geocode cache)** holds
-  append-only audit artifacts. Flat files because the audit story depends
+- **JSONL (`<log dir>/<session_id>.jsonl`, `<chat dir>/<session_id>.chat.jsonl`,
+  geocode cache)** holds append-only audit artifacts. The geocode cache is
+  read-only committed fixtures + writable cache under the data dir. Flat files because the audit story depends
   on being trivially `grep`-able, `tail -f`-able, and replayable without
   a database. The action log is an externally consumable surface — its
   format and flatness matter externally, not just internally.

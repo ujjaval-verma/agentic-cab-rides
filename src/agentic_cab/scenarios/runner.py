@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -43,6 +44,8 @@ def _load(path: Path) -> dict[str, Any]:
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_GEOCODE_FIXTURES = _REPO_ROOT / "fixtures" / "geocode"
+# Per-scenario writable geocode layers live under `<data_dir>/scenario-geocode/<name>`.
+_SCENARIO_GEOCODE_SUBDIR = "scenario-geocode"
 
 
 async def run_scenario(
@@ -84,7 +87,17 @@ async def run_scenario(
     _geocode_fixtures_dir = (
         geocode_fixtures_dir if geocode_fixtures_dir is not None else _DEFAULT_GEOCODE_FIXTURES
     )
-    geocode_cache = GeocodeCache(fixtures_dir=_geocode_fixtures_dir)
+    # Committed fixtures are the only seed and stay read-only. The writable layer
+    # is this scenario's own, wiped per run like its DB, so neither the live
+    # web/REPL cache (`<data_dir>/geocode`) nor a previous run's miss can feed a
+    # transcript.
+    run_cache_dir = data_dir / _SCENARIO_GEOCODE_SUBDIR / scn["name"]
+    if run_cache_dir.exists():
+        shutil.rmtree(run_cache_dir)
+    geocode_cache = GeocodeCache(
+        cache_dir=run_cache_dir,
+        read_only_dirs=(_geocode_fixtures_dir,),
+    )
     http_client = httpx.AsyncClient()
     geocoder = NominatimGeocoder(cache=geocode_cache, http=http_client)
 

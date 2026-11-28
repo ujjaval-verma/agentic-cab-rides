@@ -153,7 +153,7 @@ def test_foreign_host_checked_before_origin(client: TestClient) -> None:
 
 def test_rejection_is_logged_without_origin_or_cookie(client: TestClient) -> None:
     sid = _mint(client)
-    token = client.cookies.get(f"cab_session_{sid}")
+    token = client.cookies.get(f"cab_session_8000_{sid}")
     assert token  # noqa: S101 pytest assertion
     with capture_logs() as logs:
         response = client.post(
